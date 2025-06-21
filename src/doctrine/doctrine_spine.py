@@ -62,3 +62,17 @@ class DoctrineSpine:
              self.doctrines = [Doctrine(**data) for data in docs_data]
         except FileNotFoundError:
              self.doctrines = []
+
+    def create_doctrine(self, scar, name) -> Doctrine:
+        doctrine = Doctrine(
+            id=f"Doctrine-{scar.id}",
+            name=name,
+            mutation_lineage=[],
+            scar_links=[scar.id],
+            status="active",
+            created_at=datetime.now(),
+            last_mutated=None
+        )
+        self.doctrines.append(doctrine)
+        return doctrine
+     
