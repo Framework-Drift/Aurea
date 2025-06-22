@@ -15,6 +15,7 @@ class Scar:
     decay_state: str = "active"
     linked_doctrines: List[str] = field(default_factory=list)
     last_accessed: Optional[datetime] = None
+    description: str = ""
 
 @dataclass
 class Doctrine:
@@ -25,6 +26,7 @@ class Doctrine:
     status: str = "active"
     created_at: datetime = field(default_factory=datetime.now)
     last_mutated: Optional[datetime] = None
+    description: str = ""
 
 @dataclass
 class Echo:

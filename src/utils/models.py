@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime
 
-
 @dataclass
 class Scar:
     """
@@ -10,13 +9,19 @@ class Scar:
     """
 
     id: str
-    origin: str  # e.g., doctrine or echo that triggered the scar
-    weight: float
-    created_at: datetime
-    decay_state: str = "active"  # active | dormant | fossil | retired
+    name: str                     # Canonical title or short label
+    origin: str                   # Collapse cause, event, or doctrine root
+    type: str = ""                # Symbolic type/category ("ethical", etc.)
+    weight: float = 0.0
+    created_at: datetime = field(default_factory=datetime.now)
+    decay_state: str = "active"   # active | dormant | fossil | locked
     linked_doctrines: List[str] = field(default_factory=list)
     last_accessed: Optional[datetime] = None
-
+    description: str = ""         # Human-readable meaning
+    echo_proximity: List[str] = field(default_factory=list)
+    reflexes: List[str] = field(default_factory=list)
+    tca_tags: List[str] = field(default_factory=list)
+    is_seed: bool = False
 
 @dataclass
 class Doctrine:
@@ -28,10 +33,12 @@ class Doctrine:
     name: str
     mutation_lineage: List[str] = field(default_factory=list)
     scar_links: List[str] = field(default_factory=list)
-    status: str = "active"  # active | fossil | fallen
+    status: str = "active"
     created_at: datetime = field(default_factory=datetime.now)
     last_mutated: Optional[datetime] = None
-
+    description: str = ""
+    tca_tags: List[str] = field(default_factory=list)
+    is_seed: bool = False
 
 @dataclass
 class Echo:
