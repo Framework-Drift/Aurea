@@ -1,3 +1,5 @@
+# Only used as seed dump. Removed lines for safety.
+
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -278,15 +280,3 @@ seed_doctrines = [
 scarlogic = ScarLogicCore()
 doctrinespine = DoctrineSpine()
 
-if not scarlogic.scars:
-    for scar in seed_scars:
-        scarlogic.add_scar(scar)
-    scarlogic.save_to_file()
-    print("Seed scars added.")
-
-if not doctrinespine.doctrines:
-    for doctrine in seed_doctrines:
-        doctrinespine.add_doctrine(doctrine)
-    doctrinespine.save_to_file()
-    print("Seed doctrines added.")
-    print("Seeding complete.")
