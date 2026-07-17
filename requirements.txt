@@ -1,0 +1,35 @@
+# Core Python dependencies for Aurea
+
+# --- Numerics / math ---
+numpy>=1.24
+scipy>=1.10
+
+# --- Graphs / topology ---
+networkx>=3.1          # graph structures, pathfinding, clustering
+
+# --- Persistence / storage ---
+sqlalchemy>=2.0        # if you want DB integration for scars/doctrines
+psycopg2-binary>=2.9   # PostgreSQL (optional, if you use Postgres)
+# sqlite3 is built-in, no need to add
+
+# --- Serialization / config ---
+pydantic>=2.4          # structured validation for scars, doctrines, echoes
+pyyaml>=6.0            # optional: config files
+
+# --- Monitoring / visualization ---
+matplotlib>=3.8
+seaborn>=0.13          # optional, for prettier analytics plots
+rich>=13.7             # console visualization / debugging
+asciimatics>=1.14      # if you want animated ASCII viz
+
+# --- Utilities ---
+tqdm>=4.66             # progress bars
+python-dateutil>=2.8   # date parsing
+
+# --- Testing ---
+pytest>=8.0
+pytest-cov>=5.0
+
+# --- Optional (future modules) ---
+# faiss-cpu>=1.7        # for vector similarity if you embed symbolic vectors
+# transformers>=4.40    # only if Aurea interacts with LLMs locally

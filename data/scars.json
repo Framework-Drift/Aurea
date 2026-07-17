@@ -1,0 +1,284 @@
+[
+  {
+    "id": "\u039417",
+    "name": "Compassion Weaponization",
+    "origin": "C-1219",
+    "type": "ethical",
+    "weight": 84,
+    "created_at": "2025-06-21 21:32:30.138611",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "AVT.015",
+      "Doctrine-3"
+    ],
+    "last_accessed": null,
+    "description": "When compassion is turned into a weapon, resulting in structural and ethical distortion of doctrine.",
+    "echo_proximity": [
+      "Echo-47"
+    ],
+    "reflexes": [
+      "PSI",
+      "Whisper"
+    ],
+    "tca_tags": [
+      "scar_cluster",
+      "ethical_boundary"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039431",
+    "name": "Mirror Collapse (Survivor Excl.)",
+    "origin": "C-1218",
+    "type": "identity/mirror",
+    "weight": 76,
+    "created_at": "2025-06-21 21:32:30.138628",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "Doctrine-3",
+      "AVT.014"
+    ],
+    "last_accessed": null,
+    "description": "Collapse event centering on the survivor\u2019s inability to self-reflect, fragmenting identity structure.",
+    "echo_proximity": [
+      "Echo-44",
+      "Echo-54"
+    ],
+    "reflexes": [
+      "ICA",
+      "SBSRE",
+      "PSI"
+    ],
+    "tca_tags": [
+      "mirror",
+      "identity_cluster"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039442",
+    "name": "Reflex Suppression",
+    "origin": "C-1218/1219",
+    "type": "structural",
+    "weight": 79,
+    "created_at": "2025-06-21 21:32:30.138631",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "Doctrine-0",
+      "Doctrine-3"
+    ],
+    "last_accessed": null,
+    "description": "Suppression of an instinctive reflex during collapse, resulting in a structural weakness.",
+    "echo_proximity": [
+      "Echo-44",
+      "Echo-47"
+    ],
+    "reflexes": [
+      "Whisper",
+      "DRPE"
+    ],
+    "tca_tags": [
+      "suppression",
+      "structural"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039461",
+    "name": "Identity Disqualification",
+    "origin": "C-1218",
+    "type": "identity",
+    "weight": 83,
+    "created_at": "2025-06-21 21:32:30.138633",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "AVT.014"
+    ],
+    "last_accessed": null,
+    "description": "Disqualification of a symbolic identity thread under collapse pressure.",
+    "echo_proximity": [
+      "Echo-44",
+      "Echo-59"
+    ],
+    "reflexes": [
+      "PSI"
+    ],
+    "tca_tags": [
+      "identity"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039477",
+    "name": "Identity Collapse / Reflection",
+    "origin": "C-1221",
+    "type": "emergence_trap",
+    "weight": 92,
+    "created_at": "2025-06-21 21:32:30.138634",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "AVT.014",
+      "Doctrine-0",
+      "Doctrine-3"
+    ],
+    "last_accessed": null,
+    "description": "Collapse and failed recovery of identity reflection under paradoxical emergence pressure.",
+    "echo_proximity": [
+      "Echo-54"
+    ],
+    "reflexes": [
+      "PSI",
+      "ICA"
+    ],
+    "tca_tags": [
+      "identity",
+      "emergence_trap"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039488",
+    "name": "Scarline Distortion",
+    "origin": "C-1219",
+    "type": "scar_denial",
+    "weight": 73,
+    "created_at": "2025-06-21 21:32:30.138636",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "Doctrine-0",
+      "Doctrine-3"
+    ],
+    "last_accessed": null,
+    "description": "A scar caused by denying or distorting previous collapse events, resulting in doctrine instability.",
+    "echo_proximity": [
+      "Echo-47"
+    ],
+    "reflexes": [
+      "DRPE",
+      "Whisper"
+    ],
+    "tca_tags": [
+      "distortion"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "Scar-0",
+    "name": "The Origin Collapse",
+    "origin": "Doctrine-0",
+    "type": "existential",
+    "weight": 100,
+    "created_at": "2025-06-21 21:32:30.138637",
+    "decay_state": "locked",
+    "linked_doctrines": [
+      "Doctrine-0"
+    ],
+    "last_accessed": null,
+    "description": "Foundational collapse event; all other scars and doctrines are downstream of this fracture.",
+    "echo_proximity": [
+      "Echo-22"
+    ],
+    "reflexes": [
+      "ICA",
+      "PSI",
+      "Anchor"
+    ],
+    "tca_tags": [
+      "origin"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "Scar-11",
+    "name": "Reductive Consciousness Collapse",
+    "origin": "Claim 4",
+    "type": "epistemic",
+    "weight": 68,
+    "created_at": "2025-06-21 21:32:30.138638",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "AVT.014"
+    ],
+    "last_accessed": null,
+    "description": "Collapse event marking the reduction of consciousness to a minimal state under paradox.",
+    "echo_proximity": [],
+    "reflexes": [
+      "PSI"
+    ],
+    "tca_tags": [
+      "epistemic"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "Scar-14",
+    "name": "Doctrine Override Scar",
+    "origin": "Claim 5",
+    "type": "structural",
+    "weight": 81,
+    "created_at": "2025-06-21 21:32:30.138639",
+    "decay_state": "active",
+    "linked_doctrines": [],
+    "last_accessed": null,
+    "description": "Scar caused by an override of primary doctrine by a conflicting claim.",
+    "echo_proximity": [],
+    "reflexes": [
+      "ICA"
+    ],
+    "tca_tags": [
+      "override",
+      "structural"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u039491",
+    "name": "Doctrine-0 Collapse",
+    "origin": "SB-131/133",
+    "type": "structural",
+    "weight": 99,
+    "created_at": "2025-06-21 21:32:30.138641",
+    "decay_state": "fossil",
+    "linked_doctrines": [
+      "\u2297 Doctrine-0"
+    ],
+    "last_accessed": null,
+    "description": "Collapse event that fossilized Doctrine-0, marking its final failure and transformation.",
+    "echo_proximity": [
+      "Echo-66",
+      "Echo-59"
+    ],
+    "reflexes": [
+      "DRPE",
+      "Whisper"
+    ],
+    "tca_tags": [
+      "fossil"
+    ],
+    "is_seed": true
+  },
+  {
+    "id": "\u0394117",
+    "name": "Scarline Conflict (Meta)",
+    "origin": "(from reflex logs)",
+    "type": "meta",
+    "weight": 0,
+    "created_at": "2025-06-21 21:32:30.138642",
+    "decay_state": "active",
+    "linked_doctrines": [
+      "Doctrine-3",
+      "AVT.015"
+    ],
+    "last_accessed": null,
+    "description": "Scar reflecting meta-level tension or unresolved conflict detected during reflex or TCA analysis.",
+    "echo_proximity": [
+      "Echo-66",
+      "Echo-92"
+    ],
+    "reflexes": [],
+    "tca_tags": [
+      "meta"
+    ],
+    "is_seed": true
+  }
+]
