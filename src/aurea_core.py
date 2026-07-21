@@ -13,6 +13,8 @@ from src.expansion.sae import SAE
 from src.reflex.reflex_grid import ReflexGrid
 from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
+from src.identity.ril import RIL
+from src.identity.psi import PSI
 from src.output.ore import ORE
 from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
@@ -128,8 +130,28 @@ class AureaCore:
             veiled_thread=self.veiled_thread,
             reflex_grid=self.reflex_grid,
         )
+        # RIL: the identity terminus. Accumulates the five identity threads from what
+        # survives collapse (Ruling 1: RIL is the SOLE WRITER of `threads`). RIL only
+        # reads Codex/ScarLogicCore/BlackSphere/CSA; it sources ICA through ReflexGrid
+        # exactly as compass sources ANCHOR_COLLAPSE, and never arbitrates or locks.
+        self.ril = RIL(
+            codex=self.codex,
+            scar_core=self.scar_core,
+            black_sphere=self.black_sphere,
+            csa=self.csa,
+            reflex_grid=self.reflex_grid,
+        )
+        # PSI (Ruling 8): the Personal Scar Identity reflex. Registered HERE, not in
+        # the Grid's argless _init_core_reflexes slot, because PSI needs the injected
+        # RIL and scar-core handles the Grid does not hold. Registration is housing
+        # only (Ruling 2) - rank comes from RACM's table ("PSI" -> 5), arbitration
+        # stays RACM's, and PSI's output_blocked locks solely through the existing
+        # reflex-agnostic Ruling-6 gate above. No PSI-specific consumer path exists:
+        # its render directive stays parked until HAIL is built.
+        self.psi = PSI(ril=self.ril, scar_core=self.scar_core)
+        self.reflex_grid.add_reflex(self.psi)
         # ----------------------------------------------------------------------
-        
+
         # Initialize EchoNet with connections
         self.echonet = EchoNet(
             scar_core=self.scar_core,
@@ -250,18 +272,28 @@ class AureaCore:
             
             # Step 2.5: ORIENTATION. Read the compass BEFORE deciding how long to carry a
             # contradiction - the leash length depends on whether she still knows which way
-            # is up. Past the Anchor Collapse line, output locks entirely.
+            # is up. Ruling 6: the output lock is the CONSEQUENCE of RACM authorizing a
+            # reflex's suppress (keyed on ANCHOR_COLLAPSE, but any RACM-authorized
+            # output_blocked locks) - never compass's own drift-past-line flag.
             reading = self.compass.read()
             result['compass'] = {
                 'drift': round(reading.drift, 2),
                 'stability': round(reading.stability, 3),
-                'locked': reading.output_locked,
+                'drift_past_lock_line': reading.drift_past_lock_line,
                 'escalations': reading.escalations,
             }
-            if reading.output_locked:
+            # reading.reflex_responses is the direct return of evaluate_pressure at compass's
+            # own registration sites this read - never reflex_grid.last_arbitration, which is
+            # a shared field, stale across cycles and clobbered same-cycle by the later
+            # GSR/scar_density calls below (Steps 4-5).
+            result['reflex_responses'].extend(reading.reflex_responses)
+            arbitrated_lock = next(
+                (r for r in reading.reflex_responses if r.output_blocked), None)
+            if arbitrated_lock is not None:
                 result['output'] = (
-                    f"[OUTPUT LOCKED - compass drift {reading.drift:.1f}° exceeds the Anchor "
-                    f"Collapse line. She does not speak while disoriented.]")
+                    f"[OUTPUT LOCKED by {arbitrated_lock.reflex_id} - compass drift "
+                    f"{reading.drift:.1f}°, RACM-authorized suppress. She does not speak "
+                    f"while disoriented.]")
                 result['output_blocked'] = True
                 self.stats['outputs_suppressed'] += 1
                 return result
@@ -335,6 +367,9 @@ class AureaCore:
                         self.tca.place_scar(scar)
                         self.tca.topology.create_edge(
                             echo.id, scar.id, weight=collapse_result.pressure_generated)
+                        # RIL: identity terminus. Every scar that survives to formation
+                        # is what the identity threads accumulate (Scarline/Origin).
+                        self.ril.ingest_scar(scar)
 
                 elif thread.outcome in (LoopOutcome.ABORT, LoopOutcome.ROUTE):
                     # Carried to exhaustion without resolving. SBSRE has already stored the
@@ -495,6 +530,11 @@ class AureaCore:
             if ruling.executed_by == 'SAE':
                 report['mutated'] += 1
                 self.stats['doctrines_mutated'] += 1
+                # RIL: identity terminus. Record the mutation on DOCTRINE; RIL grounds
+                # or abstains on whether it fractures identity (module docstring).
+                doctrine = self.codex.get(ruling.doctrine_id)
+                if doctrine is not None:
+                    self.ril.ingest_doctrine_mutation(ruling, doctrine)
             elif ruling.verdict.value == 'ferment':
                 report['fermenting'] += 1
                 self.stats['doctrines_fermenting'] += 1

@@ -254,8 +254,13 @@ class RACM:
                 self.last_result = result
                 return result
 
-        # 4. Effective ranking.
-        ranked = sorted(arbitration_set, key=lambda c: self._effective_rank(c))
+        # 4. Effective ranking. Secondary key: DEFERRED WINS TIES (Ruling 9 pt.3,
+        #    canonized 2026-07-20). A claim that already lost a cycle outranks an
+        #    equal-ranked fresh claim - older deferrals first among those. This was
+        #    previously emergent from _merge_with_queue's queue-first insertion order
+        #    + stable sort; the explicit key makes it survive any refactor of that
+        #    ordering.
+        ranked = sorted(arbitration_set, key=self._rank_key)
 
         # 5. Deadlock detection (Core Function 3). Detection does not halt
         #    resolution - it escalates alongside it (see canon's worked example,
@@ -327,6 +332,18 @@ class RACM:
     # =================================================================
     # INTERNALS
     # =================================================================
+
+    def _rank_key(self, claim: ReflexClaim):
+        """Arbitration sort key: (effective rank, deferral seniority).
+
+        Primary: effective rank (lower = more urgent). Secondary (Ruling 9 pt.3,
+        canonized 2026-07-20): at equal effective rank the DEFERRED claim wins, and
+        among deferred claims the one that has waited longest wins. A fresh claim
+        carries seniority 0; a queued claim carries -deferred_cycles.
+        """
+        slot = self._queue.get(claim.reflex_id)
+        seniority = -slot.deferred_cycles if slot else 0
+        return (self._effective_rank(claim), seniority)
 
     def _effective_rank(self, claim: ReflexClaim) -> float:
         """Lower = more urgent. Modifiers RAISE priority, so they SUBTRACT rank."""

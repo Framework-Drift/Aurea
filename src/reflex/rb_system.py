@@ -60,6 +60,17 @@ class RBEntry:
     # v1.1: present only on defer / expire entries.
     deferred_cycles: Optional[int] = None
     ttl_remaining: Optional[int] = None
+    # Ruling 7 (ruled 2026-07-19, implemented 2026-07-20): present ONLY on entries
+    # that DECOMPOSE a GSR cascade. A cascade is not a BehaviorType - the enum is
+    # closed - it is control flow that decomposes into its constituent behavior
+    # (a system-wide SUSPEND, recorded as such) plus this meta-fact: that the
+    # suspension was cascade-class (coherence-collapse-triggered), distinguishable
+    # from the ordinary >0.85 suspend band.
+    # PARKED SURFACE (RIL-Nova / ACR-TCAML pattern): CTL, the ruled home of the
+    # cascade meta-event, is unbuilt. Until CTL exists, this field is where the
+    # fact survives - legible and queryable. Do not fabricate a CTL to consume it;
+    # when CTL is built it reads this field (or supersedes it, by ruling).
+    cascade_meta: Optional[Dict[str, Any]] = None
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:

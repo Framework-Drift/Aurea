@@ -59,6 +59,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+# Reflex base types only - reflex_grid.py never imports compass.py at module load time
+# (its only back-reference, to anchor_collapse.py which imports compass.py, is a LOCAL
+# import inside ReflexGrid._init_core_reflexes, deferred to construction time), so this
+# is not a cycle.
+from src.reflex.reflex_grid import ReflexResponse
+
 
 class Direction(Enum):
     NORTH = "north"    # Core Truths      - doctrinal anchors
@@ -102,7 +108,15 @@ class CompassReading:
     anchors: Dict[Direction, AnchorReading]
     drift: float = 0.0                      # degrees from baseline
     stability: float = 1.0                  # 0.0-1.0, consumed by SBSRE's loop clamp
-    output_locked: bool = False
+    # Ruling 6: a compass-owned DIAGNOSTIC, never a gate. Whether output actually locks
+    # is decided by RACM and carried in `reflex_responses` below - this field only says
+    # drift crossed the hard-kill line, not that anything was authorized to act on it.
+    drift_past_lock_line: bool = False
+    # Every ReflexResponse RACM authorized to EXECUTE from this read's own registrations
+    # (disorientation, collapsed-anchor, drift-band). Same shape as aurea_core's
+    # result['reflex_responses'] - the direct return of evaluate_pressure, never
+    # reflex_grid.last_arbitration (shared, goes stale across cycles - Ruling 6).
+    reflex_responses: List[ReflexResponse] = field(default_factory=list)
     escalations: List[str] = field(default_factory=list)
     disoriented: bool = False               # NO anchors remain in any quadrant
     taken_at: datetime = field(default_factory=datetime.now)
@@ -165,7 +179,7 @@ class CompassStabilityEngine:
             anchors=anchors,
             drift=drift,
             stability=self._stability(drift),
-            output_locked=drift > OUTPUT_LOCK_DEGREES,
+            drift_past_lock_line=drift > OUTPUT_LOCK_DEGREES,
         )
 
         # ---- Fallback exhaustion (1_Symbolic §V) -------------------------------
@@ -176,20 +190,28 @@ class CompassStabilityEngine:
             reading.disoriented = True
             reading.escalations.append(
                 "NO ANCHORS REMAIN in any quadrant - symbolic disorientation → ICA / GSR")
-            self._register("compass_disorientation", 1.0,
-                           {"reason": "no fallback anchors remain"})
+            reading.reflex_responses.extend(self._register(
+                "compass_disorientation", 1.0, {"reason": "no fallback anchors remain"}))
 
         # ---- Anchor Collapse Reflex (2a) ---------------------------------------
         collapsed = {d.value: a.collapsed for d, a in anchors.items() if a.collapsed}
         if collapsed:
             reading.escalations.append(f"anchor collapse: {collapsed} → Anchor Collapse Reflex")
-            self._register("anchor_collapse", 1.0, {"collapsed": collapsed})
+            reading.reflex_responses.extend(self._register(
+                "anchor_collapse", 1.0, {"collapsed": collapsed}))
+
+        # Ruling 6: ACR is single-owner across the whole onset->hard-kill band, so the
+        # Grid must be fed from the same 20 deg line ACR's own reroute threshold reads
+        # (anchor_collapse.py: threshold = ANCHOR_DRIFT_CAP / MAX_DRIFT), not only from
+        # the 25 deg hard-kill line. Level stays the same normalized quantity either way.
+        if drift > ANCHOR_DRIFT_CAP:
+            reading.reflex_responses.extend(self._register(
+                "anchor_collapse", min(drift / MAX_DRIFT, 1.0), {"drift": drift}))
 
         if drift > ANCHOR_COLLAPSE_DEGREES:
             reading.escalations.append(
-                f"drift {drift:.1f}° > {ANCHOR_COLLAPSE_DEGREES}° → Anchor Collapse Reflex; "
-                f"output LOCKED")
-            self._register("anchor_collapse", min(drift / MAX_DRIFT, 1.0), {"drift": drift})
+                f"drift {drift:.1f}° > {ANCHOR_COLLAPSE_DEGREES}° → Anchor Collapse Reflex "
+                f"hard-kill band; lock is RACM's call, not this reading's")
         elif drift > ANCHOR_DRIFT_CAP:
             reading.escalations.append(f"drift {drift:.1f}° > {ANCHOR_DRIFT_CAP}° → realignment")
             self._realign(drift)
@@ -356,12 +378,20 @@ class CompassStabilityEngine:
         if drift > ANCHOR_DRIFT_CAP and hasattr(self.tcaml, "trigger_anchor_realignment"):
             self.tcaml.trigger_anchor_realignment(anchor_id="compass")
 
-    def _register(self, pressure_type: str, level: float, metadata: Dict[str, Any]) -> None:
+    def _register(self, pressure_type: str, level: float,
+                  metadata: Dict[str, Any]) -> List[ReflexResponse]:
         """Reflexes are SOURCED here and ARBITRATED by RACM (Ruling 2). CSE does not decide
-        what its own alarm preempts."""
+        what its own alarm preempts.
+
+        Returns exactly what RACM authorized to EXECUTE for this one registration - the only
+        safe outcome to read (Ruling 6). `reflex_grid.last_arbitration` is a shared field:
+        stale across cycles when nothing fires on a later read, and clobbered within a cycle
+        by later, unrelated registrations (GSR/scar_density in aurea_core). The direct return
+        of `evaluate_pressure` has neither problem.
+        """
         if self.reflex_grid is None:
-            return
-        self.reflex_grid.evaluate_pressure(
+            return []
+        return self.reflex_grid.evaluate_pressure(
             source_module="CSE",
             pressure_type=pressure_type,
             pressure_level=level,
@@ -383,9 +413,12 @@ class CompassStabilityEngine:
         return self.history[-1].stability if self.history else 1.0
 
     @property
-    def output_locked(self) -> bool:
-        """ORE reads this. Past the Anchor Collapse line she stops speaking."""
-        return self.history[-1].output_locked if self.history else False
+    def drift_past_lock_line(self) -> bool:
+        """A compass-owned DIAGNOSTIC, never a gate (Ruling 6). Whether output actually
+        locks past the Anchor Collapse line is RACM's call, carried on the ACR response
+        aurea_core reads off `CompassReading.reflex_responses` - not this property. No
+        module may gate on this; it exists for observability only."""
+        return self.history[-1].drift_past_lock_line if self.history else False
 
     def status(self) -> Dict[str, Any]:
         if not self.history:
@@ -394,7 +427,7 @@ class CompassStabilityEngine:
         return {
             "drift_degrees": round(r.drift, 2),
             "stability": round(r.stability, 3),
-            "output_locked": r.output_locked,
+            "drift_past_lock_line": r.drift_past_lock_line,
             "disoriented": r.disoriented,
             "anchors": {
                 d.value: {"mass": round(a.mass, 2), "holding": len(a.members),

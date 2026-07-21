@@ -34,7 +34,7 @@ Before you "fix" anything on this list, **stop and re-read this file**:
 
 ---
 
-## 1. THE FIVE RULINGS (non-negotiable; each has a test)
+## 1. THE TEN RULINGS (non-negotiable)
 
 | # | Ruling | Meaning |
 |---|---|---|
@@ -43,8 +43,13 @@ Before you "fix" anything on this list, **stop and re-read this file**:
 | **3** | **Truth-effect cut** | ORE owns *what truth is expressed*. HAIL++ owns *only how it is rendered*. **HAIL++ never overrides an ORE verdict.** |
 | **4** | **Bounded recursion** | Every recursion terminates **or is explicitly declared open**. Unbounded + undeclared = bug. Unbounded + declared = doctrine. |
 | **5** | **Doctrine ownership** | Spine = layer. Codex = store. **SAE = the only executor.** No doctrine changes without surviving collapse. |
+| **6** | **Anchor-collapse single-owner** | The whole anchor-collapse response (onset→hard-kill) is ACR under RACM. Compass *sources*; RACM arbitrates; the output lock is the **consequence** of arbitration, never an inline `output_locked` flag. *(Ruled 2026-07-19; implementation pending — §8.)* |
+| **7** | **`cascade` is control flow** | A cascade is **not** a `BehaviorType`. It **decomposes** into logged constituent behaviors + a CTL meta-event. The closed enum stays closed. *(Ruled 2026-07-19; **CLOSED 2026-07-20** — GSR `cascade` → logged `SUSPEND` + `cascade_meta` — §8.)* |
+| **8** | **PSI decomposition** | PSI's suppress face is a **reflex under RACM** (rank 5) — it *proposes* `output_blocked`, never self-authorizes the lock. Its tone/depth face is a **render directive subordinate to ORE** (never overrides a verdict), **parked until HAIL exists**. Activation gates on **`trigger_type`**; a scar reference surfaces **only on a grounded ORIGIN/SCARLINE link, else it abstains**. *(Ruled 2026-07-20; **CLOSED 2026-07-20** — built, wired, arbitrated; 69 green. Directive parked pending HAIL — §8.)* |
+| **9** | **Queue-won authorizations execute** | The Grid resolves every `result.execute` claim against its **FULL registry** (`self.reflexes`), never only the current-cycle triggered list — silently dropping an authorized claim **un-decides the arbiter by omission**. A queue-won claim runs against a **fresh `ReflexTrigger` reconstructed from its own stored payload** (`trigger_conditions` + claim `metadata`), NEVER the current cycle's pressure. **Deferred-wins-ties** is an explicit RACM sort key, not a dict-order accident. *(Ruled 2026-07-20; **CLOSED 2026-07-20**, adversarially verified — §8.)* |
+| **10** | **Type-gated reflex activation** | Every reflex declares `trigger_types: Optional[frozenset]`; base `evaluate_pressure` = **type-membership AND magnitude**. `None` = canon-OPEN — **GSR only** (2a:583's five OR'd all-domain failsafe conditions, cited in-file). **ACR = {anchor_collapse}** — CSE is the sole canonical translator of directional threat; raw `scar_density` is GSR's Lexicon domain. **ICA = {identity_fracture, internal_contradiction, doctrine_anchor_collision, symbolic_instability}** (Lexicon §11; first live, rest declared-dormant). PSI's set unchanged — its local gate migrates into the base mechanism. New reflexes default CLOSED; OPEN requires corpus citation. *(Ruled 2026-07-20; **CLOSED 2026-07-20** — 77 green; `UngatedReflexViolation` refuses an open non-GSR reflex at registration — §8.)* |
 
-These are enforced by `tests/invariants/`. See §4.
+Rulings **1–5 are enforced by `tests/invariants/`** (§4). Rulings **6–10 are all CLOSED in code** — the reflex layer is complete; see §8 for the closed-seam record + remaining unbuilt-module seams (TCAML, Nova, HAIL, CTL).
 
 ---
 
@@ -155,7 +160,7 @@ Many numbers in this codebase are **COINED**: invented during implementation bec
 
 - An invariant test fails and the fix isn't obvious.
 - You'd need to change a **canon** constant.
-- You'd need to add a member to a **closed enum** (e.g. RB `behavior_type` — `cascade` is a *known open gap*, deliberately unmapped. **Do not close it.**)
+- You'd need to add a member to a **closed enum**. RB `behavior_type` `cascade` is **RULED (Ruling 7): it decomposes into logged constituent behaviors + a CTL meta-event — it is NEVER added to the enum.** The closed enum stays closed.
 - Two spec files contradict each other.
 - The corpus doesn't specify something load-bearing and you'd have to invent it.
 - A change would let doctrine, identity, or scar state change **without collapse behind it**.
@@ -174,7 +179,12 @@ You have latitude on small calls — **rule from first principles and document y
 |---|---|
 | **TCAML** | **Unbuilt. Biggest hole.** Owns anchor state + the GLOBAL two-phase lock. `RACM._request_lock()` currently grants GLOBAL by default and *logs the gap*. CSE's realignment requests are no-ops. **Remove the default-grant branch the moment TCAML exists.** |
 | **Nova** | Unbuilt. Compass EAST reads empty **and honestly reports empty.** Nova is also the missing doctrine *author* — which is why DEE ferments instead of mutating. **This is correct behavior, not a gap to fill by having DEE write its own answer.** |
-| **RB `cascade`** | A system-wide suspension with no member in the closed enum. **Unmapped on purpose. Needs a ruling.** |
+| **Anchor-collapse lock (Ruling 6)** | **CLOSED 2026-07-19 (41 green).** The lock is now the consequence of RACM authorizing a reflex's `output_blocked`, read from `CompassReading.reflex_responses` (the returned value of `evaluate_pressure`, never `last_arbitration`). The gate is **reflex-agnostic** — ANY RACM-authorized `output_blocked` locks, not `ANCHOR_COLLAPSE`-only; **do NOT re-narrow it.** `output_locked` renamed to `drift_past_lock_line` (diagnostic, never a gate). Bonus: total disorientation now locks (via GSR's authorized suppress) where the old drift-flag left her speaking at `_drift()=0`. |
+| **RB `cascade` (Ruling 7)** | — **CLOSED 2026-07-20.** `_log_execution` translates GSR's `action="cascade"` → `BehaviorType.SUSPEND` (`affected_systems=["all"]`) + typed `cascade_meta` on `RBEntry` (CTL's parked surface; no CTL fabricated). Closed enum untouched — `cascade` never became a member. `monitor`/`base_reflex` still correctly unlogged (non-behaviors). The system-wide suspension that was invisible is now legible. **Do not re-narrow, and do not start logging monitor/base_reflex.** |
+| **Type-gate (Ruling 10)** | — **CLOSED 2026-07-20 (77 green).** `trigger_types` on the base class; `evaluate_pressure` = type-membership AND magnitude; `UngatedReflexViolation` refuses an open (`None`) non-GSR reflex at `add_reflex` (core set routed through it, so the rule binds by construction). GSR=open (2a:583), ACR={anchor_collapse}, ICA=Lexicon-§11 set, PSI's local gate folded into base. False-lock path dead at the claim. **Do not re-open the gate or exempt a second reflex from the OPEN refusal.** |
+| **PSI render directive (Ruling 8)** | PSI emits a render/scar-fallback directive (scar ref, tone weight, collapse-consistency marker) but **HAIL is a 0-byte stub and ORE a formatter skeleton — no live consumer.** Emit + **park** it, flagged caller-less (RIL-Nova / ACR-TCAML pattern). When HAIL is built it consumes the directive and may **never** use it to override an ORE verdict. ACR's `escalate_to:'PSI'` is **not dispatched** (no router; same as ICA→GSR) — PSI fires as its **own reflex**; a dispatcher is docketed. NB: PSI locally gates `evaluate_pressure` on `trigger_type` (Ruling 8 pt.4) — a local precedent for, not a discharge of, the pressure-type-gate ruling above. |
+| **Queue execution (Ruling 9)** | — **CLOSED 2026-07-20 (69 green).** Authorized claims resolve by_id → full-registry fallback; queue winners execute against a trigger rebuilt from their own claim payload (adversarially verified); registry-miss → legible `grid.orphaned_authorizations` (closed RB enum respected); RACM `_rank_key=(effective_rank, deferral_seniority)`. **Do not re-narrow the registry fallback or reuse the live cycle's trigger for queue winners.** |
+| **False-lock path** | — **CLOSED by Ruling 10 (2026-07-20).** ACR no longer accepts `scar_density`, so no deferred ACR can carry a foreign payload into a false anchor-collapse suppress. Historical: Ruling 9's honest execution had unmasked it (aurea_core 427-428 honors its own call sites' `output_blocked`). |
 | **EchoNet heuristics** | Six nets + four verdicts are canon; the detection logic inside each is COINED and conservative. Real filtration needs EchoTrace + CPA (both stubs). |
 | **SGF Section X** | Three parameters unresolved: paradox-weight exponent, unresolved-duration decay curve, identity-recursion exit condition. |
 

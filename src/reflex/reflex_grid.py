@@ -61,6 +61,17 @@ class ReflexResponse:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+class UngatedReflexViolation(Exception):
+    """Raised when a non-GSR reflex tries to register canon-OPEN (Ruling 10).
+
+    `trigger_types=None` means "activates on EVERY pressure type in the system" -
+    a claim only GSR's canon supports (2a:583, the all-domain failsafe). A reflex
+    that fires on everything is how anchor-collapse suppresses ride in on scar
+    density. This is not a warning to catch and proceed past: register the reflex
+    with the set of types its canon actually names, or escalate for a ruling.
+    """
+
+
 class SymbolicReflex:
     """Base class for all symbolic reflexes.
 
@@ -69,22 +80,41 @@ class SymbolicReflex:
     alongside the winner only if it is LOCAL-scope AND its affected-system set is
     disjoint from every higher executing reflex. A reflex that does not declare
     what it touches cannot be safely run in parallel with anything.
+
+    `trigger_types` (Ruling 10, 2026-07-20) is an ACTIVATION input: the closed set
+    of pressure types this reflex answers to. None = canon-OPEN (every type), which
+    only GSR may claim - `add_reflex` makes the wrong path unexecutable. New
+    reflexes default CLOSED: declare your types.
     """
-    
+
     def __init__(self, id: str, name: str, priority: ReflexPriority,
                  scope: Scope = Scope.LOCAL,
-                 affected_systems: Optional[frozenset] = None):
+                 affected_systems: Optional[frozenset] = None,
+                 trigger_types: Optional[frozenset] = None):
         self.id = id
         self.name = name
         self.priority = priority
         self.scope = scope
         self.affected_systems = affected_systems or frozenset()
+        # Ruling 10: None is NOT a convenience default - it is the canon-OPEN claim,
+        # and registration (add_reflex) refuses it for anything but GSR.
+        self.trigger_types = trigger_types
         self.activation_count = 0
         self.last_triggered: Optional[datetime] = None
         self.threshold = 0.7  # Default pressure threshold
-        
+
     def evaluate_pressure(self, trigger: ReflexTrigger) -> bool:
-        """Determine if pressure exceeds activation threshold."""
+        """Type-membership AND magnitude (Ruling 10).
+
+        Before this ruling the base gate was magnitude-only, and every loud event
+        pulled in every reflex whose threshold it cleared - high compass pressure
+        dragged ICA/GSR into anchor-collapse cycles, and a deferred ACR could carry
+        a scar_density payload into a false anchor-collapse suppress (the false-lock
+        path, CLAUDE.md §8). Type first, magnitude second.
+        """
+        if self.trigger_types is not None \
+                and trigger.trigger_type not in self.trigger_types:
+            return False
         return trigger.pressure_level >= self.threshold
         
     def trigger(self, trigger: ReflexTrigger) -> ReflexResponse:
@@ -99,13 +129,34 @@ class SymbolicReflex:
 
 
 class ICA(SymbolicReflex):
-    """Internal Collapse Awareness - detects internal contradictions."""
-    
+    """Internal Collapse Awareness - detects internal contradictions.
+
+    trigger_types (Ruling 10, Lexicon §11 - ICA's domain is INTERNAL contradiction):
+        identity_fracture          LIVE     sourced by RIL on a grounded fallen-ancestor
+                                            fracture (ril.py `_fire_ica`)
+        internal_contradiction     DORMANT  Lexicon §11's own name for ICA's core event;
+                                            no emitter yet
+        doctrine_anchor_collision  DORMANT  Lexicon §11 collision phrase; no emitter yet
+        symbolic_instability       DORMANT  Lexicon §11 instability phrase; no emitter yet
+
+    ICA does NOT accept sbsre_abort / cascade_warning / escalation / scar_density -
+    no emitter ever named ICA for those; all three escalation-shaped types name GSR
+    in their own code or canon, and scar density is GSR's Lexicon domain. Pre-Ruling-10
+    magnitude spillover pulled ICA into those cycles anyway; that was the seam, not
+    the intent.
+    """
+
     def __init__(self):
         super().__init__(
             "ICA", "Internal Collapse Awareness", ReflexPriority.HIGH,
             scope=Scope.LOCAL,
             affected_systems=frozenset({"output", "doctrine", "suspension"}),
+            trigger_types=frozenset({
+                "identity_fracture",
+                "internal_contradiction",
+                "doctrine_anchor_collision",
+                "symbolic_instability",
+            }),
         )
         self.contradiction_log: List[Dict] = []
         
@@ -163,8 +214,17 @@ class ICA(SymbolicReflex):
 
 
 class GSR(SymbolicReflex):
-    """Guardian Signal Reflex - monitors system-wide symbolic coherence."""
-    
+    """Guardian Signal Reflex - monitors system-wide symbolic coherence.
+
+    trigger_types=None - the ONLY canon-OPEN reflex (Ruling 10). Authority: 2a:583,
+    which arms GSR on five OR'd conditions spanning every domain in the system
+    (collapse loop overload, scar cascade, compass failure, doctrine breakdown,
+    external override) - "a failsafe rather than a consensus mechanism." A failsafe
+    that must be told which pressure types count is not a failsafe; GSR listens to
+    everything and lets its 0.85 threshold do the filtering. Every OTHER reflex
+    declares a closed set - `add_reflex` enforces it.
+    """
+
     def __init__(self, alert_callback: Optional[Callable] = None):
         # GLOBAL scope: the Global Integrity Lock touches everything, so it can
         # never run in parallel with another reflex (Overflow Policy 2), and it
@@ -173,6 +233,7 @@ class GSR(SymbolicReflex):
             "GSR", "Guardian Signal Reflex", ReflexPriority.CRITICAL,
             scope=Scope.GLOBAL,
             affected_systems=frozenset({"all"}),
+            trigger_types=None,   # canon-OPEN, 2a:583 - see class docstring
         )
         self.threshold = 0.85  # Higher threshold for system-wide alerts
         self.alert_callback = alert_callback or self._default_alert
@@ -302,6 +363,9 @@ class ReflexGrid:
         self.reflexes: Dict[str, SymbolicReflex] = {}
         self.active_triggers: List[ReflexTrigger] = []
         self.response_log: List[ReflexResponse] = []
+        # Ruling 9: an RACM-authorized claim whose reflex has left the registry is
+        # recorded here rather than vanishing silently. Empty in a healthy system.
+        self.orphaned_authorizations: List[Dict[str, Any]] = []
 
         # The Grid holds a reference to the arbiter. It does not hold the decision.
         self.rb = rb_system or RBSystem()
@@ -313,20 +377,45 @@ class ReflexGrid:
         
     def _init_core_reflexes(self):
         """Initialize the core reflex set."""
-        # Add ICA and GSR
-        self.reflexes['ICA'] = ICA()
-        self.reflexes['GSR'] = GSR()
-        
+        # Local import: anchor_collapse.py imports SymbolicReflex/ReflexPriority/
+        # Scope/ReflexTrigger/ReflexResponse from this module, so a top-level import
+        # here would cycle back before those names exist. By the time this method
+        # runs (ReflexGrid construction), the module is fully loaded, so importing
+        # here is safe.
+        from src.reflex.anchor_collapse import AnchorCollapseReflex
+
+        # Core reflexes route through add_reflex like everything else, so the
+        # Ruling-10 open-gate refusal binds the core set BY CONSTRUCTION, not by
+        # trusting this method to stay honest.
+        self.add_reflex(ICA())
+        self.add_reflex(GSR())
+        self.add_reflex(AnchorCollapseReflex())
+
         # TODO: Add other reflexes as they're implemented
-        # self.reflexes['PSI'] = PSI()
-        # self.reflexes['ANCHOR_COLLAPSE'] = AnchorCollapseReflex()
+        # PSI is registered by aurea_core via add_reflex() with injected RIL/scar-core
+        # handles this Grid does not hold (Ruling 8) - do NOT add an argless PSI() here.
         # self.reflexes['SCAR_DRIFT'] = ScarDriftReflex()
         # self.reflexes['NOVA_OVERLOAD'] = NovaOverloadReflex()
         # self.reflexes['DRPE'] = DRPE()
         # self.reflexes['SBSRE_ABORT'] = SBSREAbortReflex()
         
     def add_reflex(self, reflex: SymbolicReflex):
-        """Register a new reflex with the grid."""
+        """Register a new reflex with the grid.
+
+        Ruling 10: a canon-OPEN reflex (trigger_types=None) is REFUSED unless it is
+        GSR - the one reflex whose canon (2a:583) is an all-domain failsafe. The
+        refusal is the enforcement: the wrong path is unexecutable, not discouraged.
+        (An impostor registering under the id "GSR" does not smuggle a second open
+        gate in - the registry holds one slot per id, so it would REPLACE the
+        failsafe, which no test suite in this repo would miss.)
+        """
+        if reflex.trigger_types is None and reflex.id != "GSR":
+            raise UngatedReflexViolation(
+                f"'{reflex.id}' declares trigger_types=None (canon-OPEN). Only GSR "
+                f"holds the all-domain failsafe canon (2a:583). Declare the closed "
+                f"set of pressure types this reflex answers to, or escalate for a "
+                f"ruling - there is no default-open registration."
+            )
         self.reflexes[reflex.id] = reflex
         
     def evaluate_pressure(self, source_module: str, 
@@ -363,18 +452,48 @@ class ReflexGrid:
         result = self.racm.arbitrate(claims, context=self._cycle_context(metadata))
         self.last_arbitration = result
 
-        # EXECUTION - run exactly what the arbiter authorized.
+        # EXECUTION - run exactly what the arbiter authorized. Ruling 9 (2026-07-20):
+        # authorized claims resolve against the FULL registry, not only this cycle's
+        # triggered set - a queue winner whose reflex did not re-trigger this cycle
+        # still executes. Before this ruling, such a claim was authorized by RACM,
+        # cleared from the queue, and then silently dropped right here.
         responses: List[ReflexResponse] = []
         by_id = {r.id: r for r in triggered}
         for claim in result.execute:
             reflex = by_id.get(claim.reflex_id)
-            if reflex is None:
-                continue
-            trigger.reflex_id = reflex.id
-            response = reflex.trigger(trigger)
+            if reflex is not None:
+                trigger.reflex_id = reflex.id
+                claim_trigger = trigger
+            else:
+                reflex = self.reflexes.get(claim.reflex_id)
+                if reflex is None:
+                    # Reflex removed from the registry after its claim was deferred.
+                    # An authorized claim must never vanish without a trace (Ruling 9);
+                    # RB's CLOSED behavior enum has no member for this, so the trace
+                    # lives here as legible Grid state instead.
+                    self.orphaned_authorizations.append({
+                        'reflex_id': claim.reflex_id,
+                        'cycle': result.cycle,
+                        'trigger_conditions': dict(claim.trigger_conditions),
+                    })
+                    continue
+                # Queue winner executing NOW against the pressure it claimed THEN:
+                # rebuild its trigger from the claim's own payload. Never hand it the
+                # current cycle's trigger object - that carries this cycle's unrelated
+                # pressure, and it is mutated in this loop.
+                claim_trigger = ReflexTrigger(
+                    reflex_id=reflex.id,
+                    trigger_type=claim.trigger_conditions.get("pressure_type", ""),
+                    pressure_level=float(claim.trigger_conditions.get(
+                        "pressure_level", claim.pressure_level)),
+                    source_module=claim.trigger_conditions.get(
+                        "source_module", claim.source_module),
+                    metadata=claim.metadata,
+                )
+            response = reflex.trigger(claim_trigger)
             responses.append(response)
             self.response_log.append(response)
-            self._log_execution(reflex, response, trigger)
+            self._log_execution(reflex, response, claim_trigger)
 
         return responses
 
@@ -416,15 +535,35 @@ class ReflexGrid:
                        trigger: ReflexTrigger) -> None:
         """All reflexes route to the RB System automatically (RB System, section IV).
 
-        NOTE: `monitor`, `cascade`, and `base_reflex` are response actions with no
-        member in the RB System's CLOSED behavior_type enum, so they are not logged
-        here. `cascade` in particular is a system-wide suspension going unrecorded in
-        the forensic log - flagged for a manifest ruling, not silently mapped.
+        `cascade` (Ruling 7, ruled 2026-07-19, implemented 2026-07-20): a cascade is
+        NOT a BehaviorType and never will be - the enum is closed. It is control
+        flow that DECOMPOSES: the constituent behavior is a system-wide SUSPEND,
+        recorded as exactly that, and the cascade-class fact (system-wide,
+        coherence-collapse-triggered - distinct from the ordinary >0.85 suspend
+        band) rides the entry's `cascade_meta` field, CTL's parked surface. Before
+        this, a system-wide emergency suspension dropped from the forensic log
+        entirely - and post-Ruling-10 GSR is the sole responder on three live
+        channels, so the hole was real.
+
+        `monitor` and `base_reflex` still return unlogged, DELIBERATELY: they are
+        non-behaviors - nothing changed, nothing was suppressed, no state moved.
+        Logging observation as behavior would be noise wearing the forensic log's
+        authority. Ruling 7 translates cascade ONLY.
         """
-        try:
-            behavior = BehaviorType(response.action)
-        except ValueError:
-            return
+        cascade_meta = None
+        if response.action == "cascade":
+            behavior = BehaviorType.SUSPEND
+            cascade_meta = {
+                "decomposed_from": "cascade",
+                "trigger_type": trigger.trigger_type,
+                "pressure_level": trigger.pressure_level,
+                "coherence": response.metadata.get("coherence"),
+            }
+        else:
+            try:
+                behavior = BehaviorType(response.action)
+            except ValueError:
+                return
         self.rb.record(
             reflex_triggered=reflex.id,
             behavior_type=behavior,
@@ -436,6 +575,7 @@ class ReflexGrid:
             symbolic_context=response.message,
             outcome={"result": response.action,
                      "output_blocked": response.output_blocked},
+            cascade_meta=cascade_meta,
         )
         
     def get_system_status(self) -> Dict[str, Any]:
