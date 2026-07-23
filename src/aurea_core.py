@@ -108,8 +108,9 @@ class AureaCore:
         # invariant); everything else it wants is a REQUEST list or a return
         # value. ZERO MUTATION RISK in 2a: the `proposals` seam below stays
         # None, so nothing Nova holds can reach SAE - doctrine mutation remains
-        # structurally impossible until 2b opens that path. Compass EAST is
-        # NOT wired to it yet (see the compass construction below).
+        # structurally impossible until 2b opens that path. Compass EAST reads
+        # this engine live (below), and it cycles once per pipeline pass
+        # (see _nova_cycle).
         self.nova = NovaEngine()
 
         # ---- THE COLLAPSE SPINE ----------------------------------------------
@@ -120,7 +121,7 @@ class AureaCore:
             codex=self.codex,
             scar_core=self.scar_core,
             black_sphere=self.black_sphere,
-            nova=None,                     # unbuilt: EAST reads empty, and REPORTS empty
+            nova=self.nova,                # Stage 2a: EAST reads real Nova state - active_echoes()
             tcaml=None,                    # unbuilt: realignment requests are no-ops for now
             reflex_grid=self.reflex_grid,
         )
@@ -428,6 +429,14 @@ class AureaCore:
                     )
                     result['reflex_responses'].extend(density_responses)
 
+            # Step 5a.5: NOVA (Stage 2a). Cycle Nova ONCE here, AFTER all reflex
+            # arbitration this pass (compass-read Step 2.5 + GSR cascade Step 4 +
+            # scar-density Step 5 have all appended their RACM-authorized returns
+            # to result['reflex_responses']) and BEFORE _evolve_doctrine (so the
+            # echo state Docket C reads is current). Ferment + erupt; never
+            # proposes - proposals stays None in _evolve_doctrine (2a boundary).
+            self._nova_cycle(result['reflex_responses'])
+
             # Step 5b: DOCTRINE EVOLUTION. A new scar is pressure on everything it touches.
             # DEE gates; SAE executes; the Codex records. This orchestrator does none of those.
             result['doctrine'] = self._evolve_doctrine(result, collapse_result)
@@ -496,6 +505,80 @@ class AureaCore:
         if collapse.verdict is EchoVerdict.SCARRED:
             return "irreconcilable"
         return None    # SUSPENDED: unresolved is not the same as refuted. Carry it.
+
+    def _nova_cycle(self, reflex_responses: List[Any]) -> None:
+        """Nova Stage 2a: one fermentation-and-eruption pass, ZERO mutation risk.
+
+        Nova ferments its echoes and may erupt new ones; it NEVER proposes here
+        (proposals stays None in _evolve_doctrine). G5 first: if expansion is
+        under an authorized suspension this cycle, cycle() records its own
+        refusal and advances nothing, and we skip eruption too - deference is
+        total, not cosmetic.
+        """
+        suppressed = self._nova_suppressed(reflex_responses)
+        self.nova.cycle(suppressed=suppressed, source='aurea_core')
+        if suppressed:
+            return
+        self._nova_erupt_from_doctrine_strain()
+
+    def _nova_suppressed(self, reflex_responses: List[Any]) -> bool:
+        """G5 suppression read (STEP 3) - the honest one, NOT output_blocked.
+
+        `output_blocked` means "she does not speak" - a RENDER state. Nova's
+        deference is about EXPANSION being halted. Different conditions;
+        conflating them is the convenient-flag error. GSR's high-pressure
+        suspend targets ["expansion","nova"] with output_blocked=FALSE - the
+        exact case a render-flag read would miss.
+
+        Honest surface: a RACM-AUTHORIZED response this cycle whose effect is a
+        suspension AND whose target_modules name nova / expansion / all.
+        `reflex_responses` is result['reflex_responses'] - the accumulated
+        DIRECT returns of evaluate_pressure (compass-read + GSR + scar-density),
+        every entry already RACM-authorized by construction (the Grid returns
+        only what RACM executed, Ruling 9). NEVER last_arbitration (shared,
+        stale, clobbered same-cycle - the same discipline the Ruling-6 gate
+        keeps). "cascade" is GSR's system-wide SUSPEND decomposition (Ruling 7,
+        target ["all"]); "suspend" is its selective halt (target
+        ["expansion","nova"]).
+        """
+        halt_targets = {"nova", "expansion", "all"}
+        for r in reflex_responses:
+            if getattr(r, 'action', None) in ("suspend", "cascade") \
+                    and halt_targets & set(getattr(r, 'target_modules', []) or []):
+                return True
+        return False
+
+    def _nova_erupt_from_doctrine_strain(self) -> None:
+        """STEP 4 eruption - ONE wired source: doctrine strain from DEE's watch.
+
+        DEE's DMW queue (`self.dee.dmw.queue`) holds one slot per doctrine under
+        SUSTAINED, DEE-admitted strain, persisting across cycles. Each key is a
+        real Codex doctrine id; the slot is a real strain record - so an echo
+        erupted from it traces to something survived (G1: origin_kind
+        "doctrine_strain", origin_id the doctrine id; the constructor raises on
+        a bad one - no fabricated id here). scar_links come from the doctrine's
+        OWN real scar links, nothing invented.
+
+        Minimal dedup: at most one live echo per strained doctrine (checked
+        against the index by origin) - a doctrine strained for N cycles yields
+        one echo, not N. The full Nova Echo Crosscheck (5a:82) is NOT-YET-WIRED.
+        EchoNet filtration residue, CSA fragments, and scar-conflict eruption
+        (all built and available) are ALSO NOT-YET-WIRED sources - Stage 2a
+        wires exactly one, honestly, per the contract.
+        """
+        existing = {(e.origin_kind, e.origin_id)
+                    for e in self.nova.echo_index.values()}
+        for doctrine_id in list(self.dee.dmw.queue):
+            if ("doctrine_strain", doctrine_id) in existing:
+                continue
+            doctrine = self.codex.get(doctrine_id)
+            if doctrine is None:
+                continue                      # released/expired mid-cycle; nothing real to trace
+            self.nova.erupt(
+                origin_kind="doctrine_strain",
+                origin_id=doctrine_id,
+                scar_links=list(doctrine.scar_links),
+            )
 
     def _evolve_doctrine(self, result: Dict[str, Any], collapse_result) -> Dict[str, Any]:
         """Run one DEE evolution pass. The orchestrator gates nothing and writes nothing.

@@ -346,6 +346,27 @@ class NovaEngine:
         return echo
 
     # -----------------------------------------------------------------
+    # Read surface (reads are free, Ruling 1) - what the compass consumes
+    # -----------------------------------------------------------------
+
+    def active_echoes(self) -> List["NovaEcho"]:
+        """The echoes that PULL: status ACTIVE (Echo Protocol IV,
+        "Accumulating symbolic pressure") - not yet collapsed, but exerting
+        emergent-vector pull. This is CSE's EAST surface (compass canon:
+        "Emergent Vectors - Nova echoes, not yet collapsed, but pulling").
+
+        A pure read over Nova's own index - it writes nothing and owns
+        nothing new (G4 intact). DORMANT echoes await context and do not yet
+        pull; DECAYING/MUTATED have left the emergent phase. Deliberately NO
+        per-echo `pull`/heat magnitude: the Symbolic Heat Index (Echo
+        Protocol IV) is an un-coined score, and CSE weights each echo at its
+        own getattr-default (1.0) - so EAST mass is an honest COUNT of
+        pulling echoes, not a fabricated heat sum.
+        """
+        return [e for e in self.echo_index.values()
+                if e.status is FermentationStatus.ACTIVE]
+
+    # -----------------------------------------------------------------
     # Fermentation (Echo Protocol III.2) - G5 gate at cycle entry
     # -----------------------------------------------------------------
 
