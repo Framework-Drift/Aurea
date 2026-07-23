@@ -35,6 +35,11 @@ STORE_OWNERS: dict[str, str] = {
     "scars": "src/filtration/scar_logic_core.py",
     "doctrines": "src/doctrine/codex.py",
     "threads": "src/identity/ril.py",
+    # Ruling 12 G4 (2026-07-21) put the Nova Echo Index in the ownership
+    # tables; registered here 2026-07-22 (Ruling-13 pass) so the assertion is
+    # SCANNED, not just asserted. Trivially green while Nova is unwired -
+    # load-bearing the moment Stage 2 gives other modules a Nova handle.
+    "echo_index": "src/expansion/nova.py",
 }
 
 

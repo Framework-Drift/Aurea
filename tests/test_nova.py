@@ -14,6 +14,8 @@ No wiring is exercised here - Stage 1 has none. DO NOT weaken these tests.
 They pin an architect ruling.
 """
 
+import copy
+
 import pytest
 
 from src.expansion.nova import (
@@ -21,6 +23,7 @@ from src.expansion.nova import (
     FermentationStatus,
     NovaEcho,
     NovaEngine,
+    ProvenanceOverwriteViolation,
     StoreFragment,
     UngroundedEchoViolation,
     UngroundedFragmentViolation,
@@ -296,3 +299,130 @@ def test_suppression_does_not_kill_the_engine_afterward():
     engine.cycle(suppressed=True)
     engine.cycle(suppressed=False)
     assert echo.status is FermentationStatus.ACTIVE
+
+
+# =====================================================================
+# Ruling 13 (2026-07-22): an echo is SPENT when it authors
+# =====================================================================
+
+def _mutate_second_echo(engine, origin_id="Δ88", scar_links=("Δ88",)):
+    """Take a second echo honestly through the lifecycle on a live engine."""
+    echo = engine.erupt("scar", origin_id, scar_links=list(scar_links))
+    for _ in range(FERMENTATION_ELIGIBILITY_CYCLES + 1):
+        engine.cycle(suppressed=False)
+    assert engine.record_collapse_result(echo.id, success=True)
+    return echo
+
+
+# ---------------------------------------------------------------------
+# (R13-1) one echo, one proposal, EVER
+# ---------------------------------------------------------------------
+
+def test_one_echo_one_proposal_ever():
+    """The same call that emitted once emits nothing the second time - the
+    echo is spent, and the unbacked doctrine is refused legibly."""
+    engine, echo = _mutated_engine()
+    fragments = _doctrine_fragments("D-001")
+
+    first = engine.proposals(fragments)
+    assert set(first) == {"D-001"}
+    assert echo.spent_on == first["D-001"].id
+    assert echo.spent_at is not None
+    assert echo.is_spent
+
+    second = engine.proposals(fragments)
+    assert second == {}, "a spent echo may never back another proposal"
+    refusal = engine.refusals[-1]
+    assert refusal["action"] == "proposals"
+    assert refusal["doctrine_id"] == "D-001"
+
+
+# ---------------------------------------------------------------------
+# (R13-2) the first emission's provenance survives VERBATIM
+# ---------------------------------------------------------------------
+
+def test_first_provenance_survives_verbatim_across_subsequent_calls():
+    engine, echo = _mutated_engine()
+    first = engine.proposals(_doctrine_fragments("D-001"))
+    proposal_id = first["D-001"].id
+    original = copy.deepcopy(engine.proposal_provenance[proposal_id])
+
+    # Subsequent activity: refused re-emission, a second echo authoring for
+    # the same doctrine, more fermentation.
+    engine.proposals(_doctrine_fragments("D-001"))
+    _mutate_second_echo(engine)
+    engine.proposals(_doctrine_fragments("D-001"))
+
+    assert engine.proposal_provenance[proposal_id] == original, (
+        "the exact map, byte for byte - a forensic record is never rewritten")
+
+
+# ---------------------------------------------------------------------
+# (R13-3) append-only: an existing key RAISES
+# ---------------------------------------------------------------------
+
+def test_provenance_overwrite_raises():
+    engine, _ = _mutated_engine()
+    out = engine.proposals(_doctrine_fragments("D-001"))
+    proposal_id = out["D-001"].id
+
+    with pytest.raises(ProvenanceOverwriteViolation):
+        engine._append_provenance(proposal_id, [{"store": "scars",
+                                                 "record_id": "Δ99"}])
+    # The raise protected the record - nothing changed.
+    assert engine.proposal_provenance[proposal_id] != [
+        {"store": "scars", "record_id": "Δ99"}]
+
+
+# ---------------------------------------------------------------------
+# (R13-4) the closed-enum pin: exactly the four canon members
+# ---------------------------------------------------------------------
+
+def test_fermentation_status_has_exactly_the_four_canon_members():
+    """Consumption is a FIELD, not a status. If a fifth member (SPENT,
+    CONSUMED, ...) ever appears here, someone re-made the Ruling-7 mistake
+    in Nova's enum. The enum is canon-closed (5a:1118-1123)."""
+    assert {s.value for s in FermentationStatus} == {
+        "dormant", "active", "decaying", "mutated"}
+
+
+# ---------------------------------------------------------------------
+# (R13-5) the anti-over-narrow pin: consumption is per-ECHO
+# ---------------------------------------------------------------------
+
+def test_second_distinct_echo_backs_a_proposal_for_the_same_doctrine():
+    """MUST STAY GREEN. Different survived material legitimately bears on
+    the same belief - spending echo A must not bar echo B from proposing
+    for the same strained doctrine. Each proposal gates independently at
+    DEE. If this fails, consumption was over-narrowed to per-doctrine."""
+    engine, first_echo = _mutated_engine()
+    first = engine.proposals(_doctrine_fragments("D-001"))
+    assert set(first) == {"D-001"}
+
+    second_echo = _mutate_second_echo(engine)
+    second = engine.proposals(_doctrine_fragments("D-001"))
+
+    assert set(second) == {"D-001"}, (
+        "a distinct MUTATED echo still proposes for the same doctrine")
+    assert second["D-001"].id != first["D-001"].id
+    assert second_echo.spent_on == second["D-001"].id
+    assert first_echo.spent_on == first["D-001"].id, "first echo untouched"
+    # Both forensic records coexist - append-only means both survive.
+    assert first["D-001"].id in engine.proposal_provenance
+    assert second["D-001"].id in engine.proposal_provenance
+
+
+# ---------------------------------------------------------------------
+# (R13-6) consumption is not deletion: the spent record is CARRIED
+# ---------------------------------------------------------------------
+
+def test_spent_echo_remains_in_index_with_status_mutated():
+    engine, echo = _mutated_engine()
+    engine.proposals(_doctrine_fragments("D-001"))
+
+    assert echo.is_spent
+    assert echo.id in engine.echo_index, "consumption is not deletion"
+    assert engine.echo_index[echo.id] is echo
+    assert echo.status is FermentationStatus.MUTATED, (
+        "spent is a fact about authorship - the fermentation state it "
+        "earned by surviving collapse is not revoked")

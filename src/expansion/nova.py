@@ -43,6 +43,24 @@ G5  cycle() refuses to run under suppression: "Nova Engine must not initiate
     suppression or lockout states" (5a:1067). Stage 1 receives `suppressed`
     as a parameter; the live RACM/Grid/TCAML read is Stage 2.
 
+RULING 13 (2026-07-22): AN ECHO IS SPENT WHEN IT AUTHORS
+--------------------------------------------------------
+One echo backs one proposal, EVER. Authorship consumes: an echo that has
+survived collapse carries exactly one act of doctrine-authorship in it, and
+re-spending it would let a single survival multiply into many proposals -
+resolved consensus wearing survived contradiction's face. Consumption is a
+FIELD (`spent_on` = the proposal id, + `spent_at`), NOT a fifth
+FermentationStatus - that enum is canon-closed at DORMANT/ACTIVE/DECAYING/
+MUTATED and stays closed (Ruling 7's shape: a fact about an echo is not a
+fermentation state; `status` remains MUTATED). `proposal_provenance` is
+APPEND-ONLY: writing a key that already exists RAISES
+ProvenanceOverwriteViolation - an overwrite means the one-proposal-ever gate
+already failed upstream, and a forensic record is never overwritten
+(Ruling 11's principle, second application). NOT over-narrowed: consumption
+is per-ECHO, not per-doctrine - a second, distinct MUTATED echo may still
+propose for the same strained doctrine; different survived material
+legitimately bears on the same belief, each gated independently by DEE.
+
 TIMER -> ELIGIBILITY ONLY (the overruled line)
 ----------------------------------------------
 Nova Engine v2.0's core logic contains the literal step `Timer -> Mutation |
@@ -132,6 +150,19 @@ class UngroundedFragmentViolation(Exception):
     """
 
 
+class ProvenanceOverwriteViolation(Exception):
+    """Ruling 13: an attempt to write `proposal_provenance` for a key that
+    already exists.
+
+    The provenance map is APPEND-ONLY. Its keys embed the authoring echo's
+    id, and Ruling 13 spends an echo on its one authorship - so a colliding
+    key cannot happen unless the one-proposal-ever gate has ALREADY failed
+    upstream. This raise is the detector for that structural break, not an
+    error to catch and route around: a forensic record is never overwritten
+    (Ruling 11's principle, second application).
+    """
+
+
 class FermentationStatus(Enum):
     """Canon names EXACTLY (5a:1118-1123). Closed - do not extend."""
     DORMANT = "dormant"     # Awaiting context
@@ -191,6 +222,12 @@ class NovaEcho:
     fermentation_cycles: int = 0
     collapse_attempts: List[Dict[str, Any]] = field(default_factory=list)  # IV log
     created_at: datetime = field(default_factory=datetime.now)
+    # Ruling 13: consumption. Set ONCE, by proposals() emission, in the same
+    # operation that writes the provenance entry. A FIELD, not a status -
+    # FermentationStatus is canon-closed and `status` stays MUTATED: being
+    # spent is a fact about the echo's authorship, not a fermentation state.
+    spent_on: Optional[str] = None          # the proposal id it authored
+    spent_at: Optional[datetime] = None
     # Fusion History (IV) is DECLARED DORMANT - no field. Engine v1 is
     # single-echo by ruling; a fusion field with no fusion logic is an
     # invitation, not a record. See module docstring.
@@ -208,6 +245,11 @@ class NovaEcho:
                 f"An echo with no traceable origin is fabricated pressure - "
                 f"there is no placeholder origin and no default."
             )
+
+    @property
+    def is_spent(self) -> bool:
+        """Ruling 13: this echo has authored its one proposal, ever."""
+        return self.spent_on is not None
 
     @property
     def collapse_eligible(self) -> bool:
@@ -251,7 +293,8 @@ class NovaEngine:
 
         # Provenance map per emitted proposal id (G3): every piece of every
         # proposal, traceable to the store record it came from. Written only
-        # at emission; read by anyone.
+        # at emission, APPEND-ONLY (Ruling 13) - all writes go through
+        # _append_provenance, which raises on an existing key. Read by anyone.
         self.proposal_provenance: Dict[str, List[Dict[str, str]]] = {}
 
         self._seq = 0
@@ -259,6 +302,24 @@ class NovaEngine:
     def _next_id(self) -> str:
         self._seq += 1
         return f"NE-{self._seq:04d}"
+
+    def _append_provenance(self, proposal_id: str,
+                           provenance: List[Dict[str, str]]) -> None:
+        """THE only write path into `proposal_provenance` (Ruling 13).
+
+        Append-only: an existing key raises ProvenanceOverwriteViolation.
+        The raise is a detector, not a validation nicety - a colliding key
+        means an echo authored twice, which the spent gate should have made
+        impossible. Do not catch it here or soften it to a merge/skip.
+        """
+        if proposal_id in self.proposal_provenance:
+            raise ProvenanceOverwriteViolation(
+                f"proposal_provenance already holds '{proposal_id}'. The "
+                f"provenance map is append-only (Ruling 13) - an overwrite "
+                f"attempt means the one-proposal-ever gate failed upstream. "
+                f"A forensic record is never overwritten."
+            )
+        self.proposal_provenance[proposal_id] = provenance
 
     # -----------------------------------------------------------------
     # Eruption (Echo Protocol III.1)
@@ -412,6 +473,13 @@ class NovaEngine:
         Engine v1 is single-echo: one echo backs at most one proposal per
         call, oldest qualifying echo first.
 
+        Ruling 13: authorship CONSUMES. A spent echo (`spent_on` set) never
+        qualifies again - one echo, one proposal, ever. Emission marks the
+        echo spent in the same operation that appends its provenance entry
+        (which is append-only and raises on collision). Consumption is
+        per-ECHO, not per-doctrine: a later, distinct MUTATED echo may
+        still propose for the same strained doctrine.
+
         G3: the new form is pure RECOMBINATION. Every piece of the emitted
         Doctrine's description carries its [store:record_id] tag inline, and
         `proposal_provenance[new_id]` holds the full structured map. The
@@ -423,6 +491,7 @@ class NovaEngine:
         qualifying = [
             e for e in sorted(self.echo_index.values(), key=lambda e: e.id)
             if e.status is FermentationStatus.MUTATED and e.scar_links
+            and not e.is_spent  # Ruling 13: authorship consumed the others
         ]
         emitted: Dict[str, Doctrine] = {}
 
@@ -467,7 +536,12 @@ class NovaEngine:
                                "record_id": echo.id})
             provenance.append({"store": echo.origin_kind,
                                "record_id": echo.origin_id})
-            self.proposal_provenance[new_id] = provenance
+            # Ruling 13 - ONE operation: append the forensic record (raises
+            # on collision, leaving the echo unspent and state consistent),
+            # then consume the echo. Nothing between the two.
+            self._append_provenance(new_id, provenance)
+            echo.spent_on = new_id
+            echo.spent_at = datetime.now()
 
             emitted[doctrine_id] = Doctrine(
                 id=new_id,
