@@ -564,9 +564,16 @@ class ReflexGrid:
                 behavior = BehaviorType(response.action)
             except ValueError:
                 return
+        # Ruling 11 (2026-07-21): durability is decided HERE, by scope. A
+        # GLOBAL-scope reflex's entry hits disk immediately (best-effort -
+        # RBSystem's wrapped flush never raises back into this path); LOCAL
+        # entries buffer to a boundary. Cascade is durable because GSR is
+        # GLOBAL, not because it is named - no action check in this decision.
         self.rb.record(
             reflex_triggered=reflex.id,
             behavior_type=behavior,
+            durable=(reflex.scope == Scope.GLOBAL),
+            scope=reflex.scope.value,
             trigger_conditions={
                 "pressure_type": trigger.trigger_type,
                 "pressure_level": trigger.pressure_level,
