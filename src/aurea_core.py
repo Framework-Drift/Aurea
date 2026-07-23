@@ -10,6 +10,7 @@ from src.doctrine.codex import Codex
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
 from src.expansion.sae import SAE
+from src.expansion.nova import NovaEngine
 from src.reflex.reflex_grid import ReflexGrid
 from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
@@ -101,6 +102,15 @@ class AureaCore:
         
         # Initialize Topological Constellation Architecture
         self.tca = TCAIntegration()
+
+        # Nova (Ruling 12, Stage 2a): the doctrine AUTHOR, now constructed and
+        # owned here. Sole writer of `echo_index` (G4, scanned by the Ruling-1
+        # invariant); everything else it wants is a REQUEST list or a return
+        # value. ZERO MUTATION RISK in 2a: the `proposals` seam below stays
+        # None, so nothing Nova holds can reach SAE - doctrine mutation remains
+        # structurally impossible until 2b opens that path. Compass EAST is
+        # NOT wired to it yet (see the compass construction below).
+        self.nova = NovaEngine()
 
         # ---- THE COLLAPSE SPINE ----------------------------------------------
         # CSE: orientation. Holds NO anchor store - it derives N/S/E/W from the modules that
@@ -494,11 +504,13 @@ class AureaCore:
         SAE executes; the Codex records. AureaCore's only job here is to hand DEE the
         pressure signals and report what it decided.
 
-        NOTE: no `proposals` are passed. Nothing in the live pipeline yet AUTHORS a candidate
-        doctrine - that is Nova's and DBE's job, and they are unbuilt. So eligible doctrines
-        will FERMENT rather than mutate. That is the correct behavior, not a gap to paper
-        over: AUREA does not get to invent what she becomes just because pressure demands
-        that she become something.
+        NOTE: no `proposals` are passed - BY STAGE DESIGN (Nova Stage 2a). Nova is
+        constructed and its echo state is real, but its proposals seam stays unwired:
+        `proposals=None` keeps doctrine mutation structurally impossible (SAE needs a
+        proposed form) until Stage 2b deliberately opens that path. DBE remains unbuilt.
+        Eligible doctrines FERMENT rather than mutate - correct behavior, not a gap to
+        paper over: AUREA does not get to invent what she becomes just because pressure
+        demands that she become something.
         """
         report: Dict[str, Any] = {'rulings': [], 'mutated': 0, 'fermenting': 0}
 
@@ -518,8 +530,35 @@ class AureaCore:
                 'scar_bloom': len(doctrine.scar_links) >= 3,
             }
 
+        # Docket C (Stage 2a, 2026-07-23): `echo_origin` is DERIVED from real
+        # Nova state, never a literal. The old hardcode ({'echo_origin': True}
+        # for every doctrine) claimed, falsely, that a Nova echo underwrote
+        # every doctrine - and CMTE criterion 2 is an OR, so a doctrine with
+        # NO scar links passed the gate whose law is "No belief may evolve
+        # unless the fracture that broke it can still be seen." Harmless only
+        # while proposals=None; a lie the moment 2b opens the seam.
+        #
+        # v1 BEARING RULE (conservative by design - broadening is a ruling,
+        # not an edit): an echo bears on a doctrine iff it ERUPTED FROM that
+        # doctrine's strain (origin_kind == "doctrine_strain", origin_id ==
+        # the doctrine id). Scar-link overlap is deliberately NOT inferred -
+        # that would be a weaker re-fabrication of the same false claim.
+        #
+        # `echo_resonance` is NOT supplied: no real resonance value exists in
+        # the organ (Echo Protocol IV's scores are deliberately un-coined),
+        # and criterion 3's absent-reads-as-pass semantics stay DEE's own.
+        context: Dict[str, Dict[str, Any]] = {}
+        for doctrine_id in signals:
+            context[doctrine_id] = {
+                'echo_origin': any(
+                    e.origin_kind == "doctrine_strain"
+                    and e.origin_id == doctrine_id
+                    for e in self.nova.echo_index.values()
+                ),
+            }
+
         rulings = self.dee.cycle(signals=signals, proposals=None,
-                                 context={d: {'echo_origin': True} for d in signals})
+                                 context=context)
 
         for ruling in rulings:
             report['rulings'].append({
