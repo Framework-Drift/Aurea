@@ -10,7 +10,7 @@ from src.doctrine.codex import Codex
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
 from src.expansion.sae import SAE
-from src.expansion.nova import NovaEngine
+from src.expansion.nova import NovaEngine, FermentationStatus
 from src.reflex.reflex_grid import ReflexGrid
 from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
@@ -112,6 +112,12 @@ class AureaCore:
         # this engine live (below), and it cycles once per pipeline pass
         # (see _nova_cycle).
         self.nova = NovaEngine()
+        # Ruling 14: G2's guarantee is CHECKED here, not assumed. A proposal
+        # whose backing echo is not MUTATED-and-scar-linked is a G2 BREACH -
+        # it lands on this legible surface and denies echo_origin. It never
+        # raises into the pipeline: an observer that can halt a safety path
+        # is not an observer (Ruling 11's principle). Empty in a healthy system.
+        self.nova_gate_breaches: List[Dict[str, Any]] = []
 
         # ---- THE COLLAPSE SPINE ----------------------------------------------
         # CSE: orientation. Holds NO anchor store - it derives N/S/E/W from the modules that
@@ -580,6 +586,73 @@ class AureaCore:
                 scar_links=list(doctrine.scar_links),
             )
 
+    def _backing_echo(self, proposal: Doctrine):
+        """The echo RECORDED AS AUTHORING this proposal, or None.
+
+        Source: Nova's `proposal_provenance` - the APPEND-ONLY forensic record
+        of authorship (Ruling 13), guarded by ProvenanceOverwriteViolation.
+        Chosen over the proposal's own `mutation_lineage` because that is an
+        ordinary dataclass field any future author (DBE, a Spine request)
+        could set, whereas provenance is Nova's protected record of what
+        actually went into the emission. A proposal authored by something
+        other than Nova has no entry here, so it backs no echo_origin claim -
+        which is correct: echo_origin means a NOVA echo survived.
+        """
+        for entry in self.nova.proposal_provenance.get(proposal.id, []):
+            if entry.get("store") == "nova_echo_index":
+                return self.nova.echo_index.get(entry.get("record_id"))
+        return None
+
+    def _echo_origin(self, doctrine_id: str, proposals: Dict[str, Doctrine]) -> bool:
+        """RULING 14: True iff a PROPOSAL for `doctrine_id` exists AND the echo
+        recorded as authoring it is MUTATED and scar-linked.
+
+        This is the gate that decides whether a SCAR-LESS belief may evolve
+        (CMTE criterion 2 is an OR, so echo_origin is load-bearing only there).
+        It therefore demands a SURVIVED echo, not merely an existing one.
+
+        G2's guarantee is CHECKED, not assumed. Nova's proposals() is supposed
+        to emit only MUTATED + scar-linked echoes; if a proposal ever reaches
+        here backed by an echo that is neither, that is a G2 BREACH. It is
+        recorded legibly on `nova_gate_breaches` and DENIES echo_origin - it
+        never raises, because this observer must not be able to halt the
+        pipeline it observes (Ruling 11's principle).
+        """
+        proposal = proposals.get(doctrine_id)
+        if proposal is None:
+            return False
+
+        echo = self._backing_echo(proposal)
+        if echo is None:
+            self._record_gate_breach(
+                doctrine_id, proposal.id, None,
+                "proposal has no recorded authoring echo - dangling provenance")
+            return False
+        if echo.status is not FermentationStatus.MUTATED:
+            self._record_gate_breach(
+                doctrine_id, proposal.id, echo.id,
+                f"G2 breach: backing echo is {echo.status.value}, not MUTATED "
+                f"- an unverified echo may not write doctrine")
+            return False
+        if not echo.scar_links:
+            self._record_gate_breach(
+                doctrine_id, proposal.id, echo.id,
+                "G2 breach: backing echo carries no scar linkage - the "
+                "fracture that broke this belief cannot be seen")
+            return False
+        return True
+
+    def _record_gate_breach(self, doctrine_id: str, proposal_id: str,
+                            echo_id: Optional[str], reason: str) -> None:
+        """Legible surface for a Ruling-14/G2 breach. Never raises."""
+        self.nova_gate_breaches.append({
+            'doctrine_id': doctrine_id,
+            'proposal_id': proposal_id,
+            'echo_id': echo_id,
+            'reason': reason,
+            'timestamp': datetime.now().isoformat(),
+        })
+
     def _evolve_doctrine(self, result: Dict[str, Any], collapse_result) -> Dict[str, Any]:
         """Run one DEE evolution pass. The orchestrator gates nothing and writes nothing.
 
@@ -613,34 +686,36 @@ class AureaCore:
                 'scar_bloom': len(doctrine.scar_links) >= 3,
             }
 
-        # Docket C (Stage 2a, 2026-07-23): `echo_origin` is DERIVED from real
-        # Nova state, never a literal. The old hardcode ({'echo_origin': True}
-        # for every doctrine) claimed, falsely, that a Nova echo underwrote
-        # every doctrine - and CMTE criterion 2 is an OR, so a doctrine with
-        # NO scar links passed the gate whose law is "No belief may evolve
-        # unless the fracture that broke it can still be seen." Harmless only
-        # while proposals=None; a lie the moment 2b opens the seam.
+        # Docket C (Stage 2a): `echo_origin` is DERIVED from real Nova state,
+        # never a literal - in EITHER direction. The original hardcode
+        # ({'echo_origin': True} for every doctrine) claimed falsely that a
+        # Nova echo underwrote every doctrine; a hardcoded False would be the
+        # same shape with the opposite sign, honest only until proposals
+        # arrive. It is computed, every pass, from what actually exists.
         #
-        # v1 BEARING RULE (conservative by design - broadening is a ruling,
-        # not an edit): an echo bears on a doctrine iff it ERUPTED FROM that
-        # doctrine's strain (origin_kind == "doctrine_strain", origin_id ==
-        # the doctrine id). Scar-link overlap is deliberately NOT inferred -
-        # that would be a weaker re-fabrication of the same false claim.
+        # RULING 14 (2026-07-23) supersedes Stage 2a's v1 bearing rule.
+        # `echo_origin[d]` is True iff a PROPOSAL for d exists AND the echo
+        # recorded as authoring it is MUTATED and scar-linked. NOT "an echo
+        # bears on d": a doctrine-strain echo of a scar-less doctrine is
+        # scar-less by construction, so it could never author a proposal -
+        # yet the v1 rule would have granted eligibility for one. And a
+        # scar-less doctrine's own strain is not a fracture.
         #
         # `echo_resonance` is NOT supplied: no real resonance value exists in
         # the organ (Echo Protocol IV's scores are deliberately un-coined),
         # and criterion 3's absent-reads-as-pass semantics stay DEE's own.
-        context: Dict[str, Dict[str, Any]] = {}
-        for doctrine_id in signals:
-            context[doctrine_id] = {
-                'echo_origin': any(
-                    e.origin_kind == "doctrine_strain"
-                    and e.origin_id == doctrine_id
-                    for e in self.nova.echo_index.values()
-                ),
-            }
+        # STAGE 2b STEP 3 replaces this None with Nova's proposals(fragments).
+        # Until it does, the derivation below yields False for every doctrine -
+        # DERIVED to False by walking an empty proposal map, never written as
+        # a literal, so it starts telling the truth the instant the seam opens.
+        proposals = None
+        proposal_map = proposals or {}
+        context: Dict[str, Dict[str, Any]] = {
+            doctrine_id: {'echo_origin': self._echo_origin(doctrine_id, proposal_map)}
+            for doctrine_id in signals
+        }
 
-        rulings = self.dee.cycle(signals=signals, proposals=None,
+        rulings = self.dee.cycle(signals=signals, proposals=proposals,
                                  context=context)
 
         for ruling in rulings:

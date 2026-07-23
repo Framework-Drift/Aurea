@@ -123,22 +123,39 @@ def test_scarless_doctrine_now_fails_criterion2_that_the_hardcode_masked():
 # PIN 2 - echo_origin TRUE only when a real echo bears on that doctrine
 # ---------------------------------------------------------------------
 
-def test_echo_origin_is_true_only_for_the_strained_doctrine():
-    """A real doctrine_strain echo flips echo_origin for ITS doctrine only.
-    The v1 bearing rule is conservative: eruption FROM the doctrine's strain,
-    nothing broader."""
+def test_a_merely_existing_echo_no_longer_grants_echo_origin():
+    """SUPERSEDES `test_echo_origin_is_true_only_for_the_strained_doctrine`
+    by RULING 14 (2026-07-23). The RULING moved - the code was not made
+    convenient. Reported verbatim in the session record.
+
+    OLD PIN (Stage 2a v1 bearing rule, now wrong):
+        aurea.nova.erupt("doctrine_strain", strained_id)
+        assert captured["context"][strained_id]["echo_origin"] is True
+      i.e. an echo that merely BEARS on d granted d eligibility.
+
+    NEW PIN (Ruling 14): echo_origin[d] is True iff a PROPOSAL for d exists
+    AND the echo recorded as authoring it is MUTATED and scar-linked. So the
+    v1 trigger - an erupted doctrine_strain echo, alone - now grants NOTHING.
+
+    WHY v1 WAS WRONG: a doctrine-strain echo of a SCAR-LESS doctrine is
+    scar-less by construction, so it could never author a proposal - yet v1
+    would have granted that scar-less belief eligibility to evolve, which is
+    exactly the free pass criterion 2 exists to deny. A scar-less doctrine's
+    own strain is not a fracture.
+
+    The TRUE half of Ruling 14 (a real survived backing echo) is pinned in
+    tests/test_nova_stage2b.py.
+    """
     aurea, result = _aurea_with_real_scar()
     strained_id = next(iter(aurea.codex.view()))
     aurea.nova.erupt("doctrine_strain", strained_id)
 
     captured = _spy_evolve(aurea, result)
 
-    assert captured["context"][strained_id]["echo_origin"] is True
+    assert captured["context"][strained_id]["echo_origin"] is False, (
+        "a merely-existing echo is not a SURVIVED one (Ruling 14)")
     for doctrine_id, ctx in captured["context"].items():
-        if doctrine_id != strained_id:
-            assert ctx["echo_origin"] is False, (
-                "an echo bears on the doctrine it erupted from - not on "
-                "every doctrine in the codex")
+        assert ctx["echo_origin"] is False
 
 
 def test_non_strain_echoes_do_not_claim_doctrine_bearing():
