@@ -10,7 +10,7 @@ from src.doctrine.codex import Codex
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
 from src.expansion.sae import SAE
-from src.expansion.nova import NovaEngine, FermentationStatus
+from src.expansion.nova import NovaEngine, FermentationStatus, StoreFragment
 from src.reflex.reflex_grid import ReflexGrid
 from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
@@ -118,6 +118,10 @@ class AureaCore:
         # raises into the pipeline: an observer that can halt a safety path
         # is not an observer (Ruling 11's principle). Empty in a healthy system.
         self.nova_gate_breaches: List[Dict[str, Any]] = []
+        # Stage 2b: collapse-routing / request-consumer errors land here and
+        # are swallowed. The observer never gates the observed (Ruling 11) -
+        # a filtration hiccup must not be able to halt the pipeline.
+        self.nova_collapse_failures: List[Dict[str, Any]] = []
 
         # ---- THE COLLAPSE SPINE ----------------------------------------------
         # CSE: orientation. Holds NO anchor store - it derives N/S/E/W from the modules that
@@ -522,10 +526,12 @@ class AureaCore:
         total, not cosmetic.
         """
         suppressed = self._nova_suppressed(reflex_responses)
-        self.nova.cycle(suppressed=suppressed, source='aurea_core')
+        eligible = self.nova.cycle(suppressed=suppressed, source='aurea_core')
         if suppressed:
             return
         self._nova_erupt_from_doctrine_strain()
+        self._nova_route_collapse(eligible)
+        self._nova_consume_requests()
 
     def _nova_suppressed(self, reflex_responses: List[Any]) -> bool:
         """G5 suppression read (STEP 3) - the honest one, NOT output_blocked.
@@ -585,6 +591,164 @@ class AureaCore:
                 origin_id=doctrine_id,
                 scar_links=list(doctrine.scar_links),
             )
+
+    def _nova_route_collapse(self, eligible_ids: List[str]) -> None:
+        """STEP 2 (Stage 2b): route REAL collapse outcomes into
+        record_collapse_result - the ONLY writer of MUTATED.
+
+        Echo Protocol III.4: "Echo is run through EchoNet for filtration."
+        An eligible echo names a STRAIN on a doctrine, so the collapse attempt
+        puts that strain to the test by filtering the strained doctrine's OWN
+        stated content (real Codex material) through EchoNet - the canonical
+        filtration path. No resolver is invented, and `filter_claim` is pure:
+        it writes nothing and mints no scars (scar formation is EchoNet's
+        separate opt-in `collapse_test`, deliberately NOT called here - a
+        probe that manufactured permanent records would be worse than none).
+
+        Verdict -> outcome, on canon's own meanings (Lexicon I.3):
+          SCARRED   "collapsed -> Collapse Archive" - the belief FAILED
+                    filtration, so its fracture is real and visible: the
+                    strain SURVIVED -> success=True -> MUTATED.
+          CONFIRMED "survived collapse" - the belief still holds, so the
+                    strain did NOT survive -> success=False -> DECAYING +
+                    the parked CSA request, carrying the real pressure.
+          SUSPENDED "unresolved -> Veiled Thread. NOT a failure."
+          PARADOX   "cannot be held at all -> Black Sphere"
+                    -> NO record either way. Unresolved is not refuted; the
+                    echo is CARRIED and may face collapse again. Recording
+                    these as failure would resolve by fiat what has not
+                    resolved - the one thing this system exists not to do.
+
+        A routing error is recorded and swallowed: the observer never gates
+        the observed (Ruling 11's principle).
+        """
+        for echo_id in eligible_ids:
+            try:
+                echo = self.nova.echo_index.get(echo_id)
+                if echo is None or echo.origin_kind != "doctrine_strain":
+                    # v1 holds filtration material only for doctrine strain -
+                    # the other origin kinds are NOT-YET-ROUTED, not assumed.
+                    continue
+                doctrine = self.codex.get(echo.origin_id)
+                content = (doctrine.description or doctrine.name) if doctrine else ""
+                if not content:
+                    continue                   # nothing real to filter; no fabricated probe
+                probe = Echo(
+                    id=f"nova-collapse-{echo.id}",
+                    content=content,
+                    source="nova",
+                    # Inert: EchoNet's verdict is content-driven and never
+                    # reads this field (SPL sets the same documented
+                    # placeholder). No magnitude enters the truth path here.
+                    resonance_score=1.0,
+                    created_at=datetime.now(),
+                    doctrine_link=doctrine.id,
+                )
+                outcome = self.echonet.filter_claim(probe)
+                if outcome.verdict is EchoVerdict.SCARRED:
+                    self.nova.record_collapse_result(
+                        echo.id, success=True,
+                        detail=f"EchoNet SCARRED on {doctrine.id}: {outcome.reason}")
+                elif outcome.verdict is EchoVerdict.CONFIRMED:
+                    self.nova.record_collapse_result(
+                        echo.id, success=False,
+                        detail=f"EchoNet CONFIRMED {doctrine.id} - strain did not survive",
+                        pressure=outcome.pressure_generated)
+                # SUSPENDED / PARADOX: deliberately no record. Carried.
+            except Exception as exc:
+                self.nova_collapse_failures.append({
+                    'echo_id': echo_id,
+                    'error': f"{type(exc).__name__}: {exc}",
+                    'timestamp': datetime.now().isoformat(),
+                })
+
+    def _nova_consume_requests(self) -> None:
+        """STEP 4 (Stage 2b): consumers for Nova's parked request lists.
+
+        Ruling 1: Nova never writes another module's store - it asks, and the
+        OWNER executes. csa_requests -> CSA (wired here).
+
+        scar_requests -> ScarLogicCore: RE-PARKED, not forced. `form_scar`
+        needs a `weight`, and scar weight/decay is SML's store, not Nova's
+        (Ruling 1 ownership table) - Nova supplying one would write into a
+        domain it does not own. Worse, minting a NEW scar for every mutated
+        echo would MANUFACTURE permanent records, and "scar fused" (5a:1123)
+        plausibly means fusing into the scars the echo ALREADY links, which
+        the corpus does not specify. Escalated in the session report rather
+        than guessed. The requests accumulate legibly on `nova.scar_requests`
+        until that is ruled.
+        """
+        while self.nova.csa_requests:
+            request = self.nova.csa_requests.pop(0)
+            try:
+                echo = self.nova.echo_index.get(request.get('echo_id'))
+                pressure = request.get('pressure')
+                self.csa.suspend(
+                    content={
+                        'echo_id': request.get('echo_id'),
+                        'origin_kind': getattr(echo, 'origin_kind', None),
+                        'origin_id': getattr(echo, 'origin_id', None),
+                        'status': getattr(getattr(echo, 'status', None), 'value', None),
+                    },
+                    source='nova',
+                    # The real pressure of the collapse that failed. Absent =
+                    # unrecorded -> 0.0, the lowest quarantine: the
+                    # uninformative case is the conservative case, and a
+                    # consumer must never invent a magnitude.
+                    pressure=float(pressure) if pressure is not None else 0.0,
+                    reason=request.get('reason', ''),
+                )
+            except Exception as exc:
+                self.nova_collapse_failures.append({
+                    'echo_id': request.get('echo_id'),
+                    'error': f"CSA consume failed: {type(exc).__name__}: {exc}",
+                    'timestamp': datetime.now().isoformat(),
+                })
+
+    def _nova_proposals(self, signals: Dict[str, Dict[str, Any]]
+                        ) -> Optional[Dict[str, Doctrine]]:
+        """STEP 3 (Stage 2b): THE SEAM. Nova's proposals for DEE's gate.
+
+        Returns None when nothing has survived to propose - which is the
+        common case and the CORRECT one: DEE then ferments eligible doctrines
+        rather than mutating them, exactly as before this stage. Opening this
+        path does not license making it fire.
+
+        G3: every fragment is store-traceable, and the strained doctrine's OWN
+        record is REQUIRED (Nova refuses the proposal otherwise). Material
+        comes from the Codex doctrine and the real scars the echo links -
+        nothing authored here, no generative model anywhere near it.
+        """
+        qualifying = [e for e in self.nova.echo_index.values()
+                      if e.status is FermentationStatus.MUTATED
+                      and e.scar_links and not e.is_spent]
+        if not qualifying:
+            return None
+
+        fragments: Dict[str, List[StoreFragment]] = {}
+        for echo in qualifying:
+            if echo.origin_kind != "doctrine_strain":
+                continue          # only a doctrine-strain echo names its target doctrine
+            doctrine_id = echo.origin_id
+            if doctrine_id not in signals or doctrine_id in fragments:
+                continue
+            doctrine = self.codex.get(doctrine_id)
+            if doctrine is None:
+                continue
+            frags = [StoreFragment(
+                store="doctrines", record_id=doctrine_id,
+                content=doctrine.description or doctrine.name)]
+            for scar_id in echo.scar_links:
+                scar = self.scar_core.get_scar(scar_id)
+                if scar is not None:
+                    frags.append(StoreFragment(
+                        store="scars", record_id=scar_id,
+                        content=scar.description or scar.name))
+            fragments[doctrine_id] = frags
+
+        if not fragments:
+            return None
+        return self.nova.proposals(fragments) or None
 
     def _backing_echo(self, proposal: Doctrine):
         """The echo RECORDED AS AUTHORING this proposal, or None.
@@ -704,11 +868,13 @@ class AureaCore:
         # `echo_resonance` is NOT supplied: no real resonance value exists in
         # the organ (Echo Protocol IV's scores are deliberately un-coined),
         # and criterion 3's absent-reads-as-pass semantics stay DEE's own.
-        # STAGE 2b STEP 3 replaces this None with Nova's proposals(fragments).
-        # Until it does, the derivation below yields False for every doctrine -
-        # DERIVED to False by walking an empty proposal map, never written as
-        # a literal, so it starts telling the truth the instant the seam opens.
-        proposals = None
+        # STAGE 2b STEP 3 - THE SEAM. This is the line that makes doctrine
+        # mutation possible: from here, DEE's five CMTE criteria and SAE's
+        # Self-Mutation Ceiling are the only things between pressure and a
+        # changed belief. No sixth gate was added; none of the five removed.
+        # `_nova_proposals` returns None when nothing has survived to propose,
+        # so the ordinary case is unchanged: eligible doctrines FERMENT.
+        proposals = self._nova_proposals(signals)
         proposal_map = proposals or {}
         context: Dict[str, Dict[str, Any]] = {
             doctrine_id: {'echo_origin': self._echo_origin(doctrine_id, proposal_map)}

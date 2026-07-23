@@ -412,7 +412,8 @@ class NovaEngine:
     # -----------------------------------------------------------------
 
     def record_collapse_result(self, echo_id: str, success: bool,
-                               detail: str = "") -> bool:
+                               detail: str = "",
+                               pressure: Optional[float] = None) -> bool:
         """Record the outcome of a collapse attempt on an ELIGIBLE echo.
 
         THE ONLY WRITER OF MUTATED. Stage 1 does not fabricate the collapse
@@ -470,6 +471,10 @@ class NovaEngine:
                 "echo_id": echo.id,
                 "reason": "collapse attempt failed - decay/suspension "
                           "routing (Echo Protocol III.5)",
+                # The REAL pressure of the collapse attempt that failed, when
+                # the caller has one (Stage 2b: EchoNet's pressure_generated).
+                # None = unrecorded; the consumer must not invent one.
+                "pressure": pressure,
                 "timestamp": datetime.now().isoformat(),
             })
         return True
