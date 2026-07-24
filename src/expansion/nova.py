@@ -456,6 +456,18 @@ class NovaEngine:
         })
         if success:
             echo.status = FermentationStatus.MUTATED
+            # RULING 15 (2026-07-24): the TRIGGER for this request is
+            # UNRULED, not just its consumer. 5a:1123's "Mutated -> Doctrine
+            # forged / scar fused / CSA rerouted" does not say whether
+            # "scar fused" is a THIRD outcome cumulative with "doctrine
+            # forged" on every successful collapse (fires below, as written)
+            # or an ALTERNATIVE to it (only when doctrine authorship does
+            # NOT happen - which this method cannot know, since proposals()
+            # runs later and separately). Firing on every success is the
+            # code's existing, unruled reading, left AS-IS. Ruling 15 parks
+            # the CONSUMER (ScarLogicCore - no honest weight exists), not
+            # this trigger. Do not "fix" this into looking decided either
+            # way.
             self.scar_requests.append({
                 "request": "fuse_scar",
                 "echo_id": echo.id,

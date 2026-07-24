@@ -824,13 +824,17 @@ class AureaCore:
         SAE executes; the Codex records. AureaCore's only job here is to hand DEE the
         pressure signals and report what it decided.
 
-        NOTE: no `proposals` are passed - BY STAGE DESIGN (Nova Stage 2a). Nova is
-        constructed and its echo state is real, but its proposals seam stays unwired:
-        `proposals=None` keeps doctrine mutation structurally impossible (SAE needs a
-        proposed form) until Stage 2b deliberately opens that path. DBE remains unbuilt.
-        Eligible doctrines FERMENT rather than mutate - correct behavior, not a gap to
-        paper over: AUREA does not get to invent what she becomes just because pressure
-        demands that she become something.
+        NOTE (Stage 2b, corrects the Stage-2a note this superseded): `proposals`
+        IS passed below, via `_nova_proposals(signals)` - the seam commented
+        inline at "THE SEAM. This is the line that makes doctrine mutation
+        possible." Doctrine mutation is no longer structurally impossible.
+        What stands between pressure and a changed belief now is DEE's five
+        CMTE criteria and SAE's Self-Mutation Ceiling - not the absence of a
+        proposal. An eligible doctrine with no qualifying Nova proposal, or
+        one that fails any CMTE criterion, still FERMENTS rather than
+        mutating - that remains correct behavior, not a gap: AUREA does not
+        get to invent what she becomes just because pressure demands that
+        she become something.
         """
         report: Dict[str, Any] = {'rulings': [], 'mutated': 0, 'fermenting': 0}
 
