@@ -285,10 +285,16 @@ class PSI(SymbolicReflex):
     def _live_weight(self, scar: Any) -> float:
         """Current weight from the scar OWNER, falling back to the snapshot's value.
 
-        `get_scar` returns the LIVE Scar (ScarLogicCore hands out its stored object,
-        not a copy) - so exactly one float is read from it and the reference is
-        dropped on return. Never retain it, never mutate it: weight/decay is SML's
-        store (Ruling 1), and a held live Scar is a held write path."""
+        Exactly one float is read and the reference is dropped on return. Never
+        retain it, never mutate it: weight/decay is SML's store (Ruling 1), and a
+        held Scar reference is a held write path.
+
+        RULING 22 (2026-07-25) made that discipline structural rather than
+        conventional: `get_scar` now returns a deep SNAPSHOT, so a retained
+        reference can no longer reach the record even by accident. This reads the
+        CURRENT weight either way - the snapshot is taken at call time. The
+        discipline above is unchanged and still correct; it is simply no longer
+        the only thing standing between a reader and the scar store."""
         if self.scar_core is not None:
             live = self.scar_core.get_scar(scar.id)
             if live is not None:

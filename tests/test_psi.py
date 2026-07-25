@@ -2,10 +2,14 @@
 test_psi.py - Ruling 8 Stage 1: the PSI reflex face, ISOLATED (no Grid wiring yet).
 
 PSI is built directly with a real RIL (the actual sole-writer identity store, so the
-deep-snapshot guarantee under test is the real one) and a minimal scar-core stub that
-matches ScarLogicCore's read face exactly: `get_scar(id)` returning the LIVE stored
-object, not a copy - because that live-return behavior is precisely what PSI must
-handle without retaining or mutating anything.
+deep-snapshot guarantee under test is the real one) and a minimal scar-core stub whose
+`get_scar(id)` returns the LIVE stored object.
+
+Ruling 22 (2026-07-25) gave the real ScarLogicCore snapshot-on-read, so the stub is
+now STRICTER than the owner rather than a mirror of it - and deliberately left that
+way: PSI must not retain or mutate what it reads, and a stub that hands out the live
+record is the surface that can actually catch it doing so. Loosening the stub to
+match the owner would retire a live check.
 
 Covers the five Stage-1 assertions:
   (a) fires on anchor_collapse with a grounded Scarline -> parked directive + graduated
@@ -42,8 +46,10 @@ HARD_PRESSURE = 26.0 / MAX_DRIFT      # past the 25 deg hard-kill line
 
 
 class ScarCoreStub:
-    """ScarLogicCore's read face only: get_scar returns the LIVE object (as the real
-    owner does), which is exactly the hazard PSI's _live_weight documents handling."""
+    """ScarLogicCore's read face only, held DELIBERATELY stricter than the owner:
+    get_scar returns the LIVE object, which is exactly the hazard PSI's _live_weight
+    documents handling. The real owner snapshots since Ruling 22; this does not, so
+    a PSI that retained or mutated what it read would still be caught here."""
 
     def __init__(self, scars):
         self._scars = {s.id: s for s in scars}

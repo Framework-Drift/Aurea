@@ -207,10 +207,16 @@ class DMW:
     def __init__(self, sustain_cycles: int = SUSTAIN_CYCLES):
         self.sustain_cycles = sustain_cycles
         self.queue: Dict[str, _Watched] = {}     # one slot per doctrine; bounded
+        # RULING 23 (2026-07-25): doctrines this pass DECLINED TO WATCH because the
+        # bound was reached. Reset each observe() - it is this cycle's refusals,
+        # handed to DEE.cycle, which routes them to the durable surface (_ferment ->
+        # Veiled Thread + CAE), exactly as it already routes the expiry path.
+        self.last_overflow: List[Dict[str, Any]] = []
 
     def observe(self, flags: List[PressureFlag]) -> List[_Watched]:
         """Age the queue, admit new pressure, return what has held long enough."""
         flagged = {f.doctrine_id: f for f in flags}
+        self.last_overflow = []
 
         # Decay: pressure has a half-life. Strain that stops recurring stops counting.
         for doctrine_id in list(self.queue.keys()):
@@ -229,6 +235,22 @@ class DMW:
             slot = self.queue.get(doctrine_id)
             if slot is None:
                 if len(self.queue) >= DMW_QUEUE_MAX:
+                    # RULING 23: the 32-cap is CORRECT and does not move - bounded
+                    # queues are how this system refuses to become an overload
+                    # vector. The SILENCE was the defect. This doctrine's strain was
+                    # real and DRPAS-admitted, and it is being declined; twenty lines
+                    # above, the expiry path exits through _ferment with a reason
+                    # string. Same file, same author: one exit legible, the other a
+                    # bare `continue`. Unresolved pressure never leaves silently.
+                    self.last_overflow.append({
+                        "doctrine_id": doctrine_id,
+                        "pressure": flag.pressure,
+                        "triggers": list(flag.triggers),
+                        "reason": f"DMW queue at capacity "
+                                  f"({len(self.queue)}/{DMW_QUEUE_MAX}) - strain "
+                                  f"admitted but NOT watched this pass",
+                        "refused_at": datetime.now(),
+                    })
                     continue                          # bounded: never an overload vector
                 slot = _Watched(doctrine_id=doctrine_id, pressure=flag.pressure)
                 self.queue[doctrine_id] = slot
@@ -335,6 +357,16 @@ class DEE:
                                          "pressure half-life expired without sustaining"))
             self.dmw.release(doctrine_id)
 
+        # RULING 23: strain DEE declined to watch because the bound was reached. It
+        # reaches the same surface as every other DMW outcome - a recorded ruling, the
+        # Veiled Thread, a CAE entry - rather than the bare `continue` it used to get.
+        # Not watched is not the same as not real: the doctrine ferments, carrying its
+        # actual strain magnitude, and AUREA can say that she declined to watch it.
+        for refusal in self.dmw.last_overflow:
+            rulings.append(self._ferment(
+                refusal["doctrine_id"], list(refusal["triggers"]),
+                refusal["pressure"], refusal["reason"]))
+
         for watched in list(ready):
             doctrine = self.codex.get(watched.doctrine_id)
             if doctrine is None:
@@ -382,7 +414,27 @@ class DEE:
             reason="CMTE: all five validation criteria satisfied",
         )
 
-        lineage = doctrine.scar_links[0] if doctrine.scar_links else ""
+        # RULING 21 (2026-07-25): criterion 2 above is an OR - a valid collapse-linked
+        # scar OR an echo origin - but this line read only the first half, so a SCARLESS
+        # doctrine admitted on `echo_origin` received "" and was refused by SAE's AVT.017
+        # guard. Ruling 14's positive half could pass CMTE and could never execute.
+        #
+        # RESOLUTION ORDER, and nothing coined - the data already exists:
+        #   1. the doctrine's OWN scar (unchanged: a scarred belief's lineage is its own);
+        #   2. else the PROPOSAL's scar, which Nova populated from the backing echo's
+        #      scar_links - a real scar id from a real survived collapse (Ruling 20 now
+        #      guarantees it is THIS doctrine's echo, not another's);
+        #   3. else "" - and "" is STILL REFUSED by SAE. That guard is correct and stays.
+        #
+        # This is not a widening of AVT.017. It is AVT.017 finally being satisfiable by
+        # the second of the two sources CMTE always named.
+        if doctrine.scar_links:
+            lineage = doctrine.scar_links[0]
+        elif proposed.scar_links:
+            lineage = proposed.scar_links[0]
+        else:
+            lineage = ""
+
         if self.sae is None:
             ruling.reason += " - but no executor is wired; mutation NOT performed"
             return ruling

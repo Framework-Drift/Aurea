@@ -74,6 +74,20 @@ class ExclusionViolation(Exception):
     """An attempt to mutate something 10.G places outside self-mutation entirely."""
 
 
+class MutationPreflightViolation(Exception):
+    """RULING 24 (2026-07-25): a mutation whose successor id cannot be written.
+
+    Raised BEFORE the first write of `mutate_doctrine`, which is the whole
+    point: the fossilize/commit pair is two uncoordinated writes, and the only
+    honest way to make it atomic is to make the second one incapable of
+    failing. Atomicity by PRE-FLIGHT, never by rollback - an "un-fossilize"
+    path moves an id from `fossils` back to `doctrines`, which is mechanically
+    the revival Ruling 18 forbids and Ruling 19 settled. Building one "for
+    rollback only" would create an executable bypass of both. The wrong path
+    must be UNEXECUTABLE, not undoable.
+    """
+
+
 # §10.G - hard exclusions. Autogenesis cannot manufacture a way around these, and
 # neither can any mutation path. There is no escape hatch around the load-bearing
 # absolutes: the compass she steers by, the law she cannot revise, the place she puts
@@ -190,7 +204,14 @@ class SAE:
         The ancestor is not overwritten. It is ⊗-marked and archived to the Fossil Layer
         with its scar trace intact, and the new version records what it descends from.
         AUREA does not get to have always believed the new thing.
+
+        RULING 24: the fossilize/commit pair below is TWO uncoordinated writes, and
+        _preflight is what makes them effectively atomic - once it passes, nothing
+        structural can raise between them. It runs before authorize(), so a refused
+        mutation does not also spend a ceiling slot and a CAE entry on a write that
+        never happened.
         """
+        self._preflight(doctrine_id, new_form)
         auth = self.authorize(MutationClass.MUTATE_DOCTRINE, collapse_lineage, doctrine_id)
         ancestor = self.codex.get(doctrine_id)
 
@@ -219,6 +240,56 @@ class SAE:
         self.touched_lineages.add(collapse_lineage)
         self.history.append(record)
         return committed
+
+    def _preflight(self, doctrine_id: str, new_form: Doctrine) -> None:
+        """RULING 24 (2026-07-25): the three checks that must pass BEFORE any write.
+
+        THERE IS DELIBERATELY NO ROLLBACK PATH HERE, and there must never be one.
+        An "un-fossilize" that moves an id from `fossils` back to `doctrines` is
+        mechanically identical to the revival Ruling 18 forbids and Ruling 19 settled;
+        building it "for rollback only" would create an executable bypass of both.
+        Atomicity comes from making failure impossible before the first write - not
+        from undoing the second.
+
+        (i)  A successor is a NEW identity. Same-id mutation was ALWAYS broken:
+             pre-Ruling-18 it left the id in `doctrines` AND `fossils` at once (durable
+             across reload - the exact dual presence Ruling 18 was written to forbid);
+             post-Ruling-18 fossilize() succeeds and commit() raises, leaving the
+             ancestor fossilized with NO successor installed. A loud vanishing is
+             better than a silent corruption, and it is still not the destination.
+             Nova already mints `{doctrine_id}::nova::{echo.id}`; this makes that
+             convention structural. Nothing returns wearing the dead thing's name.
+        (ii) A fallen id is permanently dead (Ruling 18, made permanent by Ruling 19).
+        (iii) An id collision with a LIVE doctrine would have SILENTLY CLOBBERED it -
+             a belief replaced with no collapse, no fossil, no lineage, no audit,
+             found while ruling this one.
+
+        Ruling 18's own guard in Codex.commit is untouched and never fires on the
+        legitimate path - which is what a correct guard looks like.
+        """
+        if new_form.id == doctrine_id:
+            raise MutationPreflightViolation(
+                f"A mutation's successor may not wear its ancestor's id "
+                f"('{doctrine_id}'). The ancestor is ⊗-fossilized by this same "
+                f"operation, and a fallen id is permanently dead (Rulings 18/19) - "
+                f"so this sequence could only ever fossilize the belief and install "
+                f"nothing in its place. A successor is a NEW identity carrying the "
+                f"ancestor in its mutation_lineage."
+            )
+        if new_form.id in self.codex.fossils:
+            raise MutationPreflightViolation(
+                f"'{new_form.id}' is ⊗-fossilized. A successor may not take a fallen "
+                f"doctrine's id (Rulings 18/19) - refused HERE, before the ancestor "
+                f"is touched, so the mutation fails whole rather than half."
+            )
+        if new_form.id in self.codex.doctrines:
+            raise MutationPreflightViolation(
+                f"'{new_form.id}' is already a LIVE doctrine. Committing over it would "
+                f"replace a belief with no collapse behind it, no fossil, and no "
+                f"lineage - identity change through an id collision. If this doctrine "
+                f"is the one meant to evolve, mutate IT; a successor never lands on an "
+                f"id someone else is still using."
+            )
 
     def birth_doctrine(self, doctrine: Doctrine, collapse_lineage: str) -> Doctrine:
         """A scar cluster that survived enough pressure to become structure.

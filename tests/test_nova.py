@@ -12,6 +12,23 @@ These tests pin the grounding contract (CLAUDE.md 1 row 12):
 
 No wiring is exercised here - Stage 1 has none. DO NOT weaken these tests.
 They pin an architect ruling.
+
+RULING 20 (2026-07-25) MOVED THE FIXTURE, NOT THE ASSERTIONS. An echo may now
+back a proposal for doctrine D only if it erupted from D's OWN strain
+(`origin_kind == "doctrine_strain"` and `origin_id == D`). The two lifecycle
+helpers below used to erupt a SCAR-origin echo and then propose for "D-001" -
+a pairing Ruling 20 refuses outright, and refuses correctly: `Δ77` is a scar
+id, not a doctrine address, so that echo never had authorship standing over
+D-001 in the first place. The helpers now erupt from D-001's strain. Every
+assertion in this file is unchanged and every one still binds; only the
+echo's ORIGIN moved, because the RULING moved. Recorded here for the same
+reason Ruling 14's supersession was recorded in test_nova_stage2b.py: a
+changed pinned test must say which ruling changed it.
+
+The one assertion edit is in test_emitted_proposal_is_fully_provenance_mapped,
+where a hardcoded `("scar", echo.origin_id)` became
+`(echo.origin_kind, echo.origin_id)` - derived from the echo instead of
+restating a literal, which is strictly stronger.
 """
 
 import copy
@@ -33,9 +50,13 @@ from src.utils.models import Doctrine
 
 def _mutated_engine(scar_links=("Δ77",)):
     """Engine holding one echo taken honestly through the full lifecycle:
-    erupt -> activate -> ferment to eligibility -> succeeded collapse."""
+    erupt -> activate -> ferment to eligibility -> succeeded collapse.
+
+    Ruling 20: the echo erupts from D-001's OWN strain, which is what gives
+    it standing to author for D-001 below. It still carries the real scar Δ77
+    as its fracture."""
     engine = NovaEngine()
-    echo = engine.erupt("scar", "Δ77", symbolic_domain="recursion",
+    echo = engine.erupt("doctrine_strain", "D-001", symbolic_domain="recursion",
                         scar_links=list(scar_links))
     for _ in range(FERMENTATION_ELIGIBILITY_CYCLES + 1):
         engine.cycle(suppressed=False)
@@ -236,7 +257,7 @@ def test_emitted_proposal_is_fully_provenance_mapped():
     supplied = {(f.store, f.record_id) for f in fragments["D-001"]}
     mapped = {(p["store"], p["record_id"]) for p in prov}
     assert mapped == supplied | {("nova_echo_index", echo.id),
-                                 ("scar", echo.origin_id)}
+                                 (echo.origin_kind, echo.origin_id)}
 
     # Every content piece of the new form carries its inline [store:id] tag.
     for piece in proposal.description.split(" + "):
@@ -305,9 +326,13 @@ def test_suppression_does_not_kill_the_engine_afterward():
 # Ruling 13 (2026-07-22): an echo is SPENT when it authors
 # =====================================================================
 
-def _mutate_second_echo(engine, origin_id="Δ88", scar_links=("Δ88",)):
-    """Take a second echo honestly through the lifecycle on a live engine."""
-    echo = engine.erupt("scar", origin_id, scar_links=list(scar_links))
+def _mutate_second_echo(engine, origin_id="D-001", scar_links=("Δ88",)):
+    """Take a second echo honestly through the lifecycle on a live engine.
+
+    Ruling 20: same doctrine origin as the first echo (that is the point of
+    R13-5 - consumption is per-ECHO), but DIFFERENT survived material (Δ88
+    rather than Δ77)."""
+    echo = engine.erupt("doctrine_strain", origin_id, scar_links=list(scar_links))
     for _ in range(FERMENTATION_ELIGIBILITY_CYCLES + 1):
         engine.cycle(suppressed=False)
     assert engine.record_collapse_result(echo.id, success=True)

@@ -128,6 +128,24 @@ ORIGIN_KINDS = frozenset({
     "doctrine_strain",
 })
 
+# RULING 20 (2026-07-25): the ONLY origin kind whose `origin_id` names a
+# DOCTRINE, and therefore the only kind that can say which doctrine an echo
+# is entitled to author for. The other four name a scar, a verdict, a CSA
+# fragment or an aborted loop - real records, but not doctrine addresses.
+# NOT a second closed set to keep in step with ORIGIN_KINDS: it is a member
+# OF it, checked at import below, so a rename cannot silently orphan this
+# rule. (A plain `assert` would vanish under -O; this does not.) Even if the
+# check were somehow bypassed the failure direction is SAFE: an unmatched
+# constant empties the author pool, every doctrine is refused, and nothing
+# mutates. Fail-closed - the doctrine ferments, which is the correct default.
+DOCTRINE_AUTHORSHIP_ORIGIN = "doctrine_strain"
+if DOCTRINE_AUTHORSHIP_ORIGIN not in ORIGIN_KINDS:      # pragma: no cover
+    raise ValueError(
+        f"DOCTRINE_AUTHORSHIP_ORIGIN '{DOCTRINE_AUTHORSHIP_ORIGIN}' is not a "
+        f"canon eruption source {sorted(ORIGIN_KINDS)} - Ruling 20's origin "
+        f"match would silently refuse every doctrine."
+    )
+
 
 class UngroundedEchoViolation(Exception):
     """G1: a NovaEcho was constructed without a real, typed origin record.
@@ -509,7 +527,33 @@ class NovaEngine:
         G2: only a MUTATED echo WITH scar linkage may back a proposal
         ("Unverified Echoes may not write doctrine", Echo Protocol VII).
         Engine v1 is single-echo: one echo backs at most one proposal per
-        call, oldest qualifying echo first.
+        call.
+
+        RULING 20 (2026-07-25) - AUTHORSHIP IS MATCHED BY ORIGIN, NEVER BY
+        SORT ORDER. An echo may back a proposal for doctrine D only if
+        `origin_kind == "doctrine_strain"` AND `origin_id == D`. This method
+        previously did `echo = qualifying.pop(0)` - drawing from a globally
+        id-sorted list while iterating `sorted(fragments)`, two orderings
+        with NO relationship to each other. With two doctrines strained at
+        once (which `_nova_erupt_from_doctrine_strain` produces routinely -
+        one live echo per strained doctrine), the pairing silently crossed.
+
+        THE DAMAGE WAS NOT MERELY MISATTRIBUTED AUTHORSHIP. The emitted
+        proposal below merges `echo.scar_links` into its own `scar_links`,
+        and DEE then hands `scar_links[0]` to SAE as the mutation's collapse
+        lineage - so a mispaired echo writes scars from a DIFFERENT
+        doctrine's collapse into the successor's permanent lineage. The
+        successor would carry visible evidence of a fracture it never
+        survived: lineage forgery by accident, arriving through a seam
+        neither G2 nor G3 watches.
+
+        No origin-matched echo for D -> the EXISTING refusal path: D
+        ferments, the refusal is recorded. NEVER a substitute. The other
+        four canon origin kinds (scar, echonet_verdict, csa_fragment,
+        sbsre_abort) have no defined doctrine-authorship semantics - their
+        `origin_id` names a scar or a verdict, not a doctrine - so they are
+        excluded LEGIBLY (a recorded refusal naming the echo), not silently
+        skipped. Admitting one is a ruling, not an edit.
 
         Ruling 13: authorship CONSUMES. A spent echo (`spent_on` set) never
         qualifies again - one echo, one proposal, ever. Emission marks the
@@ -531,6 +575,30 @@ class NovaEngine:
             if e.status is FermentationStatus.MUTATED and e.scar_links
             and not e.is_spent  # Ruling 13: authorship consumed the others
         ]
+        # Ruling 20: partition BEFORE any doctrine is considered. Only a
+        # doctrine_strain echo names a doctrine in `origin_id`; every other
+        # kind is excluded, and the exclusion is recorded rather than dropped
+        # on the floor - an echo that survived collapse and has nowhere to go
+        # is a real unresolved condition, and it stays legible.
+        authors = [e for e in qualifying
+                   if e.origin_kind == DOCTRINE_AUTHORSHIP_ORIGIN]
+        for echo in qualifying:
+            if echo.origin_kind == DOCTRINE_AUTHORSHIP_ORIGIN:
+                continue
+            self.refusals.append({
+                "action": "proposals",
+                "echo_id": echo.id,
+                "origin_kind": echo.origin_kind,
+                "origin_id": echo.origin_id,
+                "reason": f"origin kind '{echo.origin_kind}' has no defined "
+                          f"doctrine-authorship semantics (Ruling 20) - its "
+                          f"origin_id names a store record, not a doctrine. "
+                          f"Only a '{DOCTRINE_AUTHORSHIP_ORIGIN}' echo may "
+                          f"author, and admitting another kind is a ruling, "
+                          f"not an edit.",
+                "timestamp": datetime.now().isoformat(),
+            })
+
         emitted: Dict[str, Doctrine] = {}
 
         for doctrine_id in sorted(fragments):
@@ -557,7 +625,28 @@ class NovaEngine:
                 })
                 continue
 
-            echo = qualifying.pop(0)
+            # RULING 20: the echo that erupted from THIS doctrine's own
+            # strain, or none. `not is_spent` is re-checked because an
+            # earlier doctrine in this same call may already have consumed
+            # it (Ruling 13 - one echo, one proposal, EVER).
+            candidates = [e for e in authors
+                          if e.origin_id == doctrine_id and not e.is_spent]
+            if not candidates:
+                self.refusals.append({
+                    "action": "proposals",
+                    "doctrine_id": doctrine_id,
+                    "reason": "no MUTATED, scar-linked echo whose ORIGIN is "
+                              "this doctrine (Ruling 20) - a proposal is "
+                              "authored by the echo erupted from this "
+                              "doctrine's own strain, and no substitute is "
+                              "accepted. The doctrine ferments.",
+                    "timestamp": datetime.now().isoformat(),
+                })
+                continue
+            # Deterministic when two live echoes share an origin (legitimate -
+            # consumption is per-ECHO, not per-doctrine, Ruling 13): oldest
+            # id first. Never dict order, never the caller's iteration order.
+            echo = min(candidates, key=lambda e: e.id)
             new_id = f"{doctrine_id}::nova::{echo.id}"
 
             # Recombination: every piece tagged inline with its source

@@ -125,14 +125,20 @@ class Codex:
         # ruled permissible, this guard WIDENS to admit an explicitly-classed
         # authorization - it does not get deleted. Do NOT "fix" a collision here by
         # removing the fossil: fossils are archived, never deleted.
-        # UNRULED (open with the architect): whether revival is permitted at all,
-        # and whether a revived doctrine reuses its id or mints a new one carrying
-        # fossil_of lineage. Until ruled, the answer is NO - the refusal is the answer.
+        # RULED - Option B (Ruling 19, 2026-07-25). The question Ruling 18 left open
+        # is CLOSED: this guard is PERMANENT, not interim. A doctrine that resembles
+        # a fossil is born through the ORDINARY birth path under a NEW id, carrying
+        # the fallen id in its existing `mutation_lineage` - no revival API, no new
+        # field, no bypass. Revival is just birth with an extra ancestry entry. The
+        # fallen id itself stays permanently dead here. (Option C - the old id
+        # returning through the full mutation path - was refused because it would
+        # make "came back" and "never fell" indistinguishable from outside the
+        # lineage graph, the exact ambiguity this guard exists to prevent.)
         if doctrine.id in self.fossils:
             raise CodexWriteViolation(
                 f"'{doctrine.id}' is ⊗-fossilized (Ruling 18). A fallen doctrine "
-                f"does not return to active status by being committed over - "
-                f"revival is unruled, and until ruled the answer is no. If this "
+                f"does not return to active status by being committed over - the "
+                f"fallen id is permanently dead (Ruling 19, Option B). If this "
                 f"mutation is legitimate, it mints a NEW id carrying lineage; "
                 f"it does not wear a dead doctrine's name."
             )
@@ -146,11 +152,14 @@ class Codex:
 
         The fallen version is ARCHIVED, never deleted: it keeps its scar trace and the
         reason it collapsed. A fallen doctrine's id CANNOT be re-committed at all -
-        commit() refuses it outright (Ruling 18, 2026-07-25). Whether any revival
-        path exists - Lexicon's "fully re-collapsed and mutation-audited" - is
-        UNRULED; this docstring previously claimed that protection while the code
-        had none (the Docket E shape, fifth instance, first inside a store-write
-        path). What the code enforces today is stated above and nothing more.
+        commit() refuses it outright (Ruling 18, 2026-07-25), permanently (Ruling 19,
+        Option B). A doctrine that resembles a fossil is BORN under a new id carrying
+        the fallen id in `mutation_lineage`; there is no revival API and no
+        un-fossilize path, and SAE's Ruling-24 pre-flight refuses a successor that
+        would take a fossilized id before the ancestor is even touched. This
+        docstring once claimed a "fully re-collapsed and mutation-audited" protection
+        while the code had none (the Docket E shape, fifth instance, first inside a
+        store-write path). What the code enforces today is stated above and nothing more.
 
         ECI routes foreign-collapse fossilization through this same API (T2-01).
         """

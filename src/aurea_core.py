@@ -6,12 +6,16 @@ Orchestrates the flow: Input -> SPL -> EchoNet -> Reflexes -> Scars -> Output
 from src.perception.spl import SPL
 from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 from src.filtration.scar_logic_core import ScarLogicCore
-from src.doctrine.codex import Codex
+from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
-from src.expansion.sae import SAE
-from src.expansion.nova import NovaEngine, FermentationStatus, StoreFragment
-from src.reflex.reflex_grid import ReflexGrid
+from src.expansion.sae import (SAE, CeilingExceeded, ExclusionViolation,
+                               MutationPreflightViolation)
+from src.expansion.nova import (NovaEngine, FermentationStatus, StoreFragment,
+                                ProvenanceOverwriteViolation,
+                                UngroundedEchoViolation,
+                                UngroundedFragmentViolation)
+from src.reflex.reflex_grid import ReflexGrid, UngatedReflexViolation
 from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
 from src.identity.ril import RIL
@@ -26,6 +30,45 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import json
+
+
+# =====================================================================
+# RULING 25 (2026-07-25) - THE STRUCTURAL EXCEPTION TAXONOMY
+# =====================================================================
+# A STRUCTURAL violation means a gate that was supposed to be IMPOSSIBLE to
+# pass was passed. Until this tuple existed, one `except Exception` flattened
+# every deliberate guard this project has built into the same string as a
+# malformed-input hiccup - the entire "raise, don't resolve; the wrong path
+# must be unexecutable" discipline terminating in a string concatenation. A
+# guard whose firing looks like a typo is not enforcement.
+#
+# CLOSED AND ENUMERATED - concrete types only, deliberately NOT a shared base
+# class. A base class would silently widen this set the next time someone
+# subclasses it, and the whole point is that membership here is a DECISION.
+# Adding a new guard to the architecture means adding it to this tuple on
+# purpose. Every member below is a raise this codebase makes deliberately:
+#   CodexWriteViolation          doctrine written outside the collapse path
+#   CeilingExceeded              self-mutation budget spent (§10.F)
+#   ExclusionViolation           §10.G target, or AVT.017 empty lineage
+#   MutationPreflightViolation   successor id unwritable (Ruling 24)
+#   UngatedReflexViolation       an open non-GSR reflex registered (Ruling 10)
+#   UngroundedEchoViolation      echo with no traceable origin (Nova G1)
+#   UngroundedFragmentViolation  proposal material tracing to nothing (G3)
+#   ProvenanceOverwriteViolation forensic record rewritten (Ruling 13)
+#
+# An ORDINARY exception (malformed input, an unexpected None) may still
+# degrade gracefully into `errors`. That is correct and it stays. The taxonomy
+# CUTS the two apart; it does not replace one with the other.
+STRUCTURAL_VIOLATIONS = (
+    CodexWriteViolation,
+    CeilingExceeded,
+    ExclusionViolation,
+    MutationPreflightViolation,
+    UngatedReflexViolation,
+    UngroundedEchoViolation,
+    UngroundedFragmentViolation,
+    ProvenanceOverwriteViolation,
+)
 
 
 class SymbolicPressureMonitor:
@@ -72,7 +115,13 @@ class AureaCore:
     Central orchestrator for AUREA's collapse-bearing intelligence.
     Manages the complete pipeline from input to output.
     """
-    
+
+    # Ruling 25: the durable record of every structural violation. Resolved at
+    # construction (the RBSystem.DEFAULT_LOG_PATH shape) so the suite can
+    # REDIRECT it into tmp - there is deliberately no injectable no-op sink,
+    # because a forensic log you can silently disable is not a forensic log.
+    STRUCTURAL_LOG_PATH = "logs/structural_violations.jsonl"
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Initialize AUREA core systems.
@@ -81,7 +130,15 @@ class AureaCore:
             config: Optional configuration dictionary
         """
         self.config = config or {}
-        
+
+        # Ruling 25: the legible in-memory surface, its durable sink, and the
+        # sink's own failure surface. Empty in a healthy system - a non-empty
+        # `structural_violations` means one of AUREA's guards fired, which is
+        # never routine and never an ordinary error.
+        self.structural_violations: List[Dict[str, Any]] = []
+        self.structural_log_path = Path(self.STRUCTURAL_LOG_PATH)
+        self.structural_log_failures: List[Dict[str, Any]] = []
+
         # Initialize core modules
         self.spl = SPL()
         self.scar_core = ScarLogicCore()
@@ -198,6 +255,7 @@ class AureaCore:
             'contradictions_carried': 0,   # SBSRE threads run
             'doctrines_mutated': 0,        # DEE approvals executed by SAE
             'doctrines_fermenting': 0,     # eligible but unresolved - held open, not forced
+            'structural_violations': 0,    # Ruling 25 - her own guards firing
         }
         
         # Initialize with seed doctrine if none exist
@@ -478,11 +536,63 @@ class AureaCore:
             if result['reflex_responses']:
                 self.stats['reflexes_triggered'] += len(result['reflex_responses'])
                 
+        except STRUCTURAL_VIOLATIONS as violation:
+            # RULING 25: one of AUREA's OWN guards fired. This is not an error
+            # to report and speak past - it means a path the architecture makes
+            # unexecutable was executed anyway. It gets its own loud field (NOT
+            # merged into `errors`), suppressed output (she does not answer as
+            # though nothing happened when her own guard just fired), and a
+            # durable record. It does NOT crash the process: that would destroy
+            # the record, and the record is the point. Fail toward legible
+            # refusal - never toward silent corruption, never toward a fluent
+            # answer.
+            self._record_structural_violation(result, violation, raw_input, source)
         except Exception as e:
+            # ORDINARY failure: malformed input, an unexpected None. Graceful
+            # degradation is correct here and is unchanged. Ordered AFTER the
+            # structural clause on purpose - widening this one back over the
+            # other is the regression Ruling 25 exists to prevent.
             result['errors'].append(str(e))
             result['output'] = f"[ERROR: {str(e)}]"
-            
+
         return result
+
+    def _record_structural_violation(self, result: Dict[str, Any],
+                                     violation: BaseException,
+                                     raw_input: str, source: str) -> None:
+        """Ruling 25: the loud field, the suppressed output, the durable record."""
+        entry = {
+            'type': type(violation).__name__,
+            'message': str(violation),
+            'input': raw_input,
+            'source': source,
+            'timestamp': datetime.now().isoformat(),
+        }
+        result['structural_violation'] = entry
+        result['output_blocked'] = True
+        result['output'] = (
+            f"[STRUCTURAL VIOLATION - {entry['type']}: {entry['message']} "
+            f"AUREA does not answer past her own guard.]")
+        self.stats['outputs_suppressed'] += 1
+        self.stats['structural_violations'] += 1
+        self.structural_violations.append(entry)
+        self._flush_structural_violation(entry)
+
+    def _flush_structural_violation(self, entry: Dict[str, Any]) -> None:
+        """Best-effort durable append. NEVER raises (Ruling 11's principle,
+        third application): a logging failure must not be able to convert a
+        legible refusal into a crash. A failed write lands on
+        `structural_log_failures` and the in-memory record still stands."""
+        try:
+            self.structural_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.structural_log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except Exception as exc:
+            self.structural_log_failures.append({
+                'error': f"{type(exc).__name__}: {exc}",
+                'entry_type': entry.get('type'),
+                'timestamp': datetime.now().isoformat(),
+            })
     
     def _echonet_resolver(self, contradiction, cycle):
         """SBSRE's coherence check. Delegated to EchoNet's VERDICT - never guessed.

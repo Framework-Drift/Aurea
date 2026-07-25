@@ -29,6 +29,7 @@ does.
 
 import pytest
 
+from src.aurea_core import AureaCore
 from src.reflex.rb_system import RBSystem
 from src.suspension.black_sphere import BlackSphere
 from src.suspension.csa import CSA
@@ -40,6 +41,14 @@ def _persist_to_tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(
         RBSystem, "DEFAULT_LOG_PATH",
         str(tmp_path / "reflex_behavior.jsonl"),
+    )
+    # Ruling 25 (Docket N): structural violations get a durable record too, and
+    # a test driving a guard on purpose must not append to the real forensic
+    # log. Same shape as RBSystem's - resolved at construction from a class
+    # attribute, so redirecting the attribute is the whole isolation.
+    monkeypatch.setattr(
+        AureaCore, "STRUCTURAL_LOG_PATH",
+        str(tmp_path / "structural_violations.jsonl"),
     )
     # Repoint each suspension store's default filepath (the last __init__
     # default) at tmp, keeping the preceding capacity default intact.

@@ -3,6 +3,7 @@ scar_logic_core.py - Scar Logic Core for Aurea
 Handles storage, access, and management of Scar objects.
 """
 
+import copy
 import json
 from src.utils.models import Scar
 from typing import List, Optional
@@ -56,27 +57,61 @@ class ScarLogicCore:
     def _next_scar_id(self) -> str:
         return f"Scar-\u0394{len(self.scars) + 1}"
 
-    def get_active_scars(self) -> List[Scar]:
-        """
-        Return all active scars.
-        """
-        return [scar for scar in self.scars if scar.decay_state == "active"]
+    # =================================================================
+    # READS - free to every module (Ruling 1 governs writes only)
+    #
+    # RULING 22 (2026-07-25): reads return DEEP COPIES, not the stored
+    # objects. The Codex solved this exact problem with `_snapshot()`; the
+    # scar store never received the treatment, so until now the doctrine
+    # store had an ownership BOUNDARY while the scar store had only a
+    # CONVENTION. A caller could set `.weight`, clear `.linked_doctrines`, or
+    # flip `.decay_state` with no owner-controlled operation - and the AST
+    # single-writer invariant CANNOT see it, because nothing assigns to
+    # `scar_core.scars`. Scars are the most permanent records in the system,
+    # and a permanence enforced only by everyone remembering not to touch it
+    # is not permanence. Weight and decay belong to SML (Ruling 1); changing
+    # what a scar IS goes through its owner, not through a read.
+    # =================================================================
 
-    def get_scar(self, scar_id: str) -> Optional[Scar]:
-        """
-        Retrieve a scar by ID.
+    @staticmethod
+    def _snapshot(scar: Optional[Scar]) -> Optional[Scar]:
+        return copy.deepcopy(scar) if scar is not None else None
+
+    def _find(self, scar_id: str) -> Optional[Scar]:
+        """THE LIVE record, for the owner's OWN write paths only.
+
+        Deliberately private and deliberately separate from `get_scar`: the
+        public accessor snapshots, so an owner-side method that resolved its
+        target through it would mutate a copy and its write would vanish
+        SILENTLY - a fail-silent regression, the worst possible outcome of
+        Ruling 22. `decay_scar` used to do exactly that. Do not call this
+        from outside this class; emit a request instead (Ruling 1).
         """
         for scar in self.scars:
             if scar.id == scar_id:
                 return scar
         return None
 
+    def get_active_scars(self) -> List[Scar]:
+        """
+        Return all active scars, as SNAPSHOTS (Ruling 22).
+        """
+        return [self._snapshot(scar) for scar in self.scars
+                if scar.decay_state == "active"]
+
+    def get_scar(self, scar_id: str) -> Optional[Scar]:
+        """
+        Retrieve a scar by ID, as a SNAPSHOT (Ruling 22). Reading what is true
+        is free; changing it goes through this class.
+        """
+        return self._snapshot(self._find(scar_id))
+
     def decay_scar(self, scar_id: str) -> bool:
         """
         Mark a scar as decayed/retired.
         Returns True if decayed, False if not found.
         """
-        scar = self.get_scar(scar_id)
+        scar = self._find(scar_id)      # Ruling 22: the owner writes the RECORD
         if scar:
             scar.decay_state = "retired"
             self.save_to_file()
