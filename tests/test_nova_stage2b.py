@@ -46,6 +46,8 @@ was not asked for. The load-bearing guarantee is the criterion-failure
 FERMENT arm.
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from src.aurea_core import AureaCore
@@ -329,6 +331,63 @@ def test_end_to_end_the_ordinary_case_still_ferments_with_no_proposal():
     ours = next(r for r in rulings if r.doctrine_id == STRAINED)
     assert ours.verdict is Verdict.FERMENT
     assert ours.executed_by is None
+
+
+def test_evolve_doctrine_wiring_derives_echo_origin_at_the_call_site():
+    """Docket M item 4 - closes Docket K's surviving literal-False mutant.
+
+    Docket K replaced `self._echo_origin(doctrine_id, proposal_map)` at the
+    aurea_core call site with a hardcoded False - Docket C's original bug,
+    reintroduced - and the suite stayed GREEN: every other pin calls
+    _echo_origin / dee.cycle directly, bypassing the wiring line. This test
+    drives the REAL _evolve_doctrine with a real MUTATED, scar-linked,
+    proposal-backing echo present and captures exactly what the wiring hands
+    DEE (the one controlled seam is dee.cycle itself, spied - the same
+    pattern as test_nova_stage2a's _spy_evolve).
+
+    WHY THE SPY AND NOT A FULL UN-SPIED RUN: verified by execution - the real
+    scar from the honesty collapse does not TOUCH Doctrine-3 (empty
+    linked_doctrines), so Doctrine-3's signal is halved below DMW's critical
+    threshold and its slot decays before ruling. Making the un-spied gate fire
+    would require inflating the pressure signals - fabricated pressure, the
+    exact thing this build exists to refuse. The wiring line IS the untested
+    surface; the gate behavior itself is already pinned above via dee.cycle.
+    """
+    aurea = AureaCore()
+    result = aurea.process_input("Honesty is pointless.", source="test")
+    assert result["scar_formed"] is not None, "a real scar drives the signals"
+
+    echo, _ = _ferment_to_mutated(aurea)
+    assert not echo.is_spent, "authorship happens inside _evolve_doctrine below"
+
+    captured = {}
+
+    def spy(signals=None, proposals=None, context=None):
+        captured["signals"] = signals
+        captured["proposals"] = proposals
+        captured["context"] = context
+        return []
+
+    with patch.object(aurea.dee, "cycle", side_effect=spy):
+        aurea._evolve_doctrine(result, result["collapse_result"])
+
+    # The seam is wired: the wiring called _nova_proposals and passed the
+    # real emission through - not None, and keyed by the strained doctrine.
+    assert captured["proposals"] is not None, "the proposals seam went dead"
+    assert STRAINED in captured["proposals"]
+    assert echo.is_spent, "Ruling 13: the wiring's own emission consumed the echo"
+
+    # RULING 14 AT THE CALL SITE: echo_origin is DERIVED, never a literal.
+    # True for the doctrine whose proposal a MUTATED scar-linked echo backs;
+    # False - derived, not hardcoded - for every other doctrine in signals.
+    assert captured["context"][STRAINED]["echo_origin"] is True, (
+        "the call site did not derive echo_origin from the real backing echo "
+        "- if this is red, check aurea_core's context construction for a "
+        "restored literal (Docket C's shape)")
+    for doctrine_id, ctx in captured["context"].items():
+        if doctrine_id != STRAINED:
+            assert ctx["echo_origin"] is False
+    assert aurea.nova_gate_breaches == [], "G2 held on the real path"
 
 
 # =====================================================================

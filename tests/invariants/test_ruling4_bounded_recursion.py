@@ -108,8 +108,19 @@ def test_no_undeclared_unbounded_loops() -> None:
     )
 
 
-def test_sbsre_loop_limit_is_clamped() -> None:
-    """SBSRE must clamp its loop limit to [1, 5] with baseline 3."""
+def test_sbsre_clamp_magnitudes_smoke_check() -> None:
+    """SMOKE CHECK ONLY - this is NOT the guard (Docket M, item 1).
+
+    This test verifies only that the words 'clamp'/'min('/'max(' and the Ruling 4
+    magnitudes 1/3/5 appear in the SBSRE source text - a did-you-forget-entirely
+    tripwire. Docket K proved it is blind to a disabled bound: replacing
+    `min(ceiling, value)` with `max(ceiling, value)` removes the ceiling entirely
+    and this test stays green, because the tokens still exist in the file.
+
+    The GUARD is test_sbsre_clamp_binds_at_runtime below, which calls clamp()
+    and compute_loop_limit() and asserts on their RETURN VALUES. Do not treat
+    this lexical check as evidence the bound binds.
+    """
     path = _first_existing(SBSRE_CANDIDATES)
     if path is None:
         pytest.skip(
@@ -149,6 +160,60 @@ def test_sbsre_loop_limit_is_clamped() -> None:
             "suppress repeats)."
         ),
     )
+
+
+def test_sbsre_clamp_binds_at_runtime() -> None:
+    """THE GUARD (Docket M, item 1 - closing Docket K's survived mutant).
+
+    Ruling 4's entire termination argument is that `loop_limit` enters the loop
+    already bounded to [FLOOR, CEILING] and only ever decreases. Docket K showed
+    the previous test never CALLED the bound - the ceiling could be deleted
+    (`min` -> `max`) with the suite green. This test executes the bound:
+
+      - clamp() returns CEILING for any value above it, FLOOR for any below it,
+        in both directions and at the boundaries;
+      - compute_loop_limit() under the pathological input Ruling 4 exists for -
+        near-zero reflex_load driving the raw formula toward infinity - still
+        returns <= CEILING;
+      - corrupt (non-finite) input returns FLOOR, not the ceiling: a system that
+        cannot tell how heavy a contradiction is must not grant itself MORE time
+        to grind on it.
+
+    All magnitudes referenced are the Ruling 4 canon set (1/3/5) already pinned
+    at the top of this file - nothing here is coined.
+    """
+    path = _first_existing(SBSRE_CANDIDATES)
+    if path is None:
+        pytest.skip("SBSRE not yet implemented - converts to a live check when it is.")
+
+    from src.reflex.sbsre import CEILING, FLOOR, clamp, compute_loop_limit
+
+    assert FLOOR == EXPECTED_FLOOR and CEILING == EXPECTED_CEILING, (
+        "Ruling 4 magnitudes moved - that requires a manifest ruling, not an edit"
+    )
+
+    # The bound, exercised in both directions and at its own edges.
+    assert clamp(10_000.0) == CEILING, "a huge value must return the CEILING"
+    assert clamp(CEILING + 1) == CEILING
+    assert clamp(CEILING) == CEILING
+    assert clamp(FLOOR) == FLOOR
+    assert clamp(FLOOR - 1) == FLOOR, "a below-floor value must return the FLOOR"
+    assert clamp(-10_000.0) == FLOOR
+    assert clamp(3.0) == 3, "an in-range value passes through unclamped"
+
+    # The pathological case: near-zero reflex load sends the raw formula toward
+    # infinity. The clamp is what stands between that and an unbounded grinder.
+    runaway = compute_loop_limit(
+        scar_weight=1_000_000.0, compass_stability=1.0, reflex_load=1e-9)
+    assert runaway <= CEILING, (
+        "near-zero reflex_load must NOT grant more than CEILING passes - "
+        "the quiet grinder is back")
+    assert runaway >= FLOOR
+
+    # Corrupt input gets the FLOOR, not the ceiling (naive clamping returns
+    # the ceiling for NaN - that is backwards, and pinned here).
+    assert compute_loop_limit(float("nan"), 1.0, 1.0) == FLOOR
+    assert compute_loop_limit(1.0, float("inf"), 1.0) == FLOOR
 
 
 def test_self_mutation_ceiling_counts_three_classes() -> None:

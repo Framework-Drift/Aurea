@@ -117,6 +117,25 @@ class Codex:
         re-formed under re-pressure). The Codex records; it does not evaluate.
         """
         self._validate(auth)
+        # RULING 18 (2026-07-25): a ⊗-fossilized id cannot be silently re-committed.
+        # Docket K proved by execution that before this guard, birth_doctrine/commit
+        # would revive a fallen doctrine with no re-collapse check, leaving it ACTIVE
+        # and FOSSIL simultaneously - an identity that came back from the dead with
+        # nothing survived behind it. FAIL-CLOSED and REVERSIBLE: if revival is later
+        # ruled permissible, this guard WIDENS to admit an explicitly-classed
+        # authorization - it does not get deleted. Do NOT "fix" a collision here by
+        # removing the fossil: fossils are archived, never deleted.
+        # UNRULED (open with the architect): whether revival is permitted at all,
+        # and whether a revived doctrine reuses its id or mints a new one carrying
+        # fossil_of lineage. Until ruled, the answer is NO - the refusal is the answer.
+        if doctrine.id in self.fossils:
+            raise CodexWriteViolation(
+                f"'{doctrine.id}' is ⊗-fossilized (Ruling 18). A fallen doctrine "
+                f"does not return to active status by being committed over - "
+                f"revival is unruled, and until ruled the answer is no. If this "
+                f"mutation is legitimate, it mints a NEW id carrying lineage; "
+                f"it does not wear a dead doctrine's name."
+            )
         self.doctrines[doctrine.id] = doctrine
         self._consumed.add(auth.authorization_id)
         return doctrine
@@ -126,8 +145,12 @@ class Codex:
         """⊗ - mark a doctrine fallen and move it to the Fossil Layer.
 
         The fallen version is ARCHIVED, never deleted: it keeps its scar trace and the
-        reason it collapsed. A fallen doctrine cannot be reused until fully re-collapsed
-        and mutation-audited (Lexicon, Doctrine Spine failure modes).
+        reason it collapsed. A fallen doctrine's id CANNOT be re-committed at all -
+        commit() refuses it outright (Ruling 18, 2026-07-25). Whether any revival
+        path exists - Lexicon's "fully re-collapsed and mutation-audited" - is
+        UNRULED; this docstring previously claimed that protection while the code
+        had none (the Docket E shape, fifth instance, first inside a store-write
+        path). What the code enforces today is stated above and nothing more.
 
         ECI routes foreign-collapse fossilization through this same API (T2-01).
         """
