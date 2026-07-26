@@ -138,10 +138,29 @@ DEFAULT_HEALTH = 100
 HEALTH_FLOOR = 0
 HEALTH_CEILING = 100
 
-# Float comparison tolerance for betweenness ties. A NUMERIC tolerance, not a
-# symbolic magnitude - it decides whether two identically-computed centralities
-# are the same number, and says nothing about AUREA.
+# Float comparison tolerance for betweenness ties. A NUMERIC TOLERANCE, NOT A
+# DECISION THRESHOLD - it decides whether two identically-computed centralities
+# are the same number, and says nothing about AUREA. That distinction is the
+# whole of why Ruling 28 can keep this line while refusing a betweenness
+# cutoff: a cutoff would decide something, this only compares floats.
+# (Registered as such in COINED_CONSTANTS.md.)
 _TIE_TOLERANCE = 1e-9
+
+# Ruling 27's tier-default confirmation (2026-07-26). `tier=None` still
+# defaults to ROUTINE - defaulting to ELEVATED would assert structural danger
+# NO MEASURE FOUND, which is Nova's G1 failure mode in another organ. The
+# default is UPHELD and does not move.
+#
+# But SBSRE's non-finite rule establishes that THE UNINFORMATIVE CASE IS THE
+# CONSERVATIVE CASE, and "no delta supplied" is UNKNOWN impact, not
+# MEASURED-BENIGN impact. So the two must never be textually identical in the
+# record: an unexamined request says so, in the reason, every time.
+#
+# Whether a delta-less GLOBAL request should be REFUSED outright is a later
+# question, decidable once real callers exist. Today RACM supplies no delta at
+# all, so refusing would deny every GLOBAL reflex.
+UNEXAMINED_DELTA_NOTE = ("no topology_delta supplied - structural impact "
+                         "UNEXAMINED, not cleared")
 
 
 class Status(str, Enum):
@@ -180,17 +199,45 @@ class Scope(str, Enum):
 META_UNSTABLE_STATUSES = frozenset({Status.META_UNSTABLE, Status.REPAIR_CYCLE})
 
 
-class LockReleaseViolation(Exception):
-    """A module released a GLOBAL lock it does not hold.
+# =====================================================================
+# RULING 29 (2026-07-26) - TWO CAUSALLY OPPOSITE EVENTS, TWO TYPES
+# =====================================================================
+# Keeping the raise was correct: swallowing it would make a revoked operation
+# indistinguishable from a completed one. But ONE type covering BOTH causes is
+# Ruling 25's defect one level down - the taxonomy CUTS, and it has to cut here
+# too. Deliberately NOT a shared base class, for the reason `aurea_core`'s
+# STRUCTURAL_VIOLATIONS note gives: a base class silently widens the set the
+# next time someone subclasses it. Two concrete types, both enumerated.
 
-    STRUCTURAL, not an error message (Ruling 25). A release from a non-holder
-    means one of: the caller believes it holds a lock it never got; the lock
-    was force-expired or revoked underneath it and it does not know; or two
-    modules disagree about who owns a system-wide mutation. Every one of those
-    is a fault in the lock model itself, and a no-op `return False` would make
-    all three look like a successful release. Registered in `aurea_core`'s
-    `STRUCTURAL_VIOLATIONS` tuple so `process_input` catches it in the
-    enumerated clause, never in the broad one.
+class LockReleaseViolation(Exception):
+    """A caller released a GLOBAL lock it NEVER HELD.
+
+    CALLER ERROR - an upstream gate already failed. The caller believes it
+    holds a lock it never got, or two modules disagree about who owns a
+    system-wide mutation. STRUCTURAL, not an error message (Ruling 25): a
+    no-op `return False` would make both faults look like a clean release.
+
+    NOT for a holder whose lock TCAML took away - that is `StaleLockRelease`,
+    and the two are causally opposite (this one blames the caller; that one
+    absolves it).
+    """
+
+
+class StaleLockRelease(Exception):
+    """A caller released a GLOBAL lock TCAML TOOK AWAY FROM IT.
+
+    SYSTEM ACTION - the caller is BLAMELESS. Its lock was revoked by
+    meta-instability onset (Rule 3) or force-expired at TTL, and this raise is
+    how it finds out. The message always names WHICH of the two happened,
+    because "your lock is gone" without a cause just relocates the mystery.
+
+    THIS IS THE ABANDONED-STATE MARKER FOR THE CURRENT ERA, AND ONLY FOR IT.
+    Nothing downstream is durable yet, so an interrupted GLOBAL operation
+    genuinely just stops, and a typed loud record is the honest whole of what
+    happened to it. WHEN A PERSISTENCE CONTRACT LANDS THIS BECOMES A TRIGGER,
+    NOT AN ANSWER: an interrupted operation will then need a real abandoned /
+    resumable state, and this raise is where that transition begins. Do not
+    mistake it for a finished design (Ruling 27, decision point (i)).
     """
 
 
@@ -220,6 +267,11 @@ class LockResponse:
     scope: Scope = Scope.GLOBAL
     tier: Optional[Tier] = None
     cycle: int = 0
+    # Ruling 27 tier-default CONFIRMATION (2026-07-26). False means no
+    # `topology_delta` was supplied, so NO structural measure ran. See
+    # UNEXAMINED_DELTA_NOTE - "unknown impact" and "measured benign" are
+    # different facts and must never read identically.
+    delta_examined: bool = False
 
     def __bool__(self) -> bool:
         return self.granted
@@ -448,12 +500,20 @@ def assess_topology(delta: Optional[TopologyDelta]) -> TopologyAssessment:
             f"shortens scar->protected-anchor path ({shown_b} -> {int(d_after)})"
         )
 
-    # BETWEENNESS is COMPUTED AND REPORTED but does NOT select the tier.
-    # Ruling 27 names it among Docket F's measures and then enumerates the
-    # elevating conditions WITHOUT giving it one. Inventing a sixth condition
-    # would be inventing an elevation trigger the architect did not rule;
-    # dropping the measure silently would hide a named instrument. So it is
-    # surfaced in `measures` and flagged. UNRULED - escalated, not decided.
+    # RULING 28 (2026-07-26): BETWEENNESS REPORTS, IT NEVER ELEVATES.
+    # DIAGNOSTIC / FORENSIC ONLY. It must never become a tier trigger.
+    #
+    # The four elevating conditions above are each a DISCRETE STRUCTURAL FACT -
+    # an articulation point is removed or it isn't, a bridge is severed or it
+    # isn't - checkable with NO magnitude at all. Betweenness is CONTINUOUS, so
+    # any trigger built on it needs a cutoff, and that cutoff would be a coined
+    # magnitude at this organ's most safety-critical decision. Standing bar 5,
+    # refused a third time.
+    #
+    # REOPENING CONDITION (narrow, and neither half is optional): a cutoff
+    # RECOVERED from corpus, or one demonstrated by operational correlation
+    # against real lock outcomes. NEVER an invented one, however reasonable it
+    # looks in isolation - that is precisely how the last three got proposed.
     hub_removed = sorted(delta.removed_nodes & hubs)
 
     measures = {
@@ -466,8 +526,8 @@ def assess_topology(delta: Optional[TopologyDelta]) -> TopologyAssessment:
         "min_scar_anchor_before": d_before,
         "min_scar_anchor_after": d_after,
         "betweenness_hubs": sorted(hubs),
-        # UNRULED: reported, never tier-selecting. See the note above.
-        "betweenness_hubs_removed_UNRULED": hub_removed,
+        # RULED (28): reported, NEVER tier-selecting. See the note above.
+        "betweenness_hubs_removed": hub_removed,
     }
 
     if reasons:
@@ -620,6 +680,10 @@ class TCAML:
         effective_tier = tier if tier is not None else (
             assessment.tier if assessment is not None else Tier.ROUTINE
         )
+        examined = assessment is not None
+        # Ruling 27 confirmation: an UNEXAMINED request never reads like an
+        # examined-and-cleared one. See UNEXAMINED_DELTA_NOTE.
+        delta_note = "" if examined else f"; {UNEXAMINED_DELTA_NOTE}"
 
         # RULE 1: LOCAL requires no lock check. No state is touched, health and
         # status are not consulted, and no record is written - there is nothing
@@ -640,23 +704,24 @@ class TCAML:
         # RULE 3 first: instability locks out GLOBAL action outright.
         if self._status is not Status.HEALTHY:
             return self._deny(
-                action_id, module_id, effective_tier, assessment,
+                action_id, module_id, effective_tier, assessment, examined,
                 f"TCAML meta-unstable ({self._status.value}) - "
-                f"GLOBAL action locked out (Rule 3)",
+                f"GLOBAL action locked out (Rule 3){delta_note}",
             )
 
         if self._holder is not None:
             return self._deny(
-                action_id, module_id, effective_tier, assessment,
+                action_id, module_id, effective_tier, assessment, examined,
                 f"GLOBAL lock already held by '{self._holder}' "
-                f"(module '{self._holder_module}', since cycle {self._held_since})",
+                f"(module '{self._holder_module}', since cycle "
+                f"{self._held_since}){delta_note}",
             )
 
         if self._health < threshold:
             return self._deny(
-                action_id, module_id, effective_tier, assessment,
+                action_id, module_id, effective_tier, assessment, examined,
                 f"health {self._health} below {effective_tier.value} "
-                f"threshold {threshold}",
+                f"threshold {threshold}{delta_note}",
             )
 
         self._holder = action_id
@@ -667,14 +732,15 @@ class TCAML:
             action_id=action_id,
             reason=(f"granted at cycle {self._cycle}: healthy, unheld, "
                     f"health {self._health} >= {effective_tier.value} "
-                    f"threshold {threshold}"),
+                    f"threshold {threshold}{delta_note}"),
             scope=Scope.GLOBAL,
             tier=effective_tier,
             cycle=self._cycle,
+            delta_examined=examined,
         )
 
     def _deny(self, action_id: str, module_id: str, tier: Tier,
-              assessment: Optional[TopologyAssessment],
+              assessment: Optional[TopologyAssessment], examined: bool,
               reason: str) -> LockResponse:
         """Ruling 23: unresolved pressure never leaves silently. A denial is a
         request that could not be met, and it lands on a legible surface
@@ -688,6 +754,7 @@ class TCAML:
             "health": self._health,
             "holder": self._holder,
             "reason": reason,
+            "delta_examined": examined,
             "structural_reasons": list(assessment.reasons) if assessment else [],
             "at": datetime.now().isoformat(timespec="seconds"),
         })
@@ -698,49 +765,75 @@ class TCAML:
             scope=Scope.GLOBAL,
             tier=tier,
             cycle=self._cycle,
+            delta_examined=examined,
         )
 
     def release(self, action_id: str, module_id: str) -> None:
         """Only the CURRENT holder may release.
 
         A release from a non-holder RAISES (Ruling 25's discipline: a guard
-        whose firing looks like a typo is not enforcement). The message names
-        whether the lock was force-expired or revoked underneath the caller,
-        because that is the single most likely cause and a guard that fires
-        without explaining itself just relocates the mystery.
+        whose firing looks like a typo is not enforcement).
 
-        FLAGGED, NOT DECIDED: this means an operation whose lock was revoked by
-        instability onset, or force-expired at TTL, RAISES on its own orderly
-        release. That is the visible edge of Ruling 27's first open question
-        (revoke interrupts an in-flight GLOBAL operation). The alternative -
-        swallowing it - would make a revoked operation indistinguishable from
-        a completed one, which is worse. Escalated, not resolved here.
+        RULING 29 - WHICH raise depends on WHY, and the two causes are
+        opposite:
+
+          StaleLockRelease      TCAML TOOK the lock (revoked by instability
+                                onset, or force-expired at TTL). SYSTEM
+                                action; this caller is BLAMELESS and is being
+                                informed of something done TO it. The message
+                                names which of the two happened.
+
+          LockReleaseViolation  the caller NEVER HELD it. CALLER error; an
+                                upstream gate already failed.
+
+        One type for both would be Ruling 25's defect one level down - a
+        forensic record that cannot tell you whether to go fix the caller or
+        go look at what destabilised the constellation.
         """
-        if (self._holder is None
-                or self._holder != action_id
-                or self._holder_module != module_id):
-            raise LockReleaseViolation(
-                f"'{module_id}' released GLOBAL lock for action '{action_id}' "
-                f"but the lock is held by {self._describe_holder()}. "
-                f"{self._release_context(action_id)}"
+        if (self._holder is not None
+                and self._holder == action_id
+                and self._holder_module == module_id):
+            self._clear_holder()
+            return
+
+        stale = self._stale_record(action_id, module_id)
+        if stale is not None:
+            raise StaleLockRelease(
+                f"'{module_id}' released GLOBAL lock for action '{action_id}', "
+                f"but TCAML had already {stale['event']} it at cycle "
+                f"{stale['cycle']} ({stale['reason']}). The operation was "
+                f"INTERRUPTED, not completed - this caller did nothing wrong. "
+                f"The lock is now held by {self._describe_holder()}."
             )
-        self._clear_holder()
+        raise LockReleaseViolation(
+            f"'{module_id}' released GLOBAL lock for action '{action_id}' "
+            f"but never held it. The lock is held by {self._describe_holder()}. "
+            f"No revocation or expiry is recorded for that action/module pair."
+        )
+
+    def _stale_record(self, action_id: str,
+                      module_id: str) -> Optional[Dict[str, Any]]:
+        """The revocation/expiry that took THIS caller's lock, if any.
+
+        Matches on the (action_id, module_id) PAIR, not action_id alone. A
+        different module releasing someone else's revoked lock never held it
+        either - that is caller error, and widening this match would let a
+        genuine ownership confusion hide behind a blameless exception type.
+        """
+        for record in reversed(self.lock_revocations):
+            if record["action_id"] == action_id and record["module_id"] == module_id:
+                return {"event": "REVOKED", "cycle": record["cycle"],
+                        "reason": f"{record['reason']} -> {record['new_status']}"}
+        for record in reversed(self.lock_expiries):
+            if record["action_id"] == action_id and record["module_id"] == module_id:
+                return {"event": "FORCE-EXPIRED", "cycle": record["cycle"],
+                        "reason": f"held {record['held_cycles']} cycles, TTL {TTL}"}
+        return None
 
     def _describe_holder(self) -> str:
         if self._holder is None:
             return "NOBODY"
         return f"'{self._holder}' (module '{self._holder_module}')"
-
-    def _release_context(self, action_id: str) -> str:
-        for record in reversed(self.lock_revocations):
-            if record["action_id"] == action_id:
-                return (f"That lock was REVOKED at cycle {record['cycle']} "
-                        f"({record['reason']}).")
-        for record in reversed(self.lock_expiries):
-            if record["action_id"] == action_id:
-                return (f"That lock was FORCE-EXPIRED at cycle "
-                        f"{record['cycle']} after {record['held_cycles']} cycles.")
-        return "No expiry or revocation is recorded for it."
 
     def _clear_holder(self) -> None:
         self._holder = None

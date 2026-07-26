@@ -25,7 +25,7 @@ from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
 from src.suspension.black_sphere import BlackSphere
 from src.topology.tca_integration import TCAIntegration
-from src.topology.tcaml import LockReleaseViolation
+from src.topology.tcaml import TCAML, LockReleaseViolation, StaleLockRelease
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -56,7 +56,9 @@ import json
 #   UngroundedEchoViolation      echo with no traceable origin (Nova G1)
 #   UngroundedFragmentViolation  proposal material tracing to nothing (G3)
 #   ProvenanceOverwriteViolation forensic record rewritten (Ruling 13)
-#   LockReleaseViolation         GLOBAL lock released by a non-holder (R27)
+#   LockReleaseViolation         GLOBAL lock released by a NEVER-holder (R29)
+#   StaleLockRelease             GLOBAL lock TCAML revoked/expired out from
+#                                under a blameless holder (R29)
 #
 # An ORDINARY exception (malformed input, an unexpected None) may still
 # degrade gracefully into `errors`. That is correct and it stays. The taxonomy
@@ -70,13 +72,16 @@ STRUCTURAL_VIOLATIONS = (
     UngroundedEchoViolation,
     UngroundedFragmentViolation,
     ProvenanceOverwriteViolation,
-    # Ruling 27 / TCAML Stage 1 (2026-07-26). Joined here ON PURPOSE, as this
-    # tuple's own note requires. Cannot fire yet - TCAML is built but NOT
-    # wired (`_request_lock` still default-grants at the build-stage seam), so
-    # nothing in the pipeline holds or releases a real lock. Registered now so
-    # that the moment Stage 2 wires it, a non-holder release lands in the
-    # enumerated clause rather than being flattened into `errors`.
+    # Ruling 27 / TCAML. Joined ON PURPOSE, as this tuple's own note requires.
+    # RULING 29 (2026-07-26) SPLIT what was one type into two, because they are
+    # CAUSALLY OPPOSITE: `LockReleaseViolation` blames the caller (it never
+    # held the lock), `StaleLockRelease` absolves it (TCAML revoked or expired
+    # the lock out from under it). Flattening them was Ruling 25's own defect
+    # one level down - a forensic record that cannot say whether to go fix the
+    # caller or go look at what destabilised the constellation. Both are
+    # concrete types and NEITHER is a base class of the other.
     LockReleaseViolation,
+    StaleLockRelease,
 )
 
 
@@ -158,7 +163,17 @@ class AureaCore:
         self.sae = SAE(codex=self.codex)
         self.doctrine_spine = DoctrineSpine(codex=self.codex)
 
-        self.reflex_grid = ReflexGrid()
+        # TCAML (Ruling 27, Stage 2 - 2026-07-26): the topology layer's anchor
+        # and lock owner, constructed HERE and threaded to every requester, so
+        # the whole pipeline shares ONE lock. Built BEFORE the Grid because the
+        # Grid hands it straight to RACM, which no longer has an "absent TCAML"
+        # path to fall back on - the build-stage default-grant branch is gone.
+        # Requesters, none of which hold lock or anchor state:
+        #   RACM (via the Grid)  - GLOBAL two-phase lock, per claim
+        #   CSE                  - anchor_feedback_update / realignment
+        self.tcaml = TCAML()
+
+        self.reflex_grid = ReflexGrid(tcaml=self.tcaml)
         self.ore = ORE()
         
         # Initialize suspension systems
@@ -198,7 +213,7 @@ class AureaCore:
             scar_core=self.scar_core,
             black_sphere=self.black_sphere,
             nova=self.nova,                # Stage 2a: EAST reads real Nova state - active_echoes()
-            tcaml=None,                    # unbuilt: realignment requests are no-ops for now
+            tcaml=self.tcaml,              # Stage 2: realignment requests reach a real owner
             reflex_grid=self.reflex_grid,
         )
         # SBSRE: the contradiction chamber. Bounded by Ruling 4's clamp; carries what
@@ -328,7 +343,19 @@ class AureaCore:
             result['output_blocked'] = True
             result['output'] = f"[SUSPENDED: {self.suspension_reason}]"
             return result
-        
+
+        # TCAML cycle advance (Ruling 27, Stage 2). One pipeline pass = one
+        # TCAML cycle. Run FIRST, before anything can request a lock, for the
+        # same reason expiry is checked first INSIDE tick(): a lock orphaned by
+        # a previous pass must get its chance to expire before this pass's
+        # GLOBAL requests are adjudicated against it. Ticking afterwards would
+        # make the TTL bound one pass looser than the model states.
+        #
+        # This is also the ONLY thing that makes TTL reachable at all - without
+        # a cycle advance the bound could never be crossed and the force-expiry
+        # safety net would be decorative.
+        self.tcaml.tick()
+
         try:
             # Step 1: Perception layer
             echo = self.spl.process_input(raw_input, source)

@@ -33,8 +33,10 @@ from src.topology.tcaml import (
     RECOVERY_THRESHOLD,
     ROUTINE_THRESHOLD,
     TTL,
+    UNEXAMINED_DELTA_NOTE,
     LockReleaseViolation,
     Scope,
+    StaleLockRelease,
     Status,
     TCAML,
     Tier,
@@ -434,31 +436,91 @@ def test_release_when_nothing_is_held_raises():
     assert "NOBODY" in str(excinfo.value)
 
 
-def test_a_revoked_holder_releasing_is_told_it_was_revoked():
-    """FLAGGED, NOT DECIDED (Ruling 27, open question 1): revoke-on-instability
-    interrupts an in-flight GLOBAL operation, so the interrupted operation's
-    own orderly release now RAISES. That is the correct visible edge -
-    swallowing it would make a revoked operation indistinguishable from a
-    completed one - but the guard must at least SAY what happened, or it just
-    relocates the mystery."""
+def test_a_revoked_holder_releasing_raises_stale_not_violation():
+    """RULING 29 (2026-07-26) SUPERSEDED THIS TEST'S ASSERTION.
+
+    Stage 1 pinned `LockReleaseViolation` here. That was the ruling at the
+    time and the test was right about the RAISE; Ruling 29 moved the TYPE,
+    because a revoked holder is BLAMELESS - TCAML took its lock - while
+    `LockReleaseViolation` means the caller never held one. One type for both
+    is Ruling 25's defect one level down.
+
+    OLD (Stage 1, `00e258a`):
+        def test_a_revoked_holder_releasing_is_told_it_was_revoked():
+            with pytest.raises(LockReleaseViolation) as excinfo:
+                tcaml.release("doctrineRemap", "SAE")
+            assert "REVOKED" in str(excinfo.value)
+
+    NEW: same scenario, `StaleLockRelease`, and it must STILL name the cause.
+    This is a test changed because the RULING moved, not to make anything go
+    green - the only legitimate reason to touch a landed pin.
+    """
     tcaml = TCAML()
     tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
     tcaml.enter_meta_unstable()
 
-    with pytest.raises(LockReleaseViolation) as excinfo:
+    with pytest.raises(StaleLockRelease) as excinfo:
         tcaml.release("doctrineRemap", "SAE")
     assert "REVOKED" in str(excinfo.value)
+    assert "did nothing wrong" in str(excinfo.value)
+
+    assert not isinstance(excinfo.value, LockReleaseViolation), (
+        "the two types are causally opposite and must not be related by "
+        "inheritance - STRUCTURAL_VIOLATIONS is never a base class"
+    )
 
 
-def test_a_force_expired_holder_releasing_is_told_it_expired():
+def test_a_force_expired_holder_releasing_raises_stale_not_violation():
+    """Ruling 29's second cause. Same supersession as above: Stage 1 pinned
+    `LockReleaseViolation`, the ruling moved the type, the CAUSE must still be
+    named in the message."""
     tcaml = TCAML()
     tcaml.lock_request("orphaned", "GLOBAL", "MSSL")
     for _ in range(TTL):
         tcaml.tick()
 
-    with pytest.raises(LockReleaseViolation) as excinfo:
+    with pytest.raises(StaleLockRelease) as excinfo:
         tcaml.release("orphaned", "MSSL")
     assert "FORCE-EXPIRED" in str(excinfo.value)
+
+
+def test_the_two_release_exceptions_are_unrelated_types():
+    """Ruling 29: they may not share a type, and deliberately not a base class
+    either - `aurea_core`'s STRUCTURAL_VIOLATIONS note gives the reason (a base
+    class silently widens the set the next time someone subclasses it)."""
+    assert not issubclass(StaleLockRelease, LockReleaseViolation)
+    assert not issubclass(LockReleaseViolation, StaleLockRelease)
+
+    from src.aurea_core import STRUCTURAL_VIOLATIONS
+    assert LockReleaseViolation in STRUCTURAL_VIOLATIONS
+    assert StaleLockRelease in STRUCTURAL_VIOLATIONS
+
+
+def test_a_different_module_releasing_a_revoked_lock_is_still_caller_error():
+    """`_stale_record` matches the (action_id, module_id) PAIR.
+
+    A module releasing SOMEONE ELSE's revoked lock never held it either - that
+    is caller error, and matching on action_id alone would let a genuine
+    ownership confusion hide behind the blameless exception type.
+    """
+    tcaml = TCAML()
+    tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    tcaml.enter_meta_unstable()
+
+    with pytest.raises(LockReleaseViolation):
+        tcaml.release("doctrineRemap", "MSSL")
+
+
+def test_a_caller_that_never_held_anything_gets_the_violation():
+    """The other half of the cut: no revocation, no expiry, no lock - the
+    caller is simply wrong, and the message says so rather than implying
+    something was taken from it."""
+    tcaml = TCAML()
+    tcaml.lock_request("realHolder", "GLOBAL", "MSSL")
+
+    with pytest.raises(LockReleaseViolation) as excinfo:
+        tcaml.release("imaginary", "SAE")
+    assert "never held it" in str(excinfo.value)
 
 
 def test_lock_release_violation_is_in_the_structural_taxonomy():
@@ -687,11 +749,123 @@ def test_a_first_ever_scar_to_anchor_path_counts_as_a_shortening():
 
 def test_no_delta_means_the_base_bar_not_the_strict_one():
     """No structural evidence means no elevation. Defaulting to ELEVATED would
-    be inventing pressure no measure found (Nova's G1 failure mode)."""
+    be inventing pressure no measure found (Nova's G1 failure mode).
+
+    UPHELD by the Ruling 27 tier-default confirmation (2026-07-26) - the
+    default does not move.
+    """
     assert compute_tier(None) is Tier.ROUTINE
 
     tcaml = TCAML(health=ROUTINE_THRESHOLD)
     assert tcaml.lock_request("remap", "GLOBAL", "SAE").granted is True
+
+
+# =====================================================================
+# RULING 28 - BETWEENNESS REPORTS, IT NEVER ELEVATES
+# =====================================================================
+
+def test_betweenness_hub_removal_alone_does_not_elevate():
+    """RULING 28 (2026-07-26). A delta that removes the graph's highest-
+    betweenness node and NOTHING structurally discrete stays ROUTINE.
+
+    The four elevating conditions are each a discrete structural fact,
+    checkable with no magnitude. Betweenness is CONTINUOUS - any trigger on it
+    needs a cutoff, and that cutoff would be a coined magnitude at this
+    organ's most safety-critical decision. Standing bar #5, third refusal.
+
+    RED if anyone wires `betweenness_hubs_removed` into the tier decision.
+    """
+    # Two parallel s->t paths (a 4-cycle undirected). No articulation points,
+    # no bridges, every SCC a singleton, no anchors, no scars - so removing
+    # `x1` trips NO discrete condition while genuinely removing a maximum-
+    # betweenness node. A path graph would not do: there, every internal node
+    # is also an articulation point, so the tier would rise for a reason that
+    # has nothing to do with betweenness and the test would prove nothing.
+    delta = TopologyDelta(
+        nodes={"s", "x1", "y1", "t"},
+        edges={("s", "x1"), ("x1", "t"), ("s", "y1"), ("y1", "t")},
+        removed_nodes={"x1"},
+    )
+    assessment = assess_topology(delta)
+
+    assert "x1" in assessment.measures["betweenness_hubs"]
+    assert assessment.measures["betweenness_hubs_removed"] == ["x1"], (
+        "the delta must really remove a maximum-betweenness node, or this "
+        "test cannot detect betweenness being wired into the tier"
+    )
+    assert assessment.tier is Tier.ROUTINE, assessment.reasons
+
+
+def test_betweenness_is_still_reported_and_the_field_is_no_longer_unruled():
+    """Ruling 28 keeps the measure DIAGNOSTIC: reported, never tier-selecting.
+
+    The field name matters. `..._UNRULED` asserted an open question that is now
+    closed, and a stale status line in a field name is the exact defect class
+    this project has logged four times. It is ruled, so the name says ruled.
+    """
+    delta = TopologyDelta(
+        nodes={"a", "b", "c", "d", "e"},
+        edges={("a", "b"), ("b", "c"), ("c", "d"), ("d", "e")},
+        removed_nodes={"c"},
+    )
+    assessment = assess_topology(delta)
+
+    assert assessment.measures["betweenness_hubs_removed"] == ["c"]
+    assert not any(k.endswith("_UNRULED") for k in assessment.measures), (
+        "Ruling 28 closed this question - no measure key may still claim "
+        "to be unruled"
+    )
+    # It elevates here, but on the ARTICULATION condition - not on betweenness.
+    assert any("articulation point" in r for r in assessment.reasons)
+
+
+# =====================================================================
+# THE TIER-DEFAULT CONFIRMATION - RECORD DELTA-ABSENCE
+# =====================================================================
+
+def test_an_unexamined_request_says_so_in_its_reason():
+    """Ruling 27 confirmation (2026-07-26). The DEFAULT does not move; what
+    moves is the RECORD.
+
+    SBSRE's non-finite rule establishes that the uninformative case is the
+    conservative case, and "no delta supplied" is UNKNOWN impact, not
+    MEASURED-BENIGN impact. An unexamined GLOBAL request must therefore never
+    be textually identical to one that was examined and cleared - otherwise
+    the forensic record cannot tell the two apart after the fact.
+    """
+    tcaml = TCAML()
+    unexamined = tcaml.lock_request("remap", "GLOBAL", "SAE")
+
+    assert unexamined.granted is True          # the default is UPHELD
+    assert unexamined.delta_examined is False
+    assert UNEXAMINED_DELTA_NOTE in unexamined.reason
+
+    tcaml.release("remap", "SAE")
+    benign = TopologyDelta(
+        nodes={"a", "b", "c"},
+        edges={("a", "b"), ("b", "c"), ("c", "a")},
+        added_nodes={"leaf"}, added_edges={("a", "leaf")},
+    )
+    examined = tcaml.lock_request("remap2", "GLOBAL", "SAE",
+                                  topology_delta=benign)
+
+    assert examined.granted is True
+    assert examined.delta_examined is True
+    assert UNEXAMINED_DELTA_NOTE not in examined.reason
+    assert examined.reason != unexamined.reason.replace("remap", "remap2")
+
+
+def test_delta_absence_is_recorded_on_denials_too():
+    """A denial is where forensics are actually read. If the note only ever
+    appeared on grants, the record would be silent exactly when consulted."""
+    tcaml = TCAML()
+    tcaml.lock_request("first", "GLOBAL", "MSSL")
+
+    denied = tcaml.lock_request("second", "GLOBAL", "SAE")
+
+    assert denied.granted is False
+    assert UNEXAMINED_DELTA_NOTE in denied.reason
+    assert tcaml.lock_denials[0]["delta_examined"] is False
 
 
 def test_an_explicit_tier_overrides_the_derived_one_and_the_disagreement_is_recorded():

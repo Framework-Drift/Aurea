@@ -27,6 +27,11 @@ from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Protocol
 
 from src.reflex.rb_system import BehaviorType, RBSystem
+# DEPENDENCY DIRECTION: racm -> tcaml. `tcaml.py` imports networkx and the
+# stdlib only - nothing from AUREA - so this cannot cycle. TCAML is the LOCK
+# OWNER; RACM is a requester holding no lock state of its own (Ruling 2's
+# shape, one layer out: the arbiter of reflexes is not the owner of topology).
+from src.topology.tcaml import TCAML, StaleLockRelease
 
 
 # =====================================================================
@@ -97,9 +102,17 @@ class Verdict(Enum):
 
 
 class TCAMLPort(Protocol):
-    """The only surface RACM needs from the topology layer."""
+    """The only surface RACM needs from the topology layer.
+
+    `lock_request` returns a `LockResponse`, whose `__bool__` is `granted` -
+    so `if not grant:` below reads correctly. That is not an accident of the
+    dataclass: an always-truthy return would have made RACM read every DENIAL
+    as a GRANT, a fail-open on the system-wide integrity lock. It is pinned on
+    the TCAML side.
+    """
     status: str
-    def lock_request(self, action_id: str, scope: str, module_id: str) -> bool: ...
+    def lock_request(self, action_id: str, scope: str, module_id: str) -> Any: ...
+    def release(self, action_id: str, module_id: str) -> None: ...
 
 
 @dataclass
@@ -122,6 +135,27 @@ class ReflexClaim:
         return CANONICAL_PRIORITY.get(self.reflex_id.upper(), UNRANKED_RANK)
 
 
+class ReasonCode(str, Enum):
+    """WHY a claim landed where it did, as a stable machine-readable token.
+
+    OBSERVABILITY ONLY (§8 step 6b). These codes describe decisions RACM was
+    ALREADY making; not one of them participates in making a decision. The
+    `reason` prose stays exactly as it was - this is a parallel channel, not a
+    replacement, because the prose is what a human reads in a forensic log and
+    the code is what a query filters on.
+
+    This is NOT a typed-preference algebra over RACM - that is REJECTED (§9).
+    Nothing here is compared, ordered, or summed. A ReasonCode never reaches
+    `_rank_key`.
+    """
+    WON_PRIORITY = "won_priority"            # highest effective rank
+    COMPATIBLE_PASSENGER = "compatible_passenger"   # LOCAL, disjoint systems
+    LOST_CONTENTION = "lost_contention"      # deferred: outranked this cycle
+    QUEUE_EXEMPT = "queue_exempt"            # suppressed: may not queue (policy 6)
+    TTL_EXHAUSTED = "ttl_exhausted"          # expired out of the deferral queue
+    LOCK_DENIED = "lock_denied"              # TCAML refused the GLOBAL lock
+
+
 @dataclass
 class Decision:
     reflex_id: str
@@ -131,6 +165,17 @@ class Decision:
     deferred_cycles: int = 0
     ttl_remaining: int = TTL_CYCLES
     rb_entry_id: Optional[str] = None
+    # ---- observability sliver (§8 step 6b, 2026-07-26) -------------------
+    # ADDITIVE ONLY. Every field below defaults to empty, no existing field
+    # changed meaning, and no verdict differs before or after - pinned by a
+    # full before/after verdict dump across nine arbitration scenarios.
+    reason_code: Optional[ReasonCode] = None
+    # The claims that actually stood in this one's way. Answers "who beat me?"
+    # without re-deriving it from rank arithmetic after the fact.
+    blocking_claims: List[str] = field(default_factory=list)
+    # The specific conditions this claim failed, one string each - the same
+    # legibility Ruling 23 required of a refusal, applied to a non-execution.
+    failed_conditions: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -171,12 +216,31 @@ class RACM:
                  tcaml: Optional[TCAMLPort] = None,
                  smc: Any = None):
         self.rb = rb_system or RBSystem()
-        self.tcaml = tcaml
+        # TCAML Stage 2 (2026-07-26): the lock owner is now ALWAYS present.
+        # `tcaml or TCAML()` follows this constructor's own existing idiom
+        # (`rb_system or RBSystem()`), and it is what let the build-stage
+        # default-grant branch in `_request_lock` be DELETED rather than
+        # softened: there is no "TCAML absent" state left to special-case.
+        # AureaCore constructs ONE instance and threads it through the Grid so
+        # the whole pipeline shares a single lock; a bare RACM() still gets a
+        # working one instead of an ungated GLOBAL path.
+        self.tcaml: TCAMLPort = tcaml or TCAML()
         self.smc = smc                              # Collapse Context Awareness source
         self.cycle = 0
         self._queue: Dict[str, _QueuedClaim] = {}   # reflex_id -> slot; depth <= QUEUE_MAX
         self.last_result: Optional[ArbitrationResult] = None
         self.echotrace_signatures: List[Dict[str, Any]] = []  # policy 5: expiry is never silent
+        # Ruling 29: a release TCAML had already revoked/expired. Recorded
+        # rather than raised ONLY because the Grid releases from a `finally`
+        # (see release_lock). Empty in a healthy system.
+        self.stale_lock_releases: List[Dict[str, Any]] = []
+        # A GLOBAL lock RACM still held entering a new cycle - i.e. a release
+        # that never ran. See _sweep_own_stale_lock. Empty in a healthy system.
+        self.self_lock_sweeps: List[Dict[str, Any]] = []
+        # Observability sliver: who executed this cycle, for annotating the
+        # claims that did not. Written after grants are final; read by nothing
+        # that decides anything.
+        self._blocked_by: List[str] = []
 
     # -- state legibility (policy 8) --------------------------------------
 
@@ -224,6 +288,9 @@ class RACM:
         self.cycle += 1
         ctx = context or {}
         result = ArbitrationResult(cycle=self.cycle, reflexes_fired=0)
+
+        # 0. RACM NEVER ENTERS A NEW CYCLE STILL HOLDING THE LAST ONE'S LOCK.
+        self._sweep_own_stale_lock()
 
         # 1. Age the queue first, so an expiry this cycle is not silently
         #    overwritten by a same-cycle re-trigger.
@@ -307,8 +374,15 @@ class RACM:
                 verdict=Verdict.EXECUTE,
                 effective_rank=self._effective_rank(claim),
                 reason="highest priority" if claim is winner else "compatible (LOCAL, disjoint)",
+                reason_code=(ReasonCode.WON_PRIORITY if claim is winner
+                             else ReasonCode.COMPATIBLE_PASSENGER),
             ))
         result.execute = granted
+
+        # Observability sliver: WHO stood in the way of everything that did not
+        # run this cycle. Computed AFTER `granted` is final and read by nothing
+        # in this method - it annotates the outcome, it does not shape it.
+        self._blocked_by = [c.reflex_id for c in granted]
 
         # 8. Everything else: defer (or suppress, if exempt from queueing).
         executed_ids = {c.reflex_id for c in executing}
@@ -410,6 +484,9 @@ class RACM:
             deferred_cycles=slot.deferred_cycles,
             ttl_remaining=0,
             rb_entry_id=entry.id,
+            reason_code=ReasonCode.TTL_EXHAUSTED,
+            failed_conditions=[f"deferred {slot.deferred_cycles} cycles "
+                               f"without winning; TTL {TTL_CYCLES} exhausted"],
         ))
         self._clear_slot(claim.reflex_id)
 
@@ -450,8 +527,24 @@ class RACM:
             deferred_cycles=slot.deferred_cycles,
             ttl_remaining=slot.ttl_remaining,
             rb_entry_id=entry.id,
+            reason_code=ReasonCode.LOST_CONTENTION,
+            blocking_claims=list(self._blocked_by),
+            failed_conditions=self._contention_conditions(claim),
         ))
         assert len(self._queue) <= QUEUE_MAX, "deferral queue exceeded canon bound"
+
+    def _contention_conditions(self, claim: ReflexClaim) -> List[str]:
+        """Which specific bar this claim failed. OBSERVABILITY ONLY - derived
+        from decisions already made, and read by nothing that decides."""
+        conditions: List[str] = []
+        if claim.scope is Scope.GLOBAL:
+            conditions.append(
+                "GLOBAL scope: needs a system-wide lock it cannot hold while "
+                "another reflex executes"
+            )
+        conditions.append(f"effective rank {self._effective_rank(claim):.2f} "
+                          f"did not win this cycle")
+        return conditions
 
     def _suppress(self, claim: ReflexClaim, result: ArbitrationResult,
                   reason: str) -> None:
@@ -469,6 +562,10 @@ class RACM:
             effective_rank=self._effective_rank(claim),
             reason=reason,
             rb_entry_id=entry.id,
+            reason_code=ReasonCode.QUEUE_EXEMPT,
+            blocking_claims=list(self._blocked_by),
+            failed_conditions=[f"{claim.reflex_id} is queue-exempt "
+                               f"(policy 6) and did not execute"],
         ))
         self._clear_slot(claim.reflex_id)
 
@@ -480,29 +577,24 @@ class RACM:
 
     def _request_lock(self, claim: ReflexClaim, result: ArbitrationResult) -> bool:
         """Rule 2: synchronous two-phase handoff, no cached state. LOCAL-scope
-        actions require no TCAML check (Rule 1)."""
-        if self.tcaml is None:
-            # BUILD-STAGE SEAM (not canon): TCAML is not yet wired into the runtime.
-            # GLOBAL scope proceeds ungated and the gap is logged, rather than
-            # silently denying GSR and disarming the integrity lock. Remove this
-            # branch the moment TCAML is constructed - it is the one place a
-            # GLOBAL action currently escapes the lock model.
-            self.rb.record(
-                reflex_triggered=claim.reflex_id,
-                behavior_type=BehaviorType.LOCK_GRANT,
-                affected_systems=["TCAML"],
-                symbolic_context="TCAML absent (build stage) - GLOBAL scope ungated",
-                outcome={"result": "granted by default"},
-            )
-            return True
+        actions require no TCAML check (Rule 1).
 
+        THE BUILD-STAGE DEFAULT-GRANT BRANCH IS GONE (2026-07-26, §8 step 6b).
+        It was the ONE place a GLOBAL action escaped the lock model: with TCAML
+        absent, GLOBAL scope proceeded ungated and the gap was merely logged.
+        `self.tcaml` is now never None (see __init__), so there is no absent
+        state to grant around and no branch to re-introduce. If you find
+        yourself adding an `if self.tcaml is None` here, you are rebuilding the
+        seam - construct a TCAML instead.
+        """
         grant = self.tcaml.lock_request(claim.reflex_id, claim.scope.value, "RACM")
         self.rb.record(
             reflex_triggered=claim.reflex_id,
             behavior_type=BehaviorType.LOCK_GRANT if grant else BehaviorType.LOCK_DENY,
             affected_systems=["TCAML"] + sorted(claim.affected_systems),
             symbolic_context="TCAML two-phase lock (GLOBAL scope)",
-            outcome={"result": "granted" if grant else "denied"},
+            outcome={"result": "granted" if grant else "denied",
+                     "reason": getattr(grant, "reason", "")},
         )
         if not grant:
             result.decisions.append(Decision(
@@ -510,9 +602,86 @@ class RACM:
                 verdict=Verdict.LOCK_DENIED,
                 effective_rank=self._effective_rank(claim),
                 reason="TCAML lock denied",
+                # Observability sliver: the LOCK's own reason, carried through
+                # instead of collapsing to the bare verdict string above.
+                reason_code=ReasonCode.LOCK_DENIED,
+                failed_conditions=[getattr(grant, "reason", "")],
             ))
             self._clear_slot(claim.reflex_id)
-        return grant
+        return bool(grant)
+
+    def _sweep_own_stale_lock(self) -> None:
+        """Release a lock RACM is somehow still holding from a previous cycle.
+
+        WHY THIS EXISTS. RACM ACQUIRES the GLOBAL lock inside `arbitrate()`,
+        but the natural completion it is held until happens in the GRID, after
+        `arbitrate()` has returned. That split means the release depends on a
+        DIFFERENT object faithfully executing every claim RACM granted - and
+        "correct because the only caller is well-behaved" is a CONVENTION, not
+        a boundary. Ruling 22 is the standing lesson on that distinction.
+
+        Two real paths leaked before this existed:
+          * `arbitrate()` called WITHOUT the Grid (every direct-RACM test, and
+            anything future that arbitrates for itself) - the lock was taken
+            and never given back, so the NEXT cycle's GSR was LOCK_DENIED. The
+            Global Integrity Lock, disarmed by bookkeeping.
+          * Ruling 9's ORPHAN path inside the Grid, which `continue`s past a
+            claim whose reflex left the registry - skipping the release.
+        The second is now also fixed at its own site (the Grid's per-claim
+        `finally`); this sweep is what makes the leak UNEXECUTABLE rather than
+        merely fixed in the two places currently known.
+
+        NARROWLY SCOPED ON PURPOSE: it releases ONLY a lock whose holder_module
+        is 'RACM'. A genuine multi-cycle holder - an MSP install spanning
+        cycles, exactly what the TTL bound exists for - holds under its OWN
+        module id and this sweep will not touch it. Broadening that check would
+        turn a leak-guard into a lock-breaker.
+
+        Recorded, never silent. Empty in a healthy system.
+        """
+        holder = self.tcaml.holder
+        if holder is None or self.tcaml.holder_module != "RACM":
+            return
+        self.self_lock_sweeps.append({
+            "action_id": holder,
+            "held_since": self.tcaml.held_since,
+            "cycle": self.cycle,
+            "reason": "RACM held a GLOBAL lock into a new arbitration cycle - "
+                      "its natural-completion release never ran",
+            "at": datetime.now().isoformat(timespec="seconds"),
+        })
+        self.release_lock(holder)
+
+    def release_lock(self, action_id: str) -> None:
+        """Release a GLOBAL lock RACM acquired, at the action's completion.
+
+        RACM is the HOLDER (it requested as module_id 'RACM'), so RACM is the
+        only party TCAML accepts a release from. The Grid signals that the
+        reflex FINISHED; it does not reach into the lock itself - signalling
+        completion is not adjudication, and the lock was never the Grid's.
+
+        `StaleLockRelease` is CAUGHT HERE AND RECORDED, not raised - and this
+        is the one place that is correct, for a reason with precedent. The Grid
+        calls this from a `finally`, and an exception raised inside a `finally`
+        REPLACES the exception already in flight. Raising here would let a
+        lock-bookkeeping fact destroy the reflex's own failure - Ruling 11's
+        principle exactly: THE OBSERVER NEVER GATES THE OBSERVED. The event
+        stays loud and durable on `stale_lock_releases`; it is not swallowed,
+        it is REROUTED to a surface that cannot eat a real outcome.
+
+        `LockReleaseViolation` deliberately still PROPAGATES. The Grid releases
+        only claims RACM actually acquired, so that exception can only mean a
+        genuine bug in this file - and those are supposed to be loud.
+        """
+        try:
+            self.tcaml.release(action_id, "RACM")
+        except StaleLockRelease as stale:
+            self.stale_lock_releases.append({
+                "action_id": action_id,
+                "cycle": self.cycle,
+                "detail": str(stale),
+                "at": datetime.now().isoformat(timespec="seconds"),
+            })
 
     def _check_escalations(self, result: ArbitrationResult,
                            fired_ids: set, ctx: Dict[str, Any]) -> None:

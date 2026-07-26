@@ -359,7 +359,8 @@ class ReflexGrid:
     """
     
     def __init__(self, racm: Optional[RACM] = None,
-                 rb_system: Optional[RBSystem] = None):
+                 rb_system: Optional[RBSystem] = None,
+                 tcaml: Any = None):
         self.reflexes: Dict[str, SymbolicReflex] = {}
         self.active_triggers: List[ReflexTrigger] = []
         self.response_log: List[ReflexResponse] = []
@@ -368,8 +369,12 @@ class ReflexGrid:
         self.orphaned_authorizations: List[Dict[str, Any]] = []
 
         # The Grid holds a reference to the arbiter. It does not hold the decision.
+        # `tcaml` is threaded straight through to RACM and NEVER stored here:
+        # the Grid is not a lock holder and must not become one (Ruling 2 -
+        # the source never adjudicates). AureaCore builds ONE TCAML and passes
+        # it in so the whole pipeline shares a single lock.
         self.rb = rb_system or RBSystem()
-        self.racm = racm or RACM(rb_system=self.rb)
+        self.racm = racm or RACM(rb_system=self.rb, tcaml=tcaml)
         self.last_arbitration = None
         
         # Initialize core reflexes
@@ -460,37 +465,57 @@ class ReflexGrid:
         responses: List[ReflexResponse] = []
         by_id = {r.id: r for r in triggered}
         for claim in result.execute:
-            reflex = by_id.get(claim.reflex_id)
-            if reflex is not None:
-                trigger.reflex_id = reflex.id
-                claim_trigger = trigger
-            else:
-                reflex = self.reflexes.get(claim.reflex_id)
-                if reflex is None:
-                    # Reflex removed from the registry after its claim was deferred.
-                    # An authorized claim must never vanish without a trace (Ruling 9);
-                    # RB's CLOSED behavior enum has no member for this, so the trace
-                    # lives here as legible Grid state instead.
-                    self.orphaned_authorizations.append({
-                        'reflex_id': claim.reflex_id,
-                        'cycle': result.cycle,
-                        'trigger_conditions': dict(claim.trigger_conditions),
-                    })
-                    continue
-                # Queue winner executing NOW against the pressure it claimed THEN:
-                # rebuild its trigger from the claim's own payload. Never hand it the
-                # current cycle's trigger object - that carries this cycle's unrelated
-                # pressure, and it is mutated in this loop.
-                claim_trigger = ReflexTrigger(
-                    reflex_id=reflex.id,
-                    trigger_type=claim.trigger_conditions.get("pressure_type", ""),
-                    pressure_level=float(claim.trigger_conditions.get(
-                        "pressure_level", claim.pressure_level)),
-                    source_module=claim.trigger_conditions.get(
-                        "source_module", claim.source_module),
-                    metadata=claim.metadata,
-                )
-            response = reflex.trigger(claim_trigger)
+            # TCAML Stage 2: a GLOBAL claim holds the system-wide lock RACM
+            # acquired for it ACROSS its execution, releasing at natural
+            # completion (BUILD_CONTRACT: "sole valid caller is the current
+            # holder's own action_id/module_id, at natural completion"). The
+            # Grid SIGNALS completion; RACM, the holder, executes the release.
+            # Releasing before execution would have TCAML claiming nothing was
+            # running while a GLOBAL action ran.
+            #
+            # The `finally` wraps the WHOLE per-claim body, not just trigger():
+            # Ruling 9's orphan path `continue`s past a claim whose reflex left
+            # the registry, and an earlier version released only after
+            # trigger() - so that path took the lock and never gave it back.
+            # `finally` runs on `continue` too, which is exactly why the whole
+            # body is inside it.
+            is_global = claim.scope is Scope.GLOBAL
+            try:
+                reflex = by_id.get(claim.reflex_id)
+                if reflex is not None:
+                    trigger.reflex_id = reflex.id
+                    claim_trigger = trigger
+                else:
+                    reflex = self.reflexes.get(claim.reflex_id)
+                    if reflex is None:
+                        # Reflex removed from the registry after its claim was
+                        # deferred. An authorized claim must never vanish without a
+                        # trace (Ruling 9); RB's CLOSED behavior enum has no member
+                        # for this, so the trace lives here as legible Grid state.
+                        self.orphaned_authorizations.append({
+                            'reflex_id': claim.reflex_id,
+                            'cycle': result.cycle,
+                            'trigger_conditions': dict(claim.trigger_conditions),
+                        })
+                        continue
+                    # Queue winner executing NOW against the pressure it claimed
+                    # THEN: rebuild its trigger from the claim's own payload. Never
+                    # hand it the current cycle's trigger object - that carries this
+                    # cycle's unrelated pressure, and it is mutated in this loop.
+                    claim_trigger = ReflexTrigger(
+                        reflex_id=reflex.id,
+                        trigger_type=claim.trigger_conditions.get("pressure_type", ""),
+                        pressure_level=float(claim.trigger_conditions.get(
+                            "pressure_level", claim.pressure_level)),
+                        source_module=claim.trigger_conditions.get(
+                            "source_module", claim.source_module),
+                        metadata=claim.metadata,
+                    )
+                response = reflex.trigger(claim_trigger)
+            finally:
+                if is_global:
+                    self.racm.release_lock(claim.reflex_id)
+
             responses.append(response)
             self.response_log.append(response)
             self._log_execution(reflex, response, claim_trigger)
