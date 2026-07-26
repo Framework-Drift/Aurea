@@ -75,8 +75,45 @@ class Codex:
 
     EXECUTOR = "SAE"
 
-    def __init__(self, filepath: str = "data/doctrines.json"):
-        self.filepath = Path(filepath)
+    # =================================================================
+    # RULING 32 (2026-07-26): THE SEED IS READ-ONLY INPUT.
+    # =================================================================
+    # `data/doctrines.json` is AUREA's founding doctrine - Doctrine-0.1
+    # "Fracture Carried" (scar links D42/D88/D31), created 2025-06-21, TRACKED.
+    # Until this split, ONE `filepath` did two incompatible jobs: it was both
+    # the seed that is read at construction AND the target of `save_to_file`,
+    # which writes with mode "w". A default-constructed Codex that saved
+    # therefore OVERWROTE the founding doctrine with whatever was in memory.
+    #
+    # That is not Ruling 31's hazard. R31 closed APPEND-mode logs where
+    # pollution ADDS junk entries; this is a WHOLE-FILE OVERWRITE of an
+    # identity store - not false pressure, IDENTITY REPLACEMENT.
+    #
+    # Nothing prevented it except that no test happened to do it. That is
+    # CONVENTION, and the standing bar is UNEXECUTABILITY. Copy-on-first-run
+    # was REJECTED as the remedy: it leaves the seed live in the write path and
+    # guards it with a conditional. This guards it by HAVING NO WRITER - the
+    # seed path is never passed to a write call at all.
+    #
+    # MINIMAL SEMANTICS, and deliberately nothing more (no layering, no delta
+    # format, no merge rule - anything richer is a separate ruling):
+    #     load  -> runtime file if present, ELSE seed
+    #     save  -> always a full snapshot to runtime
+    SEED_PATH = "data/doctrines.json"                # TRACKED, READ-ONLY
+    RUNTIME_PATH = "data/runtime/doctrines.json"     # untracked, sole write target
+
+    def __init__(self, filepath: Optional[str] = None,
+                 seed_path: Optional[str] = None,
+                 runtime_path: Optional[str] = None):
+        # `filepath` is the EXPLICIT SINGLE-PATH form: seed and runtime collapse
+        # onto one file. It is how a test builds a fully isolated store, and it
+        # is deliberately NOT how the pipeline constructs one - `aurea_core`
+        # calls `Codex()`, which reads the real seed and writes only runtime.
+        if filepath is not None:
+            self.seed_path = self.runtime_path = Path(filepath)
+        else:
+            self.seed_path = Path(seed_path or self.SEED_PATH)
+            self.runtime_path = Path(runtime_path or self.RUNTIME_PATH)
         self.doctrines: Dict[str, Doctrine] = {}      # THE STORE. Sole writer: this class.
         self.fossils: Dict[str, Doctrine] = {}        # Codex Fossil Layer (⊗)
         self._consumed: set = set()                   # spent authorization IDs
@@ -268,18 +305,22 @@ class Codex:
     # =================================================================
 
     def save_to_file(self) -> None:
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        """Full snapshot to the RUNTIME path. Ruling 32: never the seed."""
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "active": [self._to_dict(d) for d in self.doctrines.values()],
             "fossils": [self._to_dict(d) for d in self.fossils.values()],
         }
-        with open(self.filepath, "w", encoding="utf-8") as f:
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, default=str, indent=2)
 
     def load_from_file(self) -> None:
-        if not self.filepath.exists():
+        """Runtime state if it exists, ELSE the seed (Ruling 32)."""
+        source = (self.runtime_path if self.runtime_path.exists()
+                  else self.seed_path)
+        if not source.exists():
             return
-        with open(self.filepath, "r", encoding="utf-8") as f:
+        with open(source, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Tolerate the legacy flat-list format written by the old DoctrineSpine.

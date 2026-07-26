@@ -25,3 +25,11 @@ __pycache__/
 # them on first use. Verified.
 logs/*.jsonl
 data/collapse_logs/*.jsonl
+
+# Ruling 32 (2026-07-26) - RUNTIME STATE IS NOT SEED.
+# The seed files (data/doctrines.json, data/scars.json, data/echoes.jsonl) stay
+# TRACKED and READ-ONLY: they are AUREA's founding doctrine and scars, and this
+# ruling's whole remedy is that they have no writer. Everything a run PRODUCES
+# lands here instead, under one glob-ignorable prefix that cannot collide with
+# a seed path.
+data/runtime/

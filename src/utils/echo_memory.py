@@ -19,19 +19,41 @@ class EchoMemory:
     - Support lineage tracing from Scar and Doctrine back to their originating Echo.
     """
 
-    def __init__(self, filepath: str = "data/echoes.jsonl"):
-        self.filepath = Path(filepath)
+    # RULING 32 (2026-07-26): THE SEED IS READ-ONLY INPUT.
+    # `data/echoes.jsonl` is TRACKED. This store APPENDS rather than
+    # overwriting, so it is Ruling 31's hazard shape rather than Codex's - but
+    # it sits on a tracked path with no redirect, so every run wrote echoes
+    # into version control. `_load` also TOUCHED the file into existence, which
+    # is a write in its own right and one nobody would look for in a loader.
+    #     load -> runtime if present, ELSE seed;  append -> always runtime.
+    SEED_PATH = "data/echoes.jsonl"                # TRACKED, READ-ONLY
+    RUNTIME_PATH = "data/runtime/echoes.jsonl"     # untracked, sole write target
+
+    def __init__(self, filepath: Optional[str] = None,
+                 seed_path: Optional[str] = None,
+                 runtime_path: Optional[str] = None):
+        # `filepath` = explicit single-path isolation (tests).
+        if filepath is not None:
+            self.seed_path = self.runtime_path = Path(filepath)
+        else:
+            self.seed_path = Path(seed_path or self.SEED_PATH)
+            self.runtime_path = Path(runtime_path or self.RUNTIME_PATH)
         self.echoes: List[Echo] = []
         self._load()
 
     def _load(self):
         """
-        Load echoes from disk, if the file exists.
+        Load echoes: runtime history if present, ELSE the seed (Ruling 32).
+
+        Deliberately does NOT touch the seed into existence. A loader that
+        creates its source is a writer wearing a reader's name, and the seed
+        has no writer.
         """
-        if not self.filepath.exists():
-            self.filepath.parent.mkdir(parents=True, exist_ok=True)
-            self.filepath.touch()
-        with open(self.filepath, "r", encoding="utf-8") as f:
+        source = (self.runtime_path if self.runtime_path.exists()
+                  else self.seed_path)
+        if not source.exists():
+            return
+        with open(source, "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     data = json.loads(line.strip())
@@ -41,9 +63,12 @@ class EchoMemory:
     def add_echo(self, echo: Echo) -> None:
         """
         Add a new Echo to memory and persist to disk.
+
+        Ruling 32: appends to the RUNTIME path, never the seed.
         """
         self.echoes.append(echo)
-        with open(self.filepath, "a", encoding="utf-8") as f:
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.runtime_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(echo.__dict__, default=str) + "\n")
 
     def get_echo(self, echo_id: str) -> Optional[Echo]:

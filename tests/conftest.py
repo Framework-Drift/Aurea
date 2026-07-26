@@ -19,11 +19,19 @@ for every test:
   - RBSystem resolves DEFAULT_LOG_PATH at construction time (class attr).
   - AureaCore resolves STRUCTURAL_LOG_PATH the same way (class attr).
   - GSR resolves GSR_ALERT_PATH at WRITE time (class attr) - see below.
-  - CSA / VeiledThread / BlackSphere take a `filepath` default argument;
-    AureaCore builds them with no args, so the default is what gets used -
-    this fixture repoints that default's tail at tmp, preserving capacity.
+  - CSA / VeiledThread / BlackSphere / TopologicalSpace / TetherProtocol take
+    a path default argument; AureaCore builds them with no args, so the
+    default is what gets used - this fixture repoints that one named default
+    at tmp, leaving every other default intact.
+  - Codex / ScarLogicCore / EchoMemory have a SEED path and a RUNTIME path
+    (Ruling 32). Only the RUNTIME path is redirected.
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
+
+AS OF RULING 32 THIS FIXTURE COVERS EVERY DURABLE STORE IN THE SYSTEM - the
+first time that has been true. Eleven paths: three resolved from class
+attributes, eight from `__init__` defaults. If you add a twelfth and do not
+add it here, you have reopened the hole Ruling 31 closed.
 
 WHY THE FIFTH PATH ESCAPED FOR SO LONG (Ruling 31, 2026-07-26)
 ---------------------------------------------------------------
@@ -52,14 +60,21 @@ This fixture weakens no assertion in any test. Do not extend it into one that
 does.
 """
 
+import inspect
+
 import pytest
 
 from src.aurea_core import AureaCore
+from src.doctrine.codex import Codex
+from src.expansion.tether.session_governor import TetherProtocol
+from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import GSR
 from src.suspension.black_sphere import BlackSphere
 from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
+from src.topology.tca_core import TopologicalSpace
+from src.utils.echo_memory import EchoMemory
 
 
 @pytest.fixture(autouse=True)
@@ -83,13 +98,55 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         GSR, "GSR_ALERT_PATH",
         str(tmp_path / "gsr_alerts.jsonl"),
     )
-    # Repoint each suspension store's default filepath (the last __init__
-    # default) at tmp, keeping the preceding capacity default intact.
-    for cls, fname in ((CSA, "csa.json"),
-                       (VeiledThread, "veiled_thread.json"),
-                       (BlackSphere, "black_sphere.json")):
-        defaults = cls.__init__.__defaults__ or ()
-        monkeypatch.setattr(
-            cls.__init__, "__defaults__",
-            defaults[:-1] + (str(tmp_path / fname),),
-        )
+    # Repoint each remaining store's path default at tmp. Ruling 32 completes
+    # this list: with the five below joining the three suspension stores and
+    # the three class-attribute paths above, THE FIXTURE NOW COVERS EVERY
+    # DURABLE STORE IN THE SYSTEM - the first time that has been true.
+    #
+    # For Codex / ScarLogicCore / EchoMemory it is the RUNTIME path that moves.
+    # The SEED path deliberately does NOT: a test still reads AUREA's real
+    # founding doctrine and scars, exactly as the pipeline does, and writes
+    # land in tmp. Redirecting the seed too would silently give every test an
+    # empty identity store and change what the whole suite is testing.
+    for cls, param, fname in (
+        (CSA, "filepath", "csa.json"),
+        (VeiledThread, "filepath", "veiled_thread.json"),
+        (BlackSphere, "filepath", "black_sphere.json"),
+        (Codex, "runtime_path", "doctrines.json"),
+        (ScarLogicCore, "runtime_path", "scars.json"),
+        (EchoMemory, "runtime_path", "echoes.jsonl"),
+        (TopologicalSpace, "filepath", "tca_map.json"),
+        (TetherProtocol, "telemetry_path", "tether_telemetry.jsonl"),
+    ):
+        _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
+
+
+def _redirect_default(monkeypatch, cls, param: str, value: str) -> None:
+    """Repoint ONE named `__init__` default, located BY NAME.
+
+    The older form of this loop assumed the path was the LAST defaulted
+    parameter (`defaults[:-1] + (value,)`). That happens to be true for the
+    suspension stores and is FALSE for `TetherProtocol`, whose
+    `telemetry_path` is followed by three callback parameters - patching the
+    last default there would have silently rebound `on_abort` to a string and
+    left the telemetry path pointing at the real forensic directory. Found
+    while extending the loop, not by a failing test.
+
+    A positional assumption that is true for the cases you happen to have is
+    the same class of defect Ruling 31 closed: a mechanism that appears to
+    cover a store while structurally missing it. Resolve by name instead.
+    """
+    spec = inspect.signature(cls.__init__)
+    names = [n for n, p in spec.parameters.items()
+             if p.default is not inspect.Parameter.empty]
+    assert param in names, (
+        f"{cls.__name__}.__init__ has no defaulted parameter '{param}' - the "
+        f"redirect would silently do nothing"
+    )
+    defaults = list(cls.__init__.__defaults__ or ())
+    assert len(defaults) == len(names), (
+        f"{cls.__name__}: keyword-only defaults are not in __defaults__; "
+        f"this helper would patch the wrong parameter"
+    )
+    defaults[names.index(param)] = value
+    monkeypatch.setattr(cls.__init__, "__defaults__", tuple(defaults))

@@ -14,8 +14,28 @@ class ScarLogicCore:
     """
     Scar Logic Core: Handles all scar memory management.
     """
-    def __init__(self, filepath: str = "data/scars.json"):
-        self.filepath = Path(filepath)
+    # RULING 32 (2026-07-26): THE SEED IS READ-ONLY INPUT.
+    # `data/scars.json` is TRACKED and holds D17 "Compassion Weaponization"
+    # (weight 84) among AUREA's founding scars. `save_to_file` writes mode "w",
+    # so a default-constructed ScarLogicCore that saved OVERWROTE the founding
+    # scars wholesale - IDENTITY REPLACEMENT, not the additive pollution
+    # Ruling 31 closed. Scars are the most permanent records in this system
+    # (Ruling 22); a permanence protected only by nobody happening to call
+    # save is not permanence. The seed now has NO WRITER at all.
+    #     load -> runtime if present, ELSE seed;  save -> always runtime.
+    SEED_PATH = "data/scars.json"                 # TRACKED, READ-ONLY
+    RUNTIME_PATH = "data/runtime/scars.json"      # untracked, sole write target
+
+    def __init__(self, filepath: Optional[str] = None,
+                 seed_path: Optional[str] = None,
+                 runtime_path: Optional[str] = None):
+        # `filepath` = explicit single-path isolation (tests). The pipeline
+        # calls ScarLogicCore(), reading the seed and writing only runtime.
+        if filepath is not None:
+            self.seed_path = self.runtime_path = Path(filepath)
+        else:
+            self.seed_path = Path(seed_path or self.SEED_PATH)
+            self.runtime_path = Path(runtime_path or self.RUNTIME_PATH)
         self.scars: List[Scar] = []
         self.load_from_file()  # Load at startup
 
@@ -121,17 +141,21 @@ class ScarLogicCore:
     def save_to_file(self) -> None:
         """
         Save all scars to disk as JSON.
+
+        Ruling 32: the RUNTIME path, never the seed.
         """
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.filepath, "w", encoding="utf-8") as f:
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
             json.dump([self._scar_to_dict(s) for s in self.scars], f, default=str, indent=2)
 
     def load_from_file(self) -> None:
         """
-        Load all scars from disk, if file exists.
+        Load scars from disk: runtime state if present, ELSE the seed (Ruling 32).
         """
-        if self.filepath.exists():
-            with open(self.filepath, "r", encoding="utf-8") as f:
+        source = (self.runtime_path if self.runtime_path.exists()
+                  else self.seed_path)
+        if source.exists():
+            with open(source, "r", encoding="utf-8") as f:
                 scars_data = json.load(f)
                 self.scars = [Scar(**self._dict_to_scardata(data)) for data in scars_data]
 
