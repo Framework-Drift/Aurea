@@ -40,6 +40,14 @@ STORE_OWNERS: dict[str, str] = {
     # SCANNED, not just asserted. Trivially green while Nova is unwired -
     # load-bearing the moment Stage 2 gives other modules a Nova handle.
     "echo_index": "src/expansion/nova.py",
+    # Ruling 27 / TCAML Stage 1 (2026-07-26). CLAUDE.md 2 has named TCAML the
+    # sole writer of compass anchor state since before TCAML existed; the organ
+    # now exists, so the claim becomes SCANNED rather than merely asserted.
+    # CSE calls `anchor_feedback_update` / `trigger_anchor_realignment` - it
+    # REPORTS what it measured and ASKS; it never reaches into the store and
+    # straightens the needle itself. Registered while TCAML is still unwired,
+    # the same way `echo_index` was registered before Nova Stage 2.
+    "anchor_state": "src/topology/tcaml.py",
 }
 
 

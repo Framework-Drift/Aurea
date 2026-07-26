@@ -25,6 +25,7 @@ from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
 from src.suspension.black_sphere import BlackSphere
 from src.topology.tca_integration import TCAIntegration
+from src.topology.tcaml import LockReleaseViolation
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -55,6 +56,7 @@ import json
 #   UngroundedEchoViolation      echo with no traceable origin (Nova G1)
 #   UngroundedFragmentViolation  proposal material tracing to nothing (G3)
 #   ProvenanceOverwriteViolation forensic record rewritten (Ruling 13)
+#   LockReleaseViolation         GLOBAL lock released by a non-holder (R27)
 #
 # An ORDINARY exception (malformed input, an unexpected None) may still
 # degrade gracefully into `errors`. That is correct and it stays. The taxonomy
@@ -68,6 +70,13 @@ STRUCTURAL_VIOLATIONS = (
     UngroundedEchoViolation,
     UngroundedFragmentViolation,
     ProvenanceOverwriteViolation,
+    # Ruling 27 / TCAML Stage 1 (2026-07-26). Joined here ON PURPOSE, as this
+    # tuple's own note requires. Cannot fire yet - TCAML is built but NOT
+    # wired (`_request_lock` still default-grants at the build-stage seam), so
+    # nothing in the pipeline holds or releases a real lock. Registered now so
+    # that the moment Stage 2 wires it, a non-holder release lands in the
+    # enumerated clause rather than being flattened into `errors`.
+    LockReleaseViolation,
 )
 
 
