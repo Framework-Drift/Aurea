@@ -591,12 +591,30 @@ class RACM:
 
     def _contention_conditions(self, claim: ReflexClaim) -> List[str]:
         """Which specific bar this claim failed. OBSERVABILITY ONLY - derived
-        from decisions already made, and read by nothing that decides."""
+        from decisions already made, and read by nothing that decides.
+
+        RULING 30 RESIDUE, corrected 2026-07-26. This used to say a GLOBAL
+        claim "needs a system-wide lock it cannot hold while another reflex
+        executes". That became FALSE the moment Ruling 30 keyed the lock on
+        structural class: a GLOBAL-scope reflex claim requests NO lock. It
+        loses at the COMPATIBILITY PARTITION, on breadth - a GLOBAL executor
+        affects everything, so it can neither run alongside the winner nor
+        carry passengers.
+
+        A stale reason here is worse than no reason. The sliver decides
+        nothing, but it is what an operator reads to learn WHY a claim lost,
+        and it would have sent them hunting a lock that was never requested.
+        """
         conditions: List[str] = []
         if claim.scope is Scope.GLOBAL:
             conditions.append(
-                "GLOBAL scope: needs a system-wide lock it cannot hold while "
-                "another reflex executes"
+                "GLOBAL scope: affects every system, so it cannot run "
+                "alongside another executing reflex (compatibility partition)"
+            )
+        if claim.lock_class is LockClass.STRUCTURAL:
+            conditions.append(
+                "STRUCTURAL action: requires the TCAML lock, which it cannot "
+                "hold while another reflex executes"
             )
         conditions.append(f"effective rank {self._effective_rank(claim):.2f} "
                           f"did not win this cycle")

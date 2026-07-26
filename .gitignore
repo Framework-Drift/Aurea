@@ -8,3 +8,20 @@ __pycache__/
 *.log
 .env
 .DS_Store
+
+# Ruling 31 (2026-07-26) - FORENSIC RUNTIME LOGS ARE NOT SOURCE.
+# These are append-only records of what AUREA actually did at runtime. They are
+# machine-written, environment-specific, and a committed copy is guaranteed to
+# be a merge conflict and a false-pressure vector: a test run's entries in a
+# forensic log are records of nothing she survived.
+#
+# BOTH FILES WERE TRACKED until this ruling, which is why the previously
+# deferred .gitignore line would have been INERT - git keeps updating a tracked
+# file no matter what is ignored. They were untracked with `git rm --cached`,
+# which destroys nothing: every committed version stays in git history
+# permanently, and history is never amended here.
+#
+# Both writers mkdir(parents=True, exist_ok=True), so a fresh clone recreates
+# them on first use. Verified.
+logs/*.jsonl
+data/collapse_logs/*.jsonl

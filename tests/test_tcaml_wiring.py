@@ -348,6 +348,62 @@ def test_non_executed_claims_carry_a_structured_reason():
     assert any("did not win" in c for c in loser.failed_conditions)
 
 
+def test_a_global_claims_rejection_reason_names_breadth_not_a_lock():
+    """RULING 30 RESIDUE, corrected 2026-07-26.
+
+    `_contention_conditions` told an operator that a losing GLOBAL claim
+    "needs a system-wide lock it cannot hold while another reflex executes".
+    Ruling 30 made that FALSE: a GLOBAL-scope reflex claim requests no lock at
+    all. It loses at the COMPATIBILITY PARTITION, on breadth.
+
+    A stale reason is worse than no reason. The sliver decides nothing, but it
+    is exactly what someone reads to find out why a claim lost, and this one
+    would have sent them hunting a lock that was never requested.
+
+    Asserted on REAL EMITTED OUTPUT from a real arbitration - not a source
+    scan, which could not tell a live string from a dead one.
+    """
+    racm = RACM(rb_system=RBSystem())
+    result = racm.arbitrate([
+        _claim("GSR", 0.9, Scope.GLOBAL, ["all"]),
+        # A second GLOBAL claim: non-structural (as every reflex is), so it
+        # takes no lock - it loses purely on breadth, which is the case whose
+        # explanation was wrong.
+        _claim("ICA", 0.8, Scope.GLOBAL, ["identity"]),
+    ])
+
+    loser = next(d for d in result.decisions if d.reflex_id == "ICA")
+    assert loser.verdict is Verdict.DEFERRED
+    joined = " ".join(loser.failed_conditions).lower()
+
+    assert "lock" not in joined, (
+        f"the rejection reason still names a lock that was never requested: "
+        f"{loser.failed_conditions}"
+    )
+    assert "affects every system" in joined or "compatibility partition" in joined, (
+        f"the reason must name BREADTH, the real cause: {loser.failed_conditions}"
+    )
+
+
+def test_a_structural_claim_that_loses_still_names_the_lock():
+    """The other half - the correction must not overshoot into silence.
+
+    A STRUCTURAL claim genuinely does need the lock, so its rejection reason
+    should still say so. Deleting the lock language outright would have traded
+    one wrong answer for a missing one.
+    """
+    racm = RACM(rb_system=RBSystem())
+    result = racm.arbitrate([
+        _claim("GSR", 0.9, Scope.GLOBAL, ["all"]),
+        _claim("ICA", 0.8, Scope.LOCAL, ["identity"],
+               lock_class=LockClass.STRUCTURAL),
+    ])
+
+    loser = next(d for d in result.decisions if d.reflex_id == "ICA")
+    joined = " ".join(loser.failed_conditions).lower()
+    assert "structural" in joined and "lock" in joined, loser.failed_conditions
+
+
 def test_the_sliver_changed_no_verdict_and_no_prose():
     """OBSERVABILITY ONLY - zero arbitration change (§8 step 6b, §9).
 

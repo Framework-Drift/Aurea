@@ -254,9 +254,28 @@ class GSR(SymbolicReflex):
         self.cascade_events: List[Dict] = []
         self.coherence_history: List[float] = []
         
+    # RULING 31 (2026-07-26): PATH INJECTABILITY IS PART OF A DURABLE STORE'S
+    # CONTRACT, NOT A TESTING CONVENIENCE.
+    #
+    # This was a bare literal inside `_default_alert`'s body. Every other
+    # durable store in this system resolves its path from a class attribute
+    # (`RBSystem.DEFAULT_LOG_PATH`, `AureaCore.STRUCTURAL_LOG_PATH`) or an
+    # `__init__` default (CSA / VeiledThread / BlackSphere) - and those are
+    # EXACTLY the two shapes `tests/conftest.py` can monkeypatch. A literal is
+    # neither, so this path was UNREACHABLE by the isolation fixture rather
+    # than merely uncovered, and every GSR-driving test run appended to the
+    # real forensic log. An isolation fixture covering four of five paths does
+    # not provide isolation; it provides the APPEARANCE of it.
+    #
+    # Resolved at WRITE time (not construction) so a redirect binds even for a
+    # GSR instance that already exists. There is deliberately no injectable
+    # no-op sink - a forensic log you can silently disable is not a forensic
+    # log (Ruling 11's standing refusal).
+    GSR_ALERT_PATH = "data/collapse_logs/gsr_alerts.jsonl"
+
     def _default_alert(self, message: str, severity: str):
         """Default alert mechanism - writes to file."""
-        alert_path = Path("data/collapse_logs/gsr_alerts.jsonl")
+        alert_path = Path(self.GSR_ALERT_PATH)   # Ruling 31: never a literal
         alert_path.parent.mkdir(parents=True, exist_ok=True)
         
         alert = {
