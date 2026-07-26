@@ -22,6 +22,10 @@ import json
 from pathlib import Path
 
 from src.reflex.racm import RACM, ReflexClaim, Scope
+# Ruling 30: the ACTION's structural class. Deliberately NOT `Scope` - see
+# `SymbolicReflex.lock_class` and `racm.Scope`'s docstring for why the two must
+# not be reachable from one another.
+from src.topology.tcaml import LockClass
 from src.reflex.rb_system import RBSystem, BehaviorType
 
 
@@ -90,11 +94,21 @@ class SymbolicReflex:
     def __init__(self, id: str, name: str, priority: ReflexPriority,
                  scope: Scope = Scope.LOCAL,
                  affected_systems: Optional[frozenset] = None,
-                 trigger_types: Optional[frozenset] = None):
+                 trigger_types: Optional[frozenset] = None,
+                 lock_class: LockClass = LockClass.NON_STRUCTURAL):
         self.id = id
         self.name = name
         self.priority = priority
         self.scope = scope
+        # Ruling 30: the ACTION's structural class, DECLARED - never derived
+        # from `scope`, which is durability + breadth and a different axis.
+        # NON_STRUCTURAL is the honest default and every core reflex keeps it:
+        # a reflex that suppresses, defers, cascades or monitors changes no
+        # structure, however wide its reach. Setting this to STRUCTURAL means
+        # "this reflex performs expansion, mutation, registration, topology
+        # change, or a doctrine-spine write" - which no reflex does today, and
+        # which needs a ruling before one claims it.
+        self.lock_class = lock_class
         self.affected_systems = affected_systems or frozenset()
         # Ruling 10: None is NOT a convenience default - it is the canon-OPEN claim,
         # and registration (add_reflex) refuses it for anything but GSR.
@@ -465,13 +479,21 @@ class ReflexGrid:
         responses: List[ReflexResponse] = []
         by_id = {r.id: r for r in triggered}
         for claim in result.execute:
-            # TCAML Stage 2: a GLOBAL claim holds the system-wide lock RACM
-            # acquired for it ACROSS its execution, releasing at natural
-            # completion (BUILD_CONTRACT: "sole valid caller is the current
-            # holder's own action_id/module_id, at natural completion"). The
-            # Grid SIGNALS completion; RACM, the holder, executes the release.
-            # Releasing before execution would have TCAML claiming nothing was
-            # running while a GLOBAL action ran.
+            # TCAML: a STRUCTURAL claim holds the lock RACM acquired for it
+            # ACROSS its execution, releasing at natural completion
+            # (BUILD_CONTRACT: "sole valid caller is the current holder's own
+            # action_id/module_id, at natural completion"). The Grid SIGNALS
+            # completion; RACM, the holder, executes the release. Releasing
+            # before execution would have TCAML claiming nothing was running
+            # while a structural action ran.
+            #
+            # RULING 30 (2026-07-26): keyed on `lock_class`, NOT `scope`. This
+            # line read `claim.scope is Scope.GLOBAL` - a SECOND conflation
+            # site, found by separating the two concepts: it decided whether to
+            # RELEASE A LOCK from the reflex's DURABILITY scope. It was only
+            # ever harmless because the acquire site made the same mistake, so
+            # the two agreed; keyed differently they would have leaked or
+            # double-released. Acquire and release must read the SAME axis.
             #
             # The `finally` wraps the WHOLE per-claim body, not just trigger():
             # Ruling 9's orphan path `continue`s past a claim whose reflex left
@@ -479,7 +501,7 @@ class ReflexGrid:
             # trigger() - so that path took the lock and never gave it back.
             # `finally` runs on `continue` too, which is exactly why the whole
             # body is inside it.
-            is_global = claim.scope is Scope.GLOBAL
+            holds_lock = claim.lock_class is LockClass.STRUCTURAL
             try:
                 reflex = by_id.get(claim.reflex_id)
                 if reflex is not None:
@@ -513,7 +535,7 @@ class ReflexGrid:
                     )
                 response = reflex.trigger(claim_trigger)
             finally:
-                if is_global:
+                if holds_lock:
                     self.racm.release_lock(claim.reflex_id)
 
             responses.append(response)
@@ -534,6 +556,10 @@ class ReflexGrid:
             reflex_id=reflex.id,
             pressure_level=trigger.pressure_level,
             scope=reflex.scope,
+            # Ruling 30: DECLARED by the reflex, never derived from `scope`.
+            # Every core reflex leaves it NON_STRUCTURAL, because suppressing,
+            # deferring, cascading and monitoring are not structural change.
+            lock_class=reflex.lock_class,
             affected_systems=reflex.affected_systems,
             source_module=trigger.source_module,
             fossil_linked=bool(meta.get("fossil_linked", False)),

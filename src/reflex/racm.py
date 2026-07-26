@@ -31,7 +31,7 @@ from src.reflex.rb_system import BehaviorType, RBSystem
 # stdlib only - nothing from AUREA - so this cannot cycle. TCAML is the LOCK
 # OWNER; RACM is a requester holding no lock state of its own (Ruling 2's
 # shape, one layer out: the arbiter of reflexes is not the owner of topology).
-from src.topology.tcaml import TCAML, StaleLockRelease
+from src.topology.tcaml import TCAML, LockClass, StaleLockRelease
 
 
 # =====================================================================
@@ -85,7 +85,24 @@ META_UNSTABLE_STATES = frozenset({"meta-unstable", "repair_cycle"})
 
 
 class Scope(Enum):
-    """Scope-partitioned lock model. GLOBAL requires a TCAML two-phase lock."""
+    """A reflex's DURABILITY + BREADTH scope. NOT the lock axis (Ruling 30).
+
+    Two live meanings, both about the REFLEX:
+      * DURABILITY (Ruling 11) - `_log_execution` sets
+        `durable=(reflex.scope == Scope.GLOBAL)`, so a GLOBAL reflex's RB
+        entries flush to disk immediately. UNTOUCHED by Ruling 30.
+      * BREADTH (Overflow Policy 2) - a GLOBAL-scope executor affects
+        everything, so nothing runs alongside it in the compatibility
+        partition.
+
+    IT IS NOT, AND NEVER WAS, THE LOCK AXIS. Until Ruling 30 this value was
+    passed to `TCAML.lock_request`, which wants the ACTION's structural class
+    (`tcaml.LockClass`). Same two words, different concept: GSR is GLOBAL for
+    durability and breadth, and its action - suppression - is not structural.
+    That conflation is what disarmed GSR during meta-instability. `LockClass`
+    shares neither type nor member names with this enum, so the mistake now
+    raises instead of locking the wrong thing.
+    """
     LOCAL = "LOCAL"
     GLOBAL = "GLOBAL"
 
@@ -111,7 +128,8 @@ class TCAMLPort(Protocol):
     the TCAML side.
     """
     status: str
-    def lock_request(self, action_id: str, scope: str, module_id: str) -> Any: ...
+    def lock_request(self, action_id: str, lock_class: LockClass,
+                     module_id: str) -> Any: ...
     def release(self, action_id: str, module_id: str) -> None: ...
 
 
@@ -122,6 +140,18 @@ class ReflexClaim:
     reflex_id: str
     pressure_level: float = 0.0
     scope: Scope = Scope.LOCAL
+    # RULING 30: the ACTION's structural class - the ONLY thing that may reach
+    # `TCAML.lock_request`. Separate from `scope` above by type AND by name,
+    # because they are separate concepts that shared a vocabulary.
+    #
+    # DEFAULT NON_STRUCTURAL, AND NOTHING SETS IT OTHERWISE TODAY. No reflex
+    # action is structural: reflexes suppress, defer, cascade, monitor - none
+    # of which appear in the corpus's GLOBAL list (expansion, mutation,
+    # registration, topology change, doctrine-spine write). This RESTORES the
+    # Quint model's own clientele: `ACTORS = {mspInstall, doctrineRemap}`.
+    # Reflexes were never modeled as lock clients; the code matched the
+    # model's mechanism while feeding it the wrong callers.
+    lock_class: LockClass = LockClass.NON_STRUCTURAL
     affected_systems: FrozenSet[str] = frozenset()
     source_module: str = ""
     # Modifier context, supplied by the Grid from SMC / EchoTrace lookups.
@@ -346,12 +376,21 @@ class RACM:
         executing: List[ReflexClaim] = [winner]
         claimed_systems = set(winner.affected_systems)
 
-        # A GLOBAL-scope executor holds a system-wide lock. NOTHING is disjoint
-        # from it, so nothing runs alongside it. Set-disjointness alone does not
-        # catch this (a GLOBAL reflex's affected-system set does not textually
-        # intersect a LOCAL one) - the partition must be scope-gated first.
-        # A non-winning GLOBAL claim is likewise never a passenger: it needs a
-        # lock it cannot hold while another reflex is executing. It defers.
+        # A GLOBAL-scope executor affects EVERYTHING, so nothing runs alongside
+        # it. Set-disjointness alone does not catch that (a GLOBAL reflex's
+        # affected-system set does not textually intersect a LOCAL one) - the
+        # partition must be scope-gated first. A non-winning GLOBAL claim is
+        # likewise never a passenger: its breadth cannot be reconciled with
+        # another reflex executing at the same time. It defers.
+        #
+        # RULING 30 CORRECTED THIS RATIONALE, NOT THIS BEHAVIOR. It used to
+        # read "a GLOBAL-scope executor holds a system-wide lock" - which is
+        # now false: no reflex claim requests the lock. The partition is
+        # correct on BREADTH grounds alone, which is what it always actually
+        # measured. This is `Scope`'s THIRD live sense (durability, breadth,
+        # and - wrongly - lock class); Ruling 30 removed only the third.
+        # Re-keying the partition would change arbitration verdicts, which this
+        # pass is explicitly not permitted to do.
         if winner.scope is not Scope.GLOBAL:
             for claim in ranked[1:]:
                 compatible = (
@@ -362,10 +401,27 @@ class RACM:
                     executing.append(claim)
                     claimed_systems |= set(claim.affected_systems)
 
-        # 7. TCAML two-phase lock for GLOBAL-scope executors (Rule 2).
+        # 7. TCAML two-phase lock for STRUCTURAL claims (Rule 2).
+        #
+        # RULING 30: keyed on the ACTION's structural class, NOT on the
+        # reflex's durability/breadth scope. This line used to read
+        # `claim.scope is Scope.GLOBAL`, which sent every system-wide
+        # SUPPRESSION to the lock - and then Rule 3 denied it during exactly
+        # the instability it exists to answer.
+        #
+        # NO REFLEX SETS `lock_class` TODAY, so in practice this branch does
+        # not fire and no reflex claim requests the lock. That is the ruling,
+        # not a shortcut: reflexes suppress, defer, cascade and monitor, and
+        # none of those is expansion, mutation, registration, topology change
+        # or a doctrine-spine write. AWAITING ITS STRUCTURAL CLIENTS - MSP
+        # install and doctrine remap, the Quint model's own `ACTORS`. The
+        # lifecycle below (grant, Grid release, self-sweep, stale records) is
+        # NOT DEAD CODE; it is the contract those clients will arrive into,
+        # and it is exercised by tests that declare a structural claim.
         granted: List[ReflexClaim] = []
         for claim in executing:
-            if claim.scope is Scope.GLOBAL and not self._request_lock(claim, result):
+            if claim.lock_class is LockClass.STRUCTURAL \
+                    and not self._request_lock(claim, result):
                 continue
             granted.append(claim)
             self._clear_slot(claim.reflex_id)
@@ -576,8 +632,11 @@ class RACM:
         return self.tcaml is not None and getattr(self.tcaml, "status", "") in META_UNSTABLE_STATES
 
     def _request_lock(self, claim: ReflexClaim, result: ArbitrationResult) -> bool:
-        """Rule 2: synchronous two-phase handoff, no cached state. LOCAL-scope
-        actions require no TCAML check (Rule 1).
+        """Rule 2: synchronous two-phase handoff, no cached state.
+
+        RULING 30: reached only by a STRUCTURAL claim. A non-structural action
+        requires no TCAML check (Rule 1), and no reflex action is structural
+        today - see the call site.
 
         THE BUILD-STAGE DEFAULT-GRANT BRANCH IS GONE (2026-07-26, §8 step 6b).
         It was the ONE place a GLOBAL action escaped the lock model: with TCAML
@@ -587,7 +646,7 @@ class RACM:
         yourself adding an `if self.tcaml is None` here, you are rebuilding the
         seam - construct a TCAML instead.
         """
-        grant = self.tcaml.lock_request(claim.reflex_id, claim.scope.value, "RACM")
+        grant = self.tcaml.lock_request(claim.reflex_id, claim.lock_class, "RACM")
         self.rb.record(
             reflex_triggered=claim.reflex_id,
             behavior_type=BehaviorType.LOCK_GRANT if grant else BehaviorType.LOCK_DENY,

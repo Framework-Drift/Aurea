@@ -35,7 +35,7 @@ from src.topology.tcaml import (
     TTL,
     UNEXAMINED_DELTA_NOTE,
     LockReleaseViolation,
-    Scope,
+    LockClass,
     StaleLockRelease,
     Status,
     TCAML,
@@ -59,10 +59,10 @@ def test_local_request_is_granted_without_touching_any_state():
     tcaml = TCAML()
     before = tcaml.lock_state()
 
-    response = tcaml.lock_request("localAction", "LOCAL", "RACM")
+    response = tcaml.lock_request("localAction", LockClass.NON_STRUCTURAL, "RACM")
 
     assert response.granted is True
-    assert response.scope is Scope.LOCAL
+    assert response.lock_class is LockClass.NON_STRUCTURAL
     assert tcaml.lock_state() == before          # nothing moved
     assert tcaml.lock_denials == []
     assert tcaml.holder is None
@@ -75,11 +75,11 @@ def test_local_request_ignores_health_and_instability():
     health on the floor, and the lock already held.
     """
     tcaml = TCAML()
-    tcaml.lock_request("globalHolder", "GLOBAL", "RACM")
+    tcaml.lock_request("globalHolder", LockClass.STRUCTURAL, "RACM")
     tcaml.set_health(0)
     tcaml.enter_meta_unstable()
 
-    response = tcaml.lock_request("localAction", "LOCAL", "RACM")
+    response = tcaml.lock_request("localAction", LockClass.NON_STRUCTURAL, "RACM")
 
     assert response.granted is True
     assert "Rule 1" in response.reason
@@ -92,7 +92,7 @@ def test_local_request_ignores_health_and_instability():
 def test_global_grant_at_healthy_unheld_sufficient_health():
     tcaml = TCAML()
 
-    response = tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    response = tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
     assert response.granted is True
     assert response.action_id == "mspInstall"
@@ -106,9 +106,9 @@ def test_global_denied_while_another_holder_holds_it_with_a_legible_reason():
     is holding, and it lands on a durable surface. A bare False would tell the
     loser it lost without telling anyone why."""
     tcaml = TCAML()
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
-    response = tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    response = tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
 
     assert response.granted is False
     assert "mspInstall" in response.reason
@@ -125,7 +125,7 @@ def test_global_denied_when_status_is_not_healthy(enter):
     tcaml = TCAML()
     getattr(tcaml, enter)()
 
-    response = tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    response = tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
 
     assert response.granted is False
     assert "Rule 3" in response.reason
@@ -141,8 +141,8 @@ def test_denial_is_falsey_and_grant_is_truthy():
     fail-OPEN on the system-wide integrity lock.
     """
     tcaml = TCAML()
-    assert bool(tcaml.lock_request("first", "GLOBAL", "MSSL")) is True
-    assert bool(tcaml.lock_request("second", "GLOBAL", "SAE")) is False
+    assert bool(tcaml.lock_request("first", LockClass.STRUCTURAL, "MSSL")) is True
+    assert bool(tcaml.lock_request("second", LockClass.STRUCTURAL, "SAE")) is False
 
 
 def test_the_answer_is_to_this_call_never_a_cached_one():
@@ -153,11 +153,11 @@ def test_the_answer_is_to_this_call_never_a_cached_one():
     instability onset is not still valid.
     """
     tcaml = TCAML()
-    assert tcaml.lock_request("remap", "GLOBAL", "SAE").granted is True
+    assert tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE").granted is True
     tcaml.release("remap", "SAE")
     tcaml.enter_meta_unstable()
 
-    assert tcaml.lock_request("remap", "GLOBAL", "SAE").granted is False
+    assert tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE").granted is False
 
 
 # =====================================================================
@@ -171,17 +171,17 @@ def test_same_request_routine_passes_elevated_denied_at_the_same_health():
     assert ROUTINE_THRESHOLD <= health < ELEVATED_THRESHOLD
 
     routine = TCAML(health=health)
-    passed = routine.lock_request("remap", "GLOBAL", "SAE", tier=Tier.ROUTINE)
+    passed = routine.lock_request("remap", LockClass.STRUCTURAL, "SAE", tier=Tier.ROUTINE)
     assert passed.granted is True
 
     elevated = TCAML(health=health)
-    denied = elevated.lock_request("remap", "GLOBAL", "SAE", tier=Tier.ELEVATED)
+    denied = elevated.lock_request("remap", LockClass.STRUCTURAL, "SAE", tier=Tier.ELEVATED)
     assert denied.granted is False
     assert str(ELEVATED_THRESHOLD) in denied.reason
     assert str(health) in denied.reason
 
     healthier = TCAML(health=80)
-    assert healthier.lock_request("remap", "GLOBAL", "SAE",
+    assert healthier.lock_request("remap", LockClass.STRUCTURAL, "SAE",
                                   tier=Tier.ELEVATED).granted is True
 
 
@@ -196,13 +196,13 @@ def test_a_structural_delta_raises_the_bar_without_denying_anything():
     delta = _bridge_severing_delta()
 
     low = TCAML(health=50)
-    denied = low.lock_request("remap", "GLOBAL", "SAE", topology_delta=delta)
+    denied = low.lock_request("remap", LockClass.STRUCTURAL, "SAE", topology_delta=delta)
     assert denied.granted is False
     assert denied.tier is Tier.ELEVATED
     assert any("bridge" in r for r in low.lock_denials[0]["structural_reasons"])
 
     high = TCAML(health=80)
-    granted = high.lock_request("remap", "GLOBAL", "SAE", topology_delta=delta)
+    granted = high.lock_request("remap", LockClass.STRUCTURAL, "SAE", topology_delta=delta)
     assert granted.granted is True
     assert granted.tier is Tier.ELEVATED
 
@@ -226,7 +226,7 @@ def test_ttl_expires_at_exactly_five_cycles_not_four_and_not_six():
     and one turns it red the other way (`>=  TTL - 1`) -> expires at 4.
     """
     tcaml = TCAML()
-    tcaml.lock_request("orphaned", "GLOBAL", "MSSL")
+    tcaml.lock_request("orphaned", LockClass.STRUCTURAL, "MSSL")
     assert tcaml.held_since == 0
 
     for _ in range(TTL - 1):
@@ -261,7 +261,7 @@ def test_expiry_is_considered_first_in_the_housekeeping_pass():
     the moment a second concurrent-eligible GLOBAL duty exists.
     """
     tcaml = TCAML()
-    tcaml.lock_request("orphaned", "GLOBAL", "MSSL")
+    tcaml.lock_request("orphaned", LockClass.STRUCTURAL, "MSSL")
     for _ in range(TTL - 1):
         tcaml.tick()
 
@@ -279,7 +279,7 @@ def test_expiry_is_considered_first_in_the_housekeeping_pass():
 def test_a_released_lock_never_expires():
     """Expiry is a safety net for an ORPHANED lock, not a timer on every one."""
     tcaml = TCAML()
-    tcaml.lock_request("wellBehaved", "GLOBAL", "MSSL")
+    tcaml.lock_request("wellBehaved", LockClass.STRUCTURAL, "MSSL")
     tcaml.tick()
     tcaml.release("wellBehaved", "MSSL")
 
@@ -293,11 +293,11 @@ def test_the_seat_reopens_after_a_force_expiry():
     """A force-expiry is not a punishment - it makes the lock a BOUNDED claim.
     The next requester must be able to take the seat."""
     tcaml = TCAML()
-    tcaml.lock_request("orphaned", "GLOBAL", "MSSL")
+    tcaml.lock_request("orphaned", LockClass.STRUCTURAL, "MSSL")
     for _ in range(TTL):
         tcaml.tick()
 
-    assert tcaml.lock_request("nextInLine", "GLOBAL", "SAE").granted is True
+    assert tcaml.lock_request("nextInLine", LockClass.STRUCTURAL, "SAE").granted is True
 
 
 # =====================================================================
@@ -323,7 +323,7 @@ def test_instability_onset_revokes_a_held_lock(enter, expected):
     RED the moment `_enter_instability` stops clearing the holder.
     """
     tcaml = TCAML()
-    tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
     assert tcaml.holder == "doctrineRemap"
 
     getattr(tcaml, enter)("scar bloom cascade")
@@ -344,14 +344,14 @@ def test_no_lock_is_ever_held_while_unstable_across_a_run():
     holder is not None IMPLIES status is HEALTHY, checked after every step."""
     tcaml = TCAML()
     script = [
-        lambda: tcaml.lock_request("a", "GLOBAL", "MSSL"),
+        lambda: tcaml.lock_request("a", LockClass.STRUCTURAL, "MSSL"),
         tcaml.tick,
         tcaml.enter_meta_unstable,
-        lambda: tcaml.lock_request("b", "GLOBAL", "SAE"),
+        lambda: tcaml.lock_request("b", LockClass.STRUCTURAL, "SAE"),
         tcaml.tick,
         lambda: tcaml.set_health(RECOVERY_THRESHOLD),
         tcaml.tick,
-        lambda: tcaml.lock_request("c", "GLOBAL", "SAE"),
+        lambda: tcaml.lock_request("c", LockClass.STRUCTURAL, "SAE"),
         tcaml.enter_repair_cycle,
         tcaml.tick,
     ]
@@ -409,7 +409,7 @@ def test_release_by_a_non_holder_raises():
     different faults - never granted, revoked underneath you, two modules
     disagreeing about ownership - all look like a successful release."""
     tcaml = TCAML()
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
     with pytest.raises(LockReleaseViolation):
         tcaml.release("doctrineRemap", "SAE")
@@ -421,7 +421,7 @@ def test_release_with_the_right_action_but_the_wrong_module_raises():
     """Two modules disagreeing about who owns a system-wide mutation is
     exactly the fault this guard exists for."""
     tcaml = TCAML()
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
     with pytest.raises(LockReleaseViolation):
         tcaml.release("mspInstall", "SAE")
@@ -456,7 +456,7 @@ def test_a_revoked_holder_releasing_raises_stale_not_violation():
     green - the only legitimate reason to touch a landed pin.
     """
     tcaml = TCAML()
-    tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
     tcaml.enter_meta_unstable()
 
     with pytest.raises(StaleLockRelease) as excinfo:
@@ -475,7 +475,7 @@ def test_a_force_expired_holder_releasing_raises_stale_not_violation():
     `LockReleaseViolation`, the ruling moved the type, the CAUSE must still be
     named in the message."""
     tcaml = TCAML()
-    tcaml.lock_request("orphaned", "GLOBAL", "MSSL")
+    tcaml.lock_request("orphaned", LockClass.STRUCTURAL, "MSSL")
     for _ in range(TTL):
         tcaml.tick()
 
@@ -504,7 +504,7 @@ def test_a_different_module_releasing_a_revoked_lock_is_still_caller_error():
     ownership confusion hide behind the blameless exception type.
     """
     tcaml = TCAML()
-    tcaml.lock_request("doctrineRemap", "GLOBAL", "SAE")
+    tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
     tcaml.enter_meta_unstable()
 
     with pytest.raises(LockReleaseViolation):
@@ -516,7 +516,7 @@ def test_a_caller_that_never_held_anything_gets_the_violation():
     caller is simply wrong, and the message says so rather than implying
     something was taken from it."""
     tcaml = TCAML()
-    tcaml.lock_request("realHolder", "GLOBAL", "MSSL")
+    tcaml.lock_request("realHolder", LockClass.STRUCTURAL, "MSSL")
 
     with pytest.raises(LockReleaseViolation) as excinfo:
         tcaml.release("imaginary", "SAE")
@@ -553,7 +553,7 @@ def test_lock_state_is_a_snapshot():
     quietly mutated the lock.
     """
     tcaml = TCAML()
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
     snapshot = tcaml.lock_state()
     snapshot.holder = "impostor"
@@ -757,7 +757,7 @@ def test_no_delta_means_the_base_bar_not_the_strict_one():
     assert compute_tier(None) is Tier.ROUTINE
 
     tcaml = TCAML(health=ROUTINE_THRESHOLD)
-    assert tcaml.lock_request("remap", "GLOBAL", "SAE").granted is True
+    assert tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE").granted is True
 
 
 # =====================================================================
@@ -834,7 +834,7 @@ def test_an_unexamined_request_says_so_in_its_reason():
     the forensic record cannot tell the two apart after the fact.
     """
     tcaml = TCAML()
-    unexamined = tcaml.lock_request("remap", "GLOBAL", "SAE")
+    unexamined = tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE")
 
     assert unexamined.granted is True          # the default is UPHELD
     assert unexamined.delta_examined is False
@@ -846,7 +846,7 @@ def test_an_unexamined_request_says_so_in_its_reason():
         edges={("a", "b"), ("b", "c"), ("c", "a")},
         added_nodes={"leaf"}, added_edges={("a", "leaf")},
     )
-    examined = tcaml.lock_request("remap2", "GLOBAL", "SAE",
+    examined = tcaml.lock_request("remap2", LockClass.STRUCTURAL, "SAE",
                                   topology_delta=benign)
 
     assert examined.granted is True
@@ -859,9 +859,9 @@ def test_delta_absence_is_recorded_on_denials_too():
     """A denial is where forensics are actually read. If the note only ever
     appeared on grants, the record would be silent exactly when consulted."""
     tcaml = TCAML()
-    tcaml.lock_request("first", "GLOBAL", "MSSL")
+    tcaml.lock_request("first", LockClass.STRUCTURAL, "MSSL")
 
-    denied = tcaml.lock_request("second", "GLOBAL", "SAE")
+    denied = tcaml.lock_request("second", LockClass.STRUCTURAL, "SAE")
 
     assert denied.granted is False
     assert UNEXAMINED_DELTA_NOTE in denied.reason
@@ -875,7 +875,7 @@ def test_an_explicit_tier_overrides_the_derived_one_and_the_disagreement_is_reco
     delta = _bridge_severing_delta()
     tcaml = TCAML(health=50)
 
-    response = tcaml.lock_request("remap", "GLOBAL", "SAE",
+    response = tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE",
                                   topology_delta=delta, tier=Tier.ROUTINE)
 
     assert response.granted is True
@@ -883,7 +883,7 @@ def test_an_explicit_tier_overrides_the_derived_one_and_the_disagreement_is_reco
 
     tcaml.release("remap", "SAE")
     tcaml.set_health(10)
-    tcaml.lock_request("remap2", "GLOBAL", "SAE",
+    tcaml.lock_request("remap2", LockClass.STRUCTURAL, "SAE",
                        topology_delta=delta, tier=Tier.ROUTINE)
     assert any("bridge" in r
                for r in tcaml.lock_denials[0]["structural_reasons"])
@@ -938,12 +938,12 @@ def test_nothing_in_tcaml_moves_health_on_its_own():
     in the organ."""
     tcaml = TCAML(health=60)
 
-    tcaml.lock_request("remap", "GLOBAL", "SAE")
+    tcaml.lock_request("remap", LockClass.STRUCTURAL, "SAE")
     tcaml.tick()
     tcaml.anchor_feedback_update("compass", 24.9)
     tcaml.trigger_anchor_realignment("compass")
     tcaml.enter_meta_unstable()
     tcaml.tick()
-    tcaml.lock_request("blocked", "GLOBAL", "SAE")
+    tcaml.lock_request("blocked", LockClass.STRUCTURAL, "SAE")
 
     assert tcaml.health == 60

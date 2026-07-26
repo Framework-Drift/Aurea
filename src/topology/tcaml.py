@@ -18,15 +18,30 @@ whether the topology can survive the winner running right now. Those are
 different questions with different owners (Ruling 2's shape: the arbiter never
 originates, the source never adjudicates).
 
-THE THREE RULES (Arbitration Protocol v2.0, unchanged by Ruling 27)
--------------------------------------------------------------------
-Rule 1  LOCAL scope requires NO lock check. There is no check to perform, and
-        inventing one would make every local reflex pay for a global hazard.
-Rule 2  GLOBAL scope requires a SYNCHRONOUS two-phase handoff: request ->
-        grant/deny, decided against live state. NEVER a cached or prior-cycle
-        answer. A lock you were granted last cycle is not a lock.
-Rule 3  Meta-instability (META_UNSTABLE / REPAIR_CYCLE) locks out GLOBAL
+THE THREE RULES (Arbitration Protocol v2.0, unchanged by Rulings 27 and 30)
+---------------------------------------------------------------------------
+Rule 1  A NON-STRUCTURAL action requires NO lock check. There is no check to
+        perform, and inventing one would make every local reflex pay for a
+        global hazard.
+Rule 2  A STRUCTURAL action requires a SYNCHRONOUS two-phase handoff: request
+        -> grant/deny, decided against live state. NEVER a cached or
+        prior-cycle answer. A lock you were granted last cycle is not a lock.
+Rule 3  Meta-instability (META_UNSTABLE / REPAIR_CYCLE) locks out STRUCTURAL
         action - and see below, it REVOKES, it does not merely block.
+
+RULING 30 (2026-07-26): WHAT "GLOBAL" MEANT ALL ALONG
+------------------------------------------------------
+The corpus's GLOBAL/LOCAL is a property of the ACTION, not of the module and
+not of its blast radius: GLOBAL := expansion, mutation, new module/node
+registration, topology change, doctrine-spine write. That list is exhaustively
+STRUCTURAL and contains no suppressive verb. So this file names the axis for
+what it means - `LockClass.STRUCTURAL` / `NON_STRUCTURAL` - and TYPE-ENFORCES
+it, because the same two words were also a reflex's DURABILITY scope
+(`racm.Scope`, Ruling 11) and the two flowed into each other silently.
+
+THE LOCK STOPS THE SYSTEM CHANGING ITSELF WHILE UNSTABLE. It does not stop it
+PROTECTING itself. A system-wide suppression cascade is restrictive at maximum
+breadth and is still not mutation.
 
 RULING 27's THREE ADDITIONS
 ---------------------------
@@ -190,10 +205,50 @@ class Tier(str, Enum):
     ELEVATED = "elevated"
 
 
-class Scope(str, Enum):
-    """Values match `racm.Scope` verbatim - RACM passes `claim.scope.value`."""
-    LOCAL = "LOCAL"
-    GLOBAL = "GLOBAL"
+class LockClass(Enum):
+    """RULING 30 (2026-07-26): WHAT the GLOBAL lock guards.
+
+    THE LOCK GUARDS STRUCTURAL CHANGE, NOT BREADTH. The corpus's GLOBAL list -
+    expansion, mutation, new module/node registration, topology change,
+    doctrine-spine write - is exhaustively STRUCTURAL and contains no
+    suppressive verb. A system-wide suppression cascade is restrictive at
+    maximum breadth and still is not mutation. The lock stops the system
+    CHANGING itself while unstable; it does not stop it PROTECTING itself.
+
+    So the corpus's `GLOBAL`/`LOCAL` are named here for what they MEAN:
+    STRUCTURAL / NON_STRUCTURAL.
+
+    ===================================================================
+    THIS IS DELIBERATELY NOT A `str` ENUM, AND THE NAMES DELIBERATELY DO
+    NOT MATCH `racm.Scope`.
+    ===================================================================
+    `racm.Scope` is a DIFFERENT CONCEPT that happened to share this one's
+    vocabulary: it is a reflex's DURABILITY scope (Ruling 11 - a GLOBAL-scope
+    reflex's RB entries flush to disk immediately). Both were `str` enums with
+    the members LOCAL/GLOBAL, so `claim.scope.value` flowed into
+    `lock_request` and typechecked, read correctly, and was WRONG - the defect
+    Ruling 30 exists to kill.
+
+    Sharing no type and no member names makes that conflation UNWRITABLE
+    rather than discouraged: `lock_request` rejects anything that is not a
+    `LockClass`, so passing a durability scope raises instead of quietly
+    locking the wrong thing. A comment asking for restraint is exactly what
+    this replaces.
+    """
+    NON_STRUCTURAL = "non_structural"   # corpus LOCAL - no lock check (Rule 1)
+    STRUCTURAL = "structural"           # corpus GLOBAL - two-phase lock (Rule 2)
+
+
+# The corpus's GLOBAL list, verbatim, as the definition of STRUCTURAL. Kept as
+# data so the classification can be READ rather than reconstructed from prose.
+# No suppressive verb appears here, and none may be added without a ruling.
+STRUCTURAL_ACTIONS = frozenset({
+    "expansion",
+    "mutation",
+    "registration",          # new module / node
+    "topology_change",
+    "doctrine_spine_write",
+})
 
 
 META_UNSTABLE_STATUSES = frozenset({Status.META_UNSTABLE, Status.REPAIR_CYCLE})
@@ -264,7 +319,7 @@ class LockResponse:
     granted: bool
     action_id: str
     reason: str
-    scope: Scope = Scope.GLOBAL
+    lock_class: LockClass = LockClass.STRUCTURAL
     tier: Optional[Tier] = None
     cycle: int = 0
     # Ruling 27 tier-default CONFIRMATION (2026-07-26). False means no
@@ -653,10 +708,17 @@ class TCAML:
     # RULE 1 / RULE 2 - THE LOCK
     # -----------------------------------------------------------------
 
-    def lock_request(self, action_id: str, scope: str, module_id: str,
+    def lock_request(self, action_id: str, lock_class: LockClass, module_id: str,
                      topology_delta: Optional[TopologyDelta] = None,
                      tier: Optional[Tier] = None) -> LockResponse:
         """Rule 2: a SYNCHRONOUS grant/deny, decided against live state.
+
+        RULING 30: the second argument is the ACTION's STRUCTURAL CLASS, and it
+        is TYPE-ENFORCED. It was previously a `str` scope, which let a reflex's
+        DURABILITY scope (`racm.Scope`, Ruling 11's concept) be passed here -
+        same vocabulary, different concept, no error, wrong lock. Anything that
+        is not a `LockClass` now RAISES rather than silently locking on the
+        wrong axis.
 
         NEVER a cached answer and never a prior cycle's. There is deliberately
         no memoization here and no "you already hold one, carry on" path: the
@@ -675,6 +737,19 @@ class TCAML:
         assessment is still recorded on a denial, so a disagreement between
         the two is visible rather than lost.
         """
+        # RULING 30: the type boundary that makes the conflation UNWRITABLE.
+        # `racm.Scope` (durability) and a bare "GLOBAL"/"LOCAL" string both land
+        # here and both are now REFUSED. This is a guard, not validation
+        # politeness: passing the wrong axis used to typecheck and lock the
+        # wrong thing, which is precisely how the GSR/Rule-3 conflict was born.
+        if not isinstance(lock_class, LockClass):
+            raise TypeError(
+                f"lock_request expects a LockClass (the ACTION's structural "
+                f"class), got {type(lock_class).__name__}={lock_class!r}. If "
+                f"this came from a reflex's `.scope`, that is Ruling 11's "
+                f"DURABILITY scope and is a different concept - see Ruling 30."
+            )
+
         assessment = (assess_topology(topology_delta)
                       if topology_delta is not None else None)
         effective_tier = tier if tier is not None else (
@@ -685,15 +760,17 @@ class TCAML:
         # examined-and-cleared one. See UNEXAMINED_DELTA_NOTE.
         delta_note = "" if examined else f"; {UNEXAMINED_DELTA_NOTE}"
 
-        # RULE 1: LOCAL requires no lock check. No state is touched, health and
-        # status are not consulted, and no record is written - there is nothing
-        # unresolved about a request that never needed adjudicating.
-        if scope == Scope.LOCAL.value or scope is Scope.LOCAL:
+        # RULE 1: a NON-STRUCTURAL action requires no lock check. No state is
+        # touched, health and status are not consulted, and no record is
+        # written - there is nothing unresolved about a request that never
+        # needed adjudicating. Ruling 30: suppression lands here however wide
+        # it is, because breadth does not make an action structural.
+        if lock_class is LockClass.NON_STRUCTURAL:
             return LockResponse(
                 granted=True,
                 action_id=action_id,
-                reason="LOCAL scope requires no TCAML lock (Rule 1)",
-                scope=Scope.LOCAL,
+                reason="non-structural action requires no TCAML lock (Rule 1)",
+                lock_class=LockClass.NON_STRUCTURAL,
                 tier=None,
                 cycle=self._cycle,
             )
@@ -706,13 +783,13 @@ class TCAML:
             return self._deny(
                 action_id, module_id, effective_tier, assessment, examined,
                 f"TCAML meta-unstable ({self._status.value}) - "
-                f"GLOBAL action locked out (Rule 3){delta_note}",
+                f"STRUCTURAL action locked out (Rule 3){delta_note}",
             )
 
         if self._holder is not None:
             return self._deny(
                 action_id, module_id, effective_tier, assessment, examined,
-                f"GLOBAL lock already held by '{self._holder}' "
+                f"structural lock already held by '{self._holder}' "
                 f"(module '{self._holder_module}', since cycle "
                 f"{self._held_since}){delta_note}",
             )
@@ -733,7 +810,7 @@ class TCAML:
             reason=(f"granted at cycle {self._cycle}: healthy, unheld, "
                     f"health {self._health} >= {effective_tier.value} "
                     f"threshold {threshold}{delta_note}"),
-            scope=Scope.GLOBAL,
+            lock_class=LockClass.STRUCTURAL,
             tier=effective_tier,
             cycle=self._cycle,
             delta_examined=examined,
@@ -762,7 +839,7 @@ class TCAML:
             granted=False,
             action_id=action_id,
             reason=reason,
-            scope=Scope.GLOBAL,
+            lock_class=LockClass.STRUCTURAL,
             tier=tier,
             cycle=self._cycle,
             delta_examined=examined,

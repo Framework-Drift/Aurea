@@ -10,11 +10,16 @@ defect it guards before landing.
 
 THE ONE THAT MATTERS MOST
 -------------------------
-`test_gsr_is_locked_out_during_meta_instability_ESCALATION` pins a CONFLICT,
-not a resolution. Read its docstring before changing anything near it.
+`test_gsr_executes_during_meta_instability_and_structural_change_does_not`
+pins Ruling 30's RESOLUTION of the conflict this file used to escalate. It
+asserts BOTH halves - GSR runs, structural change still does not - because the
+resolution is only correct if Rule 3 survived it. Read its docstring before
+changing anything near it.
 """
 
 from __future__ import annotations
+
+import json
 
 import pytest
 
@@ -23,7 +28,7 @@ from src.reflex.racm import RACM, ReasonCode, ReflexClaim, Scope, Verdict
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import (ReflexGrid, ReflexPriority, ReflexTrigger,
                                     SymbolicReflex)
-from src.topology.tcaml import TCAML, StaleLockRelease, Status
+from src.topology.tcaml import LockClass, TCAML, StaleLockRelease, Status
 
 
 # =====================================================================
@@ -54,9 +59,10 @@ def test_a_global_claim_is_actually_adjudicated_by_tcaml():
     racm = RACM(rb_system=RBSystem(), tcaml=tcaml)
 
     # Someone else holds the system-wide lock, and it is not RACM's to sweep.
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
-    result = racm.arbitrate([_claim("GSR", 0.9, Scope.GLOBAL, ["all"])])
+    result = racm.arbitrate([_claim("GSR", 0.9, Scope.GLOBAL, ["all"],
+                                lock_class=LockClass.STRUCTURAL)])
 
     assert result.verdict_for("GSR") is Verdict.LOCK_DENIED
     assert result.execute == []
@@ -91,10 +97,15 @@ class _LockProbe(SymbolicReflex):
     """A GLOBAL reflex that records the lock state DURING its own execution."""
 
     def __init__(self, tcaml, blow_up: bool = False):
+        # Ruling 30: STRUCTURAL is what puts a claim on the lock path. The
+        # GLOBAL `scope` here is durability/breadth and is deliberately left
+        # in place - the point is that the two are now independent, and only
+        # `lock_class` reaches TCAML. No production reflex declares this.
         super().__init__(id="PROBE", name="Lock Probe",
                          priority=ReflexPriority.HIGH, scope=Scope.GLOBAL,
                          affected_systems=frozenset({"all"}),
-                         trigger_types=frozenset({"probe"}))
+                         trigger_types=frozenset({"probe"}),
+                         lock_class=LockClass.STRUCTURAL)
         self._tcaml = tcaml
         self._blow_up = blow_up
         self.seen_holder = None
@@ -208,7 +219,8 @@ def test_racm_never_enters_a_new_cycle_still_holding_the_last_ones_lock():
     """
     tcaml = TCAML()
     racm = RACM(rb_system=RBSystem(), tcaml=tcaml)
-    claim = _claim("GSR", 0.9, Scope.GLOBAL, ["all"])
+    claim = _claim("GSR", 0.9, Scope.GLOBAL, ["all"],
+                   lock_class=LockClass.STRUCTURAL)
 
     first = racm.arbitrate([claim])
     assert first.verdict_for("GSR") is Verdict.EXECUTE
@@ -229,7 +241,7 @@ def test_the_sweep_never_touches_another_modules_lock():
     would turn a leak-guard into a lock-breaker."""
     tcaml = TCAML()
     racm = RACM(rb_system=RBSystem(), tcaml=tcaml)
-    tcaml.lock_request("mspInstall", "GLOBAL", "MSSL")
+    tcaml.lock_request("mspInstall", LockClass.STRUCTURAL, "MSSL")
 
     racm.arbitrate([_claim("ICA", 0.9, Scope.LOCAL, ["identity"])])
 
@@ -248,7 +260,7 @@ def test_a_stale_release_is_recorded_not_raised_through_the_finally():
     """
     tcaml = TCAML()
     racm = RACM(rb_system=RBSystem(), tcaml=tcaml)
-    tcaml.lock_request("GSR", "GLOBAL", "RACM")
+    tcaml.lock_request("GSR", LockClass.STRUCTURAL, "RACM")
     tcaml.enter_meta_unstable("cascade")      # revokes RACM's hold
 
     racm.release_lock("GSR")                  # must NOT raise
@@ -258,7 +270,7 @@ def test_a_stale_release_is_recorded_not_raised_through_the_finally():
 
     # ...but the exception type itself is still real and still structural.
     tcaml2 = TCAML()
-    tcaml2.lock_request("x", "GLOBAL", "RACM")
+    tcaml2.lock_request("x", LockClass.STRUCTURAL, "RACM")
     tcaml2.enter_repair_cycle()
     with pytest.raises(StaleLockRelease):
         tcaml2.release("x", "RACM")
@@ -367,51 +379,166 @@ def test_a_reason_code_never_reaches_the_rank_key():
 
 
 # =====================================================================
-# THE ESCALATION - A CONFLICT, PINNED AS A CONFLICT
+# RULING 30 - THE CONFLICT IS RESOLVED, AND NEITHER SIDE BENT
 # =====================================================================
 
-def test_gsr_is_locked_out_during_meta_instability_ESCALATION():
-    """*** THIS PINS A CONFLICT BETWEEN TWO RULED BEHAVIORS. NOT A RESOLUTION. ***
+def test_gsr_executes_during_meta_instability_and_structural_change_does_not():
+    """RULING 30 (2026-07-26) RESOLVED THE CONFLICT THIS TEST USED TO PIN.
 
-    RACM (racm.py, step 3) COINED an exemption: during meta-instability every
-    claim is suppressed EXCEPT GSR, because "suppressing it during
-    meta-instability would disarm the reflex that exists FOR instability."
+    It changes WITH the ruling, exactly as its own docstring promised.
 
-    TCAML Rule 3 has no such exemption, and cannot: `requestGlobal` requires
-    `status == Healthy`, and `noGrantDuringInstability` - the model-checked
-    safety property in `docs/formal/tcaml_lock/` - is precisely the assertion
-    that NO GLOBAL lock is held while unstable. Exempting GSR would violate
-    the property the naive-variant counterexample exists to protect.
+    OLD (Stage 2, `3c2a1a3`) - `test_gsr_is_locked_out_during_meta_instability_ESCALATION`:
+        *** THIS PINS A CONFLICT BETWEEN TWO RULED BEHAVIORS. NOT A RESOLUTION. ***
+        ... RACM exempts GSR from suppression, and then TCAML denies it the
+        GLOBAL lock two steps later. GSR IS DISARMED DURING INSTABILITY - by
+        the lock, not by the arbiter. ...
+            assert responses == [], "GSR did not execute - it was locked out"
+            assert grid.last_arbitration.verdict_for("GSR") is Verdict.LOCK_DENIED
 
-    So RACM exempts GSR from suppression, and then TCAML denies it the GLOBAL
-    lock two steps later. GSR IS DISARMED DURING INSTABILITY - by the lock,
-    not by the arbiter.
+    NEW: the conflict DISSOLVED at the classification layer. It was never a
+    contest between two authorities - it was one axis wearing another's
+    vocabulary. GSR's action is SUPPRESSION, which is not expansion, mutation,
+    registration, topology change or a doctrine-spine write, so it is
+    NON_STRUCTURAL and never reaches Rule 3 at all. Breadth was doing the
+    talking; structure decides.
 
-    LATENT, NOT LIVE: nothing in the pipeline calls `enter_meta_unstable` /
-    `enter_repair_cycle` today, so TCAML is always HEALTHY and this path never
-    fires in production. It becomes live the moment anything drives instability
-    onset - a Health Index, a scar-bloom detector, a repair cycle.
+    BOTH HALVES ARE ASSERTED HERE, and the test is worthless without the
+    second one - the resolution is only correct if Rule 3 is still intact:
+      1. GSR EXECUTES during META_UNSTABLE (RACM's coined exemption survives,
+         and nothing lock-denies a suppression).
+      2. A STRUCTURAL request in the SAME state is still DENIED - no actor
+         exemption entered Rule 3, and `noGrantDuringInstability` still holds.
 
-    ESCALATED to the architect. Do NOT resolve it by exempting GSR from the
-    lock (that breaks the model-checked property) and do NOT resolve it by
-    deleting RACM's exemption (that disarms the failsafe by a different
-    route). This test asserts CURRENT behavior so the conflict stays visible;
-    when it is ruled, this test changes WITH the ruling and says so.
+    Both wrong fixes stay wrong permanently: do NOT exempt an actor from Rule 3
+    (breaks the model-checked property), and do NOT delete RACM's exemption
+    (disarms the failsafe by another route).
     """
     tcaml = TCAML()
     grid = ReflexGrid(tcaml=tcaml)
     tcaml.enter_meta_unstable("scar bloom cascade")
 
+    # 1. Suppression is never lock-gated, however wide it reaches.
     responses = grid.evaluate_pressure("test", "scar_density", 0.99)
 
-    assert responses == [], "GSR did not execute - it was locked out"
-    assert grid.last_arbitration.verdict_for("GSR") is Verdict.LOCK_DENIED
+    assert [r.reflex_id for r in responses] == ["GSR"], (
+        "GSR must execute during instability - it is the reflex that exists "
+        "FOR instability"
+    )
+    assert grid.last_arbitration.verdict_for("GSR") is Verdict.EXECUTE
     assert tcaml.status is Status.META_UNSTABLE
 
+    # 2. ...and Rule 3 is untouched: structural change is still locked out.
+    structural = tcaml.lock_request("doctrineRemap", LockClass.STRUCTURAL, "SAE")
+    assert structural.granted is False
+    assert "Rule 3" in structural.reason
+    assert tcaml.holder is None
 
-def _claim(rid, level, scope=Scope.LOCAL, systems=()):
+
+def test_a_suppressive_reflex_never_reaches_the_lock_at_all():
+    """The mechanism behind the resolution: no reflex claim requests the lock.
+
+    Not "requests it and is granted" - never asks. A healthy TCAML would grant
+    GSR anyway, so a test that only checked the verdict could not tell the two
+    apart. The holder never moving, and no lock record existing, is what
+    distinguishes them.
+    """
+    tcaml = TCAML()
+    grid = ReflexGrid(tcaml=tcaml)
+
+    grid.evaluate_pressure("test", "scar_density", 0.99)
+
+    assert grid.last_arbitration.verdict_for("GSR") is Verdict.EXECUTE
+    assert tcaml.lock_denials == []
+    assert tcaml.holder is None
+    lock_entries = [e for e in grid.rb.entries if "LOCK" in str(e.behavior_type)]
+    assert lock_entries == [], (
+        f"a suppressive reflex still transacted with the lock: {lock_entries}"
+    )
+
+
+def test_nothing_is_structural_unless_it_declares_itself():
+    """The safe default is the whole safety property.
+
+    A hand-built `ReflexClaim` - what a future direct caller writes - must not
+    reach the lock by omission. If the dataclass default were STRUCTURAL,
+    every claim that simply did not mention `lock_class` would start
+    contending for the system-wide lock, silently, and Ruling 30 would have
+    been undone by a field initializer.
+    """
+    claim = ReflexClaim(reflex_id="ANY", pressure_level=0.9, scope=Scope.GLOBAL)
+    assert claim.lock_class is LockClass.NON_STRUCTURAL
+
+    tcaml = TCAML()
+    racm = RACM(rb_system=RBSystem(), tcaml=tcaml)
+    racm.arbitrate([claim])
+    assert tcaml.holder is None, "a claim became structural by omission"
+
+
+def test_a_durability_scope_cannot_be_passed_as_a_lock_class():
+    """RULING 30's type boundary. The conflation must be UNWRITABLE, not
+    discouraged - a comment saying "don't pass the wrong scope" is the defect
+    this ruling exists to kill.
+
+    `racm.Scope` and the raw strings it used to be converted to are both
+    refused. Before Ruling 30 `claim.scope.value` typechecked here, read
+    correctly, and locked the wrong axis.
+    """
+    tcaml = TCAML()
+
+    with pytest.raises(TypeError, match="LockClass"):
+        tcaml.lock_request("x", Scope.GLOBAL, "RACM")
+    with pytest.raises(TypeError, match="LockClass"):
+        tcaml.lock_request("x", "GLOBAL", "RACM")
+    with pytest.raises(TypeError, match="LockClass"):
+        tcaml.lock_request("x", Scope.LOCAL, "RACM")
+
+    assert tcaml.holder is None
+
+
+def test_the_two_scope_concepts_share_no_member_names():
+    """Separated BY NAME as well as by type. If `LockClass` had kept
+    GLOBAL/LOCAL, the types would differ but every reader would still have to
+    hold two meanings for one word - which is how the conflation survived
+    review in the first place."""
+    assert {m.name for m in LockClass} == {"STRUCTURAL", "NON_STRUCTURAL"}
+    assert {m.name for m in Scope} == {"LOCAL", "GLOBAL"}
+    assert not ({m.name for m in LockClass} & {m.name for m in Scope})
+
+
+def test_ruling_11_durability_still_reads_the_reflex_scope(tmp_path):
+    """The durability read is UNTOUCHED (Ruling 11).
+
+    `_log_execution` sets `durable=(reflex.scope == Scope.GLOBAL)`. GSR is
+    GLOBAL-scope, so its entry flushes to disk IMMEDIATELY - and GSR is also
+    NON_STRUCTURAL, so it takes no lock. Those two facts now come from two
+    different fields, which is the entire point of Ruling 30; if separating
+    them had re-keyed durability onto `lock_class`, GSR would silently become
+    a buffered LOCAL entry and a system-wide safety suppression would sit
+    unwritten until some later flush boundary.
+
+    ASSERTS THE FLUSH, NOT A RECORDED STRING. An earlier version of this test
+    checked `entry.scope == "GLOBAL"` - which is the scope RB was TOLD, not
+    the durability DECISION, so it stayed green when durability was re-keyed.
+    Ruling 11's guarantee is "on disk now"; that is what gets asserted.
+    """
+    log = tmp_path / "rb.jsonl"
+    grid = ReflexGrid(rb_system=RBSystem(log_path=str(log)), tcaml=TCAML())
+
+    grid.evaluate_pressure("test", "scar_density", 0.99)
+
+    assert log.exists(), "GSR's GLOBAL-scope entry was not flushed immediately"
+    on_disk = [json.loads(line) for line in log.read_text().splitlines() if line]
+    assert [e["reflex_triggered"] for e in on_disk] == ["GSR"]
+
+
+def _claim(rid, level, scope=Scope.LOCAL, systems=(),
+           lock_class=LockClass.NON_STRUCTURAL):
+    """Ruling 30: `scope` (durability/breadth) and `lock_class` (the ACTION's
+    structural class) are SEPARATE knobs here on purpose. Production sets the
+    latter NON_STRUCTURAL for every reflex; tests that exercise the lock
+    lifecycle declare STRUCTURAL explicitly, the way MSP install will."""
     return ReflexClaim(
-        reflex_id=rid, pressure_level=level, scope=scope,
+        reflex_id=rid, pressure_level=level, scope=scope, lock_class=lock_class,
         affected_systems=frozenset(systems), source_module="test",
         trigger_conditions={"pressure_type": "t", "pressure_level": level},
     )
