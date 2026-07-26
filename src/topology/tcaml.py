@@ -100,27 +100,35 @@ import networkx as nx
 # claim on the present; five cycles is how long the present lasts here.
 TTL = 5
 
-# COINED - registered in COINED_CONSTANTS.md (architect's file, outside this
-# checkout). Each is a health FLOOR on a 0..100 index, not a formula.
+# COINED - already REGISTERED in `Aurea Build/COINED_CONSTANTS.md` (the
+# architect's file, sibling to this repo) under this module's own section. The
+# justifications below are that register's, NOT independent ones invented here:
+# two divergent rationales for the same magnitude is how a coined number starts
+# drifting. If you change one side, change both, and say so.
 #
-# ROUTINE_THRESHOLD (COINED): the base bar. Ordinary GLOBAL housekeeping should
-# not run while the constellation sits in the bottom two fifths of its own
-# health range - but a higher bar would make routine GLOBAL work impossible
-# during exactly the sustained pressure it exists to relieve.
+# Each is a health FLOOR on a 0..100 index. None of them is a formula.
+#
+# ROUTINE_THRESHOLD (COINED): minimum Health Index a `ROUTINE`-tier GLOBAL
+# request must clear. Reuses the project's recurring "elevated attention" 0.4
+# band (DEE `PRESSURE_RISING`), rescaled 0-100 for the Health Index. Only the
+# RESCALED REUSE is coined, not a fresh number.
 ROUTINE_THRESHOLD = 40
 
-# ELEVATED_THRESHOLD (COINED): the bar a STRUCTURALLY consequential change must
-# clear (see assess_topology). Three quarters: a delta that severs a bridge or
-# takes out an articulation point reshapes what the topology can survive, so it
-# may proceed from a clearly healthy constellation, not a merely adequate one.
+# ELEVATED_THRESHOLD (COINED): minimum Health Index an `ELEVATED`-tier request
+# must clear - one Docket F flagged as structurally consequential. Reuses the
+# recurring "critical" 0.75 band (EchoNet `BASE_THRESHOLD`, DEE
+# `PRESSURE_CRITICAL`, RIL `IDENTITY_FRACTURE_PRESSURE`). The SAME gate as
+# routine at a stricter bar - never a separate verdict path.
 ELEVATED_THRESHOLD = 75
 
 # RECOVERY_THRESHOLD (COINED): health required to leave META_UNSTABLE /
-# REPAIR_CYCLE. Deliberately EQUAL to ELEVATED_THRESHOLD - recovering from
-# instability is not a lesser claim than making a structural change under it.
-# FLAGGED, NOT DECIDED (Ruling 27 open question 2): equality means there is NO
-# HYSTERESIS BAND. Nothing in this module moves health, so it cannot flap on
-# its own; a caller oscillating health across 75 would flap the status.
+# REPAIR_CYCLE. Same band as ELEVATED_THRESHOLD, DELIBERATELY EQUAL rather than
+# lower - no hysteresis band is coined here.
+# FLAGGED AS AN OPEN DECISION, not a considered-and-rejected one (Ruling 27,
+# open question 2). Canon's 20 deg / 25 deg pair is an existing precedent for a
+# hysteresis band if this index is ever observed oscillating across one
+# threshold. Nothing in THIS module moves health, so it cannot flap on its own;
+# a caller oscillating health across 75 would flap the status.
 RECOVERY_THRESHOLD = 75
 
 # The model's `init` health. SPEC-DERIVED (tcaml_lock.qnt: `health' = 100`),
