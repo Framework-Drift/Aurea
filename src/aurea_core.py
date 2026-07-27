@@ -199,6 +199,10 @@ class AureaCore:
         # calls `stabilization_event`; SAE never polls SML, because the
         # budget-holder must not be the judge of its own debts (Ruling 37 (5)).
         self.sml = SML(scar_core=self.scar_core, sae=self.sae)
+        # Ruling 40: bind THE decay owner, so a manual retire through
+        # `scar_core.decay_scar` executes on the same SML that holds the
+        # quiet-cycle counters and the handle to SAE - one bookkeeper, not two.
+        self.scar_core.attach_decay_owner(self.sml)
 
         self.ore = ORE()
         # Ruling 33 Stage 2. ORE resolves the verdict; HAIL renders it. HAIL is
@@ -230,7 +234,10 @@ class AureaCore:
         #
         # Compass EAST reads this engine live (below), and it cycles once per
         # pipeline pass (see _nova_cycle).
-        self.nova = NovaEngine()
+        # Ruling 42: Nova takes a READ handle to the scar owner so a LOAD can ask
+        # whether a restored echo's scar links still name records that exist.
+        # Reads are free (Ruling 1); `scar_requests` stay PARKED (Ruling 15).
+        self.nova = NovaEngine(scar_core=self.scar_core)
         # Ruling 14: G2's guarantee is CHECKED here, not assumed. A proposal
         # whose backing echo is not MUTATED-and-scar-linked is a G2 BREACH -
         # it lands on this legible surface and denies echo_origin. It never
@@ -1483,6 +1490,13 @@ class AureaCore:
         self.codex.save_to_file()
         self.tca.topology.save_to_file()
         self.sae.save()
+        # Ruling 42: the three continuity stores. Like SAE's, each is ALREADY
+        # durable at the moment of its own mutation - these are consistency
+        # snapshots, not the mechanism. If this were the only save point, a
+        # process kill would still be able to make her forget.
+        self.ril.save()
+        self.nova.save()
+        self.reflex_grid.racm.save()
 
     def load_state(self, filepath: Optional[str] = None):
         """Load system state from disk. Symmetrical with `save_state` (res.8)."""

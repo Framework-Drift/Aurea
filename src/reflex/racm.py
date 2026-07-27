@@ -21,10 +21,14 @@ runtime (that would re-couple arbiter to source and reintroduce the cycle).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Protocol
+
+from src.utils.continuity import LoadReport, RestorationOutcome
 
 from src.reflex.rb_system import BehaviorType, RBSystem
 # DEPENDENCY DIRECTION: racm -> tcaml. `tcaml.py` imports networkx and the
@@ -242,9 +246,15 @@ class RACM:
     during collapse.
     """
 
+    STATE_VERSION = 1
+
     def __init__(self, rb_system: Optional[RBSystem] = None,
                  tcaml: Optional[TCAMLPort] = None,
-                 smc: Any = None):
+                 smc: Any = None,
+                 runtime_path: str = "data/runtime/racm_queue.json"):
+        # Ruling 42 / Ruling 39: an `__init__` DEFAULT under `data/runtime/`,
+        # redirected by name in `tests/conftest.py`. SAE's shape.
+        self.runtime_path = Path(runtime_path)
         self.rb = rb_system or RBSystem()
         # TCAML Stage 2 (2026-07-26): the lock owner is now ALWAYS present.
         # `tcaml or TCAML()` follows this constructor's own existing idiom
@@ -271,6 +281,16 @@ class RACM:
         # claims that did not. Written after grants are final; read by nothing
         # that decides anything.
         self._blocked_by: List[str] = []
+
+        # Ruling 42 taxonomy + best-effort persistence (Ruling 11's shape).
+        self.load_report: Optional[LoadReport] = None
+        self.persist_failures: List[Dict[str, Any]] = []
+        # Ruling 23's word, applied to a boundary rather than a queue cap:
+        # UNRESOLVED PRESSURE NEVER LEAVES SILENTLY. A queue that could not be
+        # restored is a DECLARED LOSS, recorded here and on the RB channel.
+        self.declared_losses: List[Dict[str, Any]] = []
+
+        self.load()
 
     # -- state legibility (policy 8) --------------------------------------
 
@@ -333,6 +353,7 @@ class RACM:
         result.reflexes_fired = len(arbitration_set)
         if not arbitration_set:
             self.last_result = result
+            self._persist()
             return result
 
         # 3. Meta-instability override (2b, Rule 3): a GLOBAL grant issued a
@@ -457,7 +478,206 @@ class RACM:
         self._check_escalations(result, fired_ids, ctx)
 
         self.last_result = result
+        # Ruling 42 res.3: the queue and the cycle counter leave this method in
+        # step, so they are written in the SAME SNAPSHOT. `deferred_cycles` and
+        # `ttl_remaining` are RELATIVE counters - meaningless without the clock
+        # they were counted against - and persisting them apart from `cycle`
+        # would restore ages measured against a clock that no longer exists.
+        self._persist()
         return result
+
+    # =================================================================
+    # CONTINUITY (Ruling 42) - deferred pressure survives the boundary
+    # =================================================================
+
+    def save(self) -> None:
+        """Whole-file snapshot. Ruling 32's minimal semantics VERBATIM.
+
+        WHAT ROUND-TRIPS: `cycle`, and every deferral slot as
+        (serialized `ReflexClaim`, `deferred_cycles`, `ttl_remaining`).
+
+        CLOCK COHERENCE IS LOCAL, AND DELIBERATELY SO. The two ages are RELATIVE
+        counters and `cycle` is written in the SAME snapshot, so a restored slot's
+        age is still measured against the clock it was counted against. No GLOBAL
+        symbolic ordinal exists anywhere in this system, and none is invented here
+        - inventing one would be a coined magnitude at the boundary between
+        arbitration and time.
+
+        REPORTED-NOT-PERSISTED, each for the same reason - they describe the
+        CYCLE JUST ENDED, not pressure still owed, and a restored copy would be a
+        record of events from a process that no longer exists:
+          * `echotrace_signatures` - expiry signatures bound for EchoTrace (unbuilt)
+          * `stale_lock_releases`  - Ruling 29 observations of a lock TCAML took
+          * `self_lock_sweeps`     - locks swept entering a new cycle
+          * `last_result`          - the previous cycle's ArbitrationResult
+          * `_blocked_by`          - who executed this cycle, for annotation
+        All five are forensic candidates for a later slice, not this pass's scope.
+        """
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": self.STATE_VERSION,
+            "saved_at": datetime.now().isoformat(),
+            "cycle": self.cycle,
+            "queue": [
+                {
+                    "claim": self._claim_to_dict(slot.claim),
+                    "deferred_cycles": slot.deferred_cycles,
+                    "ttl_remaining": slot.ttl_remaining,
+                }
+                for slot in self._queue.values()
+            ],
+        }
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def load(self) -> bool:
+        """Runtime state if present, ELSE an empty queue. Returns whether it resumed.
+
+        A RESTORED QUEUE OVER `QUEUE_MAX` IS A REFUSED LOAD, NOT A TRUNCATION.
+        Truncation is a silent drain: it would discard real deferred pressure and
+        report a healthy queue, which is the one outcome this whole ruling exists
+        to prevent. The bound does not move (Ruling 23's shape - a bounded queue
+        is how this system refuses to become an overload vector).
+
+        EVERY REFUSAL HERE IS A DECLARED LOSS. Deferred pressure that cannot be
+        restored has not been resolved; it has been LOST, and Ruling 23's sentence
+        governs - unresolved pressure never leaves silently. The loss lands on
+        `declared_losses` AND on the RB channel, which is the durable surface
+        every other RACM outcome already uses.
+        """
+        if not self.runtime_path.exists():
+            return False
+
+        try:
+            with open(self.runtime_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            return self._refuse_queue(f"unreadable arbitration state: {exc!r}", 0)
+
+        version = data.get("version")
+        if version != self.STATE_VERSION:
+            return self._refuse_queue(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched",
+                len(data.get("queue") or []))
+
+        slots = data.get("queue") or []
+        if len(slots) > QUEUE_MAX:
+            return self._refuse_queue(
+                f"restored queue depth {len(slots)} exceeds the canon bound "
+                f"{QUEUE_MAX}; truncating would silently drain real deferred "
+                f"pressure, so the whole restore is refused", len(slots))
+
+        try:
+            restored = {}
+            for slot in slots:
+                claim = self._claim_from_dict(slot["claim"])
+                restored[claim.reflex_id] = _QueuedClaim(
+                    claim=claim,
+                    deferred_cycles=int(slot.get("deferred_cycles", 0)),
+                    ttl_remaining=int(slot.get("ttl_remaining", TTL_CYCLES)),
+                )
+        except (KeyError, TypeError, ValueError) as exc:
+            return self._refuse_queue(
+                f"a deferral slot did not reconstruct: {exc!r}", len(slots))
+
+        self._queue = restored
+        self.cycle = int(data.get("cycle", 0))
+        self.load_report = LoadReport(
+            store="racm._queue", outcome=RestorationOutcome.RESTORED,
+            path=str(self.runtime_path), resumed=True,
+            detail={"cycle": self.cycle, "queue_depth": len(restored),
+                    "saved_at": data.get("saved_at")})
+        return True
+
+    def _refuse_queue(self, reason: str, lost: int) -> bool:
+        """Refuse the file, EMPTY the queue, and DECLARE the loss.
+
+        The file is left BYTE-UNTOUCHED - `_persist` is a no-op for the life of a
+        process that refused, because a file overwritten one cycle later was not
+        left untouched.
+        """
+        self._queue = {}
+        record = {"event": "deferred_pressure_lost", "reason": reason,
+                  "slots_lost": lost, "path": str(self.runtime_path),
+                  "at": datetime.now().isoformat()}
+        self.declared_losses.append(record)
+        self.load_report = LoadReport(
+            store="racm._queue", outcome=RestorationOutcome.REFUSED,
+            path=str(self.runtime_path), resumed=False, detail=record)
+        # The RB channel, because it is the durable surface every other RACM
+        # outcome already routes to (Ruling 11) - a loss recorded only in memory
+        # would evaporate on the next restart, which is the defect one level up.
+        # Best-effort: a logging failure must never make a store unconstructable.
+        try:
+            self.rb.record(
+                reflex_triggered="RACM",
+                behavior_type=BehaviorType.EXPIRE,
+                trigger_conditions={"restore_refused": reason},
+                affected_systems=["all"],
+                symbolic_context="deferred pressure lost at a process boundary",
+                deferred_cycles=0,
+                ttl_remaining=0,
+                outcome={"result": "declared loss", "slots_lost": lost},
+                durable=True,
+            )
+        except Exception as exc:                    # pragma: no cover - defensive
+            self.persist_failures.append({
+                "op": "declare_loss", "error": repr(exc),
+                "at": datetime.now().isoformat()})
+        return False
+
+    def _persist(self) -> None:
+        """BEST-EFFORT save. NEVER RAISES (Ruling 11: the observer never gates the
+        observed - a disk problem must not disable arbitration)."""
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            return
+        try:
+            self.save()
+        except (OSError, TypeError, ValueError) as exc:
+            self.persist_failures.append({
+                "op": "save", "path": str(self.runtime_path), "error": repr(exc),
+                "at": datetime.now().isoformat(),
+            })
+
+    @staticmethod
+    def _claim_to_dict(claim: ReflexClaim) -> Dict[str, Any]:
+        """Both scope axes are written by NAME, and they stay separate (Ruling 30).
+        `scope` is the durability/breadth axis; `lock_class` is the action's
+        structural class. Serializing either as the other would rebuild the exact
+        conflation Ruling 30 made unwritable."""
+        return {
+            "reflex_id": claim.reflex_id,
+            "pressure_level": claim.pressure_level,
+            "scope": claim.scope.name,
+            "lock_class": claim.lock_class.name,
+            "affected_systems": sorted(claim.affected_systems),
+            "source_module": claim.source_module,
+            "fossil_linked": claim.fossil_linked,
+            "failed_nova_lineage": claim.failed_nova_lineage,
+            "lesl_sesl_clean": claim.lesl_sesl_clean,
+            "trigger_conditions": dict(claim.trigger_conditions),
+            "metadata": dict(claim.metadata),
+        }
+
+    @staticmethod
+    def _claim_from_dict(d: Dict[str, Any]) -> ReflexClaim:
+        return ReflexClaim(
+            reflex_id=d["reflex_id"],
+            pressure_level=float(d.get("pressure_level", 0.0)),
+            scope=Scope[d.get("scope", Scope.LOCAL.name)],
+            lock_class=LockClass[d.get("lock_class", LockClass.NON_STRUCTURAL.name)],
+            affected_systems=frozenset(d.get("affected_systems") or ()),
+            source_module=d.get("source_module", ""),
+            fossil_linked=bool(d.get("fossil_linked", False)),
+            failed_nova_lineage=bool(d.get("failed_nova_lineage", False)),
+            lesl_sesl_clean=bool(d.get("lesl_sesl_clean", False)),
+            trigger_conditions=dict(d.get("trigger_conditions") or {}),
+            metadata=dict(d.get("metadata") or {}),
+        )
 
     # =================================================================
     # INTERNALS

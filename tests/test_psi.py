@@ -193,14 +193,45 @@ def test_hard_band_proposes_output_blocked_but_never_self_locks(grounded):
 # ---------------------------------------------------------------------
 
 def test_read_path_cannot_mutate_ril_threads():
+    """UPDATED 2026-07-27 (Ruling 42 res.2). Ruling-14 precedent, old/new verbatim:
+
+        OLD: psi = PSI(ril=ril, scar_core=None)  # falls back to snapshot weight
+             assert directive.tone_weight == 2.0, "snapshot-weight fallback ..."
+             assert ril.threads[IdentityThread.SCARLINE] == [scar]
+        NEW: assert directive.tone_weight == 0.0, "no owner, no weight ..."
+             assert [e["record_id"] for e in ril.threads[SCARLINE]] == [scar.id]
+
+    WHY: RIL's threads no longer embed live `Scar` objects, so there is no
+    embedded weight left to fall back TO. The old fallback read `.weight` off
+    the scar store's own record, reached through the identity layer - Ruling 15's
+    rule is that the owner owns the write INCLUDING its magnitudes, and a
+    non-owner holding one is a disguised write. PSI asks the owner or reports
+    nothing.
+
+    NOT A WEAKENING, ON THREE COUNTS.
+      1. THE SUBJECT IS UNTOUCHED. This test is named for, and still proves,
+         that PSI's read path cannot reach `ril.threads`. Both of those
+         assertions are unchanged in force.
+      2. NO LIVE CONFIGURATION MOVES. `aurea_core` always constructs
+         `PSI(ril=..., scar_core=self.scar_core)`, so the pipeline only ever
+         takes the owner branch. `scar_core=None` is a test-only shape, and the
+         value it now reports is the honest one rather than a stale one.
+      3. `tone_weight` REPORTS, IT NEVER GATES (Ruling 33 / section 9 bar #5) -
+         no comparison anywhere consumes it, so a changed magnitude here cannot
+         change a verdict. If that ever stops being true, bar #5 has been broken
+         somewhere else and THAT is the defect.
+    """
     ril = RIL()
     scar = _scar("Scar-001", 2.0)
     ril.ingest_scar(scar)
-    psi = PSI(ril=ril, scar_core=None)   # no scar owner: falls back to snapshot weight
+    psi = PSI(ril=ril, scar_core=None)   # no scar owner: no weight to report
 
     response = psi.trigger(_trigger("anchor_collapse", HARD_PRESSURE))
     directive = response.metadata["psi_directive"]
-    assert directive.tone_weight == 2.0, "snapshot-weight fallback when no scar owner"
+    assert directive.tone_weight == 0.0, (
+        "no scar owner means no weight - RIL does not carry SML's magnitudes")
+    # The bearing itself is still grounded: PSI names the scar RIL recorded.
+    assert directive.scar_ref == scar.id
 
     # The directive is frozen - it is a statement, not a channel.
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -209,5 +240,5 @@ def test_read_path_cannot_mutate_ril_threads():
     # And the snapshot surface PSI reads through is disconnected from the store.
     snapshot = ril.thread_state(IdentityThread.SCARLINE)
     snapshot[IdentityThread.SCARLINE].clear()
-    assert ril.threads[IdentityThread.SCARLINE] == [scar], (
+    assert [e["record_id"] for e in ril.threads[IdentityThread.SCARLINE]] == [scar.id], (
         "mutating a thread_state snapshot must never reach ril.threads")

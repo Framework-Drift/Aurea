@@ -64,14 +64,77 @@ irreducible identity paradox from an ordinary volatile fracture would require pa
 classification data RIL does not have at this layer. Ground it or abstain applies to that
 choice too - CSA is the defensible default, Black Sphere is left for a future session
 with the missing signal.
+
+CONTINUITY: THE THREADS ARE DURABLE, AND ORIGIN IS CONSTITUTIONAL (Ruling 42)
+------------------------------------------------------------------------------
+Until Ruling 42 this store was PURELY IN-MEMORY. `threads` was built empty in
+`__init__` and never written to disk, so every process death emptied ORIGIN -
+and the "written ONCE" guard below, which is correct and untouched, guarded
+nothing across a restart. THE FIRST SCAR AFTER A RESTART BECAME HER BIRTH
+IDENTITY. A guard whose scope is one process is not a guard on a fact that is
+supposed to hold for a lifetime.
+
+So the threads persist (`runtime_path`, under `data/runtime/` per Rulings 32 and
+39), with Ruling 32's minimal semantics VERBATIM: load reads runtime if present,
+save writes a whole-file snapshot, and there is NO layering, NO delta and NO
+merge rule. There is also NO SEED THREAD FILE - identity is ACCUMULATED, never
+issued, exactly as SAE's epoch is (Ruling 34).
+
+ENTRIES ARE BY-ID REFERENCES, NOT EMBEDDED RECORDS (Ruling 42 res.2)
+----------------------------------------------------------------------
+ORIGIN and SCARLINE used to hold the LIVE `Scar` OBJECTS aurea_core handed in -
+the same objects living in ScarLogicCore's list. That made an identity thread a
+WRITE PATH INTO THE SCAR STORE: anything holding a thread entry could set
+`.weight`, clear `.linked_doctrines` or flip `.decay_state`, and the Ruling 1
+single-writer scanner cannot see it, because nothing assigns to `scar_core.scars`.
+psi.py's own `_live_weight` docstring had already named the hazard in words -
+"a held Scar reference is a held write path" - while RIL held one per scar.
+
+Entries are now dicts naming the record and the facts RIL ASSERTED AT INGEST:
+
+    {"record_type": "scar", "record_id": "...", "linked_doctrines": [...], ...}
+
+RIL records that it anchored identity to a scar. It does not carry the scar's
+MAGNITUDES: weight and decay belong to SML (Ruling 1, and Ruling 15's
+generalization - the owner owns the write INCLUDING its magnitudes), so a weight
+copied into an identity thread would be a non-owner carrying an owner's number
+into a permanent record. A reader that wants a weight asks the owner.
+
+`_anchored_in_identity` therefore reads BOTH the at-ingest `linked_doctrines`
+RIL recorded AND the owner's LIVE record - a union, Ruling 26's bidirectional
+shape one layer up. That is not a widening: holding the live object made the old
+read live BY ACCIDENT, and asking the owner makes it live BY CONTRACT.
+
+ORIGIN IS CONSTITUTIONAL (Ruling 42 res.3)
+--------------------------------------------
+When a load leaves ORIGIN empty, RIL ASKS THE SCAR OWNER - never opening a file
+itself (Ruling 1) - for the SEED scar tagged `origin`, and requires EXACTLY ONE.
+Found: ORIGIN gets its by-ID entry, provenance `constitutional`, and the load
+reports `MIGRATED`, because a value derived from facts the file did not carry is
+not the same event as a value restored from one.
+
+Zero or several: ORIGIN STAYS EMPTY and a VOID discontinuity entry records that
+the constitutional origin was UNRESOLVABLE. Declared, never claimed - the
+abstaining-detector discipline this module already applies to fracture, applied
+to its own birth.
+
+NO OWNER AT ALL is a THIRD case and NOT a discontinuity: no instrument ran, so
+there is nothing to declare unresolvable (Docket H's `NOT_COUNTABLE`-vs-
+`NONE_FOUND` cut - two absences that are not the same absence). A bare
+`RIL()` keeps the `is_root` semantics it has always had, and persistence then
+makes even that assignment permanent.
 """
 
 from __future__ import annotations
 
 import copy
+import json
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Scar, Doctrine
 from src.doctrine.dee import EligibilityRuling
 from src.reflex.reflex_grid import ReflexResponse
@@ -93,6 +156,21 @@ class IdentityThread(Enum):
 # ril.py-only).
 IDENTITY_FRACTURE_PRESSURE = 0.75
 
+# Ruling 42 res.3. The tag the scar owner's SEED records carry to mark AUREA's
+# constitutional origin. `data/scars.json` carries exactly one such record
+# (`Scar-0`, `tca_tags: ["origin"]`). RECOVERED FROM THE SEED, not coined: this
+# is a name that already exists in the tracked corpus, read rather than invented.
+#
+# TAG, NOT NAME AND NOT ID. A name-match or id-match heuristic ("the one called
+# Scar-0") would make the constitution depend on a spelling; the tag is the
+# seed's own declaration of what the record IS.
+CONSTITUTIONAL_ORIGIN_TAG = "origin"
+
+# The record kinds a thread entry may name. Closed - an entry that names no
+# record is not a reference, it is prose.
+RECORD_TYPE_SCAR = "scar"
+RECORD_TYPE_DISCONTINUITY = "discontinuity"
+
 
 class RIL:
     """Recursive Identity Layer. Accumulates the five identity threads; sources ICA on
@@ -104,18 +182,39 @@ class RIL:
     `if ril:` silently lie the moment every thread is still empty.
     """
 
+    STATE_VERSION = 1
+
     def __init__(self, codex: Any = None, scar_core: Any = None,
                  black_sphere: Any = None, csa: Any = None,
-                 reflex_grid: Any = None):
+                 reflex_grid: Any = None,
+                 runtime_path: str = "data/runtime/ril_threads.json"):
         self.codex = codex               # doctrine content OWNER; RIL is a reader
         self.scar_core = scar_core       # scar OWNER; RIL is a reader, never form_scar
         self.black_sphere = black_sphere  # paradox suspension; RIL routes as a REQUEST
         self.csa = csa                   # volatile-content suspension; RIL REQUESTS
         self.reflex_grid = reflex_grid   # ICA is SOURCED here; RACM arbitrates, not RIL
 
+        # Ruling 42 / Ruling 39: an `__init__` DEFAULT under `data/runtime/` - one of
+        # the exactly two shapes `tests/conftest.py` can reach, redirected there BY
+        # NAME in the same commit. SAE's `runtime_path` is the template.
+        self.runtime_path = Path(runtime_path)
+
         # SOLE WRITER (Ruling 1). Attribute name is exactly `threads` - load-bearing,
         # see the module docstring's OWNERSHIP section.
         self.threads: Dict[IdentityThread, List[Any]] = {t: [] for t in IdentityThread}
+
+        # Ruling 42 taxonomy. `load_report` is None on a run that restored NOTHING -
+        # a first run performs no restoration, so it has nothing to report, and a
+        # sixth enum member to say "nothing happened" would make absence an event.
+        self.load_report: Optional[LoadReport] = None
+        # Entries whose referent the scar owner cannot resolve. HELD, VISIBLE,
+        # REPORTED - never silently unlinked, never merged back without a ruling.
+        self.quarantined: List[Dict[str, Any]] = []
+        # Ruling 11's `flush_failures` shape: the observer never gates the observed.
+        self.persist_failures: List[Dict[str, Any]] = []
+
+        self.load()
+        self._restore_constitutional_origin()
 
     # =================================================================
     # INGESTION - the two live handoffs (aurea_core wiring points, not built here)
@@ -127,13 +226,40 @@ class RIL:
         (ScarLogicCore is the sole scar-store writer; RIL is a requester like every
         other module, Ruling 1)."""
         is_root = not self.threads[IdentityThread.SCARLINE]
-        self.threads[IdentityThread.SCARLINE].append(scar)
+        self.threads[IdentityThread.SCARLINE].append(
+            self._scar_entry(scar, provenance="ingest"))
 
         # ORIGIN is written ONCE. Guarded on ORIGIN's own state, not merely inferred
         # from SCARLINE's emptiness - so a future change to how SCARLINE grows cannot
         # silently reopen the overwrite this guard exists to prevent.
+        #
+        # RULING 42: THE GUARD IS UNCHANGED AND WAS ALWAYS CORRECT. What changed is
+        # that it now guards across process boundaries too - both threads are
+        # restored from disk before this runs, so a restart no longer presents a
+        # freshly-empty ORIGIN for the next scar to claim.
         if is_root and not self.threads[IdentityThread.ORIGIN]:
-            self.threads[IdentityThread.ORIGIN].append(scar)
+            self.threads[IdentityThread.ORIGIN].append(
+                self._scar_entry(scar, provenance="ingest"))
+
+        self._persist()
+
+    @staticmethod
+    def _scar_entry(scar: Scar, provenance: str) -> Dict[str, Any]:
+        """A BY-ID reference plus the facts RIL asserted at ingest (Ruling 42 res.2).
+
+        NO MAGNITUDES. `weight` and `decay_state` are SML's (Ruling 1), and a
+        non-owner carrying an owner's number into a permanent record is Ruling 15's
+        disguised write. A reader wanting a weight asks the scar owner - which is
+        what `psi._live_weight` already did FIRST, before falling back to the
+        embedded object this entry replaces.
+        """
+        return {
+            "record_type": RECORD_TYPE_SCAR,
+            "record_id": scar.id,
+            "linked_doctrines": list(scar.linked_doctrines or []),
+            "provenance": provenance,
+            "ingested_at": datetime.now().isoformat(),
+        }
 
     def ingest_doctrine_mutation(self, ruling: EligibilityRuling,
                                   doctrine: Doctrine) -> None:
@@ -153,10 +279,12 @@ class RIL:
         # Fact 1: does this mutation name a fallen ancestor at all?
         ancestor_id = doctrine.mutation_lineage[-1] if doctrine.mutation_lineage else None
         if ancestor_id is None:
+            self._persist()
             return  # nothing fell - no ancestor to ground a fracture in. Abstain.
 
         # Fact 2: was that ancestor already anchored in RIL's own identity threads?
         if not self._anchored_in_identity(ancestor_id):
+            self._persist()
             return  # not grounded - RIL never held this doctrine as identity. Abstain.
 
         # ---- Both facts present: an identity-defining belief fell. ----
@@ -165,6 +293,7 @@ class RIL:
             "fallen_ancestor": ancestor_id,
             "ruling_reason": ruling.reason,
         })
+        self._persist()
 
         responses = self._fire_ica(doctrine, ancestor_id, ruling)
         ica_response = next((r for r in responses if r.reflex_id == "ICA"), None)
@@ -184,12 +313,43 @@ class RIL:
     def _anchored_in_identity(self, doctrine_id: str) -> bool:
         """Grounded check: does any scar RIL has already recorded in ORIGIN or SCARLINE
         link to this doctrine ID? Uses `scar.linked_doctrines`, the same field
-        aurea_core's own DEE pressure-signal pass reads for scar<->doctrine touch."""
+        aurea_core's own DEE pressure-signal pass reads for scar<->doctrine touch.
+
+        RULING 42: reads a UNION of RIL's at-ingest record and the OWNER'S LIVE one.
+        Holding the live `Scar` object used to make this read live BY ACCIDENT - the
+        stored object was the store's object, so an owner-side edit showed up here.
+        By-ID entries end that accident, so the live half is now obtained the way it
+        should always have been: by ASKING THE OWNER. Ruling 26's bidirectional shape
+        - a union of two partial views, never either alone.
+
+        No owner (a bare `RIL()`): the at-ingest half stands alone. That is RIL's own
+        record of what it anchored, which is the half this module is entitled to.
+        """
         for thread in (IdentityThread.ORIGIN, IdentityThread.SCARLINE):
-            for scar in self.threads[thread]:
-                if doctrine_id in scar.linked_doctrines:
+            for entry in self.threads[thread]:
+                if doctrine_id in self._entry_links(entry):
                     return True
         return False
+
+    def _entry_links(self, entry: Any) -> List[str]:
+        """At-ingest links UNION the owner's current links for the same record."""
+        if not isinstance(entry, dict):
+            return []
+        links = list(entry.get("linked_doctrines") or [])
+        record_id = entry.get("record_id")
+        live = self._owner_scar(record_id)
+        if live is not None:
+            links.extend(d for d in (live.linked_doctrines or []) if d not in links)
+        return links
+
+    def _owner_scar(self, record_id: Optional[str]) -> Optional[Scar]:
+        """Resolve a referenced scar THROUGH ITS OWNER. Reads are free (Ruling 1),
+        and `get_scar` snapshots (Ruling 22), so nothing reachable from here is a
+        write path back into the scar store."""
+        if not record_id or self.scar_core is None:
+            return None
+        getter = getattr(self.scar_core, "get_scar", None)
+        return getter(record_id) if callable(getter) else None
 
     def _fire_ica(self, doctrine: Doctrine, ancestor_id: str,
                    ruling: EligibilityRuling) -> List[ReflexResponse]:
@@ -226,7 +386,206 @@ class RIL:
         real and their actual request shape is known.
         """
         self.threads[thread].append(entry)
+        self._persist()
         return entry
+
+    # =================================================================
+    # CONTINUITY (Ruling 42) - the threads cross the process boundary
+    # =================================================================
+
+    def save(self) -> None:
+        """Whole-file snapshot to the runtime path.
+
+        RULING 32'S MINIMAL SEMANTICS, VERBATIM: no layering, no delta format, no
+        merge rule. A snapshot replaces a snapshot.
+
+        Threads are keyed by the enum's VALUE so the file stays plain JSON and a
+        reader needs nothing from this module to understand it.
+
+        DELIBERATELY NO `default=str`. Every entry this module writes is already
+        JSON-native (by-ID dicts, ISO strings), so a value that cannot serialize
+        means some caller put a live object on a thread - the exact defect res.2
+        closes. `default=str` would stringify it and the file would look fine,
+        which is the fail-silent shape. It raises instead, and `_persist` records.
+        """
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": self.STATE_VERSION,
+            "saved_at": datetime.now().isoformat(),
+            "threads": {t.value: list(self.threads[t]) for t in IdentityThread},
+        }
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def load(self) -> bool:
+        """Runtime state if present, ELSE empty threads. Returns whether state resumed.
+
+        THERE IS NO SEED THREAD FILE. Identity is ACCUMULATED, never issued - SAE's
+        epoch reasoning (Ruling 34) applied to the store that holds who she is. A
+        missing file is a first run.
+
+        REFUSAL LEAVES THE FILE BYTE-UNTOUCHED. An unreadable file or an unknown
+        `version` constructs an EMPTY store and records the refusal; it does not
+        rewrite, migrate or truncate what it could not read. When AUREA cannot
+        prove what a record says, she does not overwrite it with a guess.
+        """
+        if not self.runtime_path.exists():
+            return False
+
+        try:
+            with open(self.runtime_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            return self._refuse(f"unreadable identity state: {exc!r}")
+
+        version = data.get("version")
+        if version != self.STATE_VERSION:
+            return self._refuse(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched")
+
+        restored = {t: list(data.get("threads", {}).get(t.value, []) or [])
+                    for t in IdentityThread}
+
+        # Referent check, and ONLY where an instrument exists. No scar owner means
+        # no lookup ran - which is not the same fact as a lookup that found nothing
+        # (Docket H's NOT_COUNTABLE / NONE_FOUND cut), so it quarantines nothing.
+        held: List[Dict[str, Any]] = []
+        if self.scar_core is not None:
+            for thread in (IdentityThread.ORIGIN, IdentityThread.SCARLINE):
+                kept = []
+                for entry in restored[thread]:
+                    if self._referent_missing(entry):
+                        held.append({"thread": thread.value, "entry": entry,
+                                     "reason": "referenced scar not in the scar store"})
+                    else:
+                        kept.append(entry)
+                restored[thread] = kept
+
+        self.threads = restored
+        self.quarantined.extend(held)
+
+        if held:
+            self._report(RestorationOutcome.PARTIALLY_RESTORED, resumed=True,
+                         detail={"quarantined": len(held),
+                                 "quarantined_ids": [h["entry"].get("record_id")
+                                                     for h in held]})
+        else:
+            self._report(RestorationOutcome.RESTORED, resumed=True,
+                         detail={"saved_at": data.get("saved_at")})
+        return True
+
+    def _referent_missing(self, entry: Any) -> bool:
+        """A scar entry naming a record the OWNER cannot resolve."""
+        if not isinstance(entry, dict) or entry.get("record_type") != RECORD_TYPE_SCAR:
+            return False
+        return self._owner_scar(entry.get("record_id")) is None
+
+    def _restore_constitutional_origin(self) -> None:
+        """RULING 42 res.3 - ORIGIN IS CONSTITUTIONAL, not merely first-seen.
+
+        Runs only when a load left ORIGIN EMPTY. Asks the scar OWNER (never a file -
+        Ruling 1) for the SEED record tagged `origin`, and requires EXACTLY ONE.
+
+        WHY `is_seed` IS PART OF THE FILTER: her constitution is what she was born
+        with. A scar formed at RUNTIME and tagged `origin` is a runtime fact, and
+        letting one qualify would make the birth identity re-derivable from
+        something that happened afterwards - which is the very overwrite this
+        ruling exists to make impossible.
+
+        ZERO OR SEVERAL: ORIGIN STAYS EMPTY and a VOID discontinuity entry declares
+        the question unresolvable. It does not pick one, and it does not fall back
+        to a name or id match: an ambiguous constitution is a fact to record, not a
+        tie to break. NO OWNER AT ALL records nothing - no instrument ran.
+        """
+        if self.threads[IdentityThread.ORIGIN] or self.scar_core is None:
+            return
+
+        finder = getattr(self.scar_core, "seed_scars_tagged", None)
+        if not callable(finder):
+            return
+        candidates = list(finder(CONSTITUTIONAL_ORIGIN_TAG) or [])
+
+        if len(candidates) == 1:
+            self.threads[IdentityThread.ORIGIN].append(
+                self._scar_entry(candidates[0], provenance="constitutional"))
+            self._report(
+                RestorationOutcome.MIGRATED,
+                resumed=self.load_report.resumed if self.load_report else False,
+                detail={"origin_provenance": "constitutional",
+                        "origin_record_id": candidates[0].id,
+                        "derived": "ORIGIN was not carried by the state file and was "
+                                   "derived from the scar owner's seed record"})
+            self._persist()
+            return
+
+        self.threads[IdentityThread.VOID].append({
+            "record_type": RECORD_TYPE_DISCONTINUITY,
+            "kind": "constitutional_origin_unresolvable",
+            "candidate_ids": sorted(getattr(c, "id", "") for c in candidates),
+            "reason": (f"expected exactly one seed scar tagged "
+                       f"'{CONSTITUTIONAL_ORIGIN_TAG}', found {len(candidates)}"),
+            "at": datetime.now().isoformat(),
+        })
+        self._persist()
+
+    # -- reporting + best-effort write -----------------------------------
+
+    def _report(self, outcome: RestorationOutcome, resumed: bool,
+                detail: Optional[Dict[str, Any]] = None) -> None:
+        """Record what kind of restoration this was.
+
+        PRECEDENCE, when a load is more than one thing at once: a REFUSAL outranks
+        a partial restoration, which outranks a derivation, which outranks a clean
+        one. The headline is the most serious fact; the rest survive in `detail`,
+        so nothing is lost to the ranking.
+        """
+        order = {
+            RestorationOutcome.RESTORED: 0,
+            RestorationOutcome.MIGRATED: 1,
+            RestorationOutcome.QUARANTINED: 2,
+            RestorationOutcome.PARTIALLY_RESTORED: 2,
+            RestorationOutcome.REFUSED: 3,
+        }
+        merged = dict(self.load_report.detail) if self.load_report else {}
+        merged.update(detail or {})
+        if self.load_report is not None and order[self.load_report.outcome] > order[outcome]:
+            outcome = self.load_report.outcome
+        self.load_report = LoadReport(
+            store="ril.threads", outcome=outcome, path=str(self.runtime_path),
+            resumed=resumed, detail=merged)
+
+    def _refuse(self, reason: str) -> bool:
+        self.threads = {t: [] for t in IdentityThread}
+        self._report(RestorationOutcome.REFUSED, resumed=False, detail={"reason": reason})
+        return False
+
+    def _persist(self) -> None:
+        """BEST-EFFORT save. NEVER RAISES.
+
+        Ruling 11's `flush_failures` shape, and the trade-off was accepted at the
+        manifest's twenty-eighth entry rather than re-argued here: a disk problem
+        must not become a NEW REFUSAL PATH inside the identity layer. A failed save
+        lands on `persist_failures`, where it is legible.
+
+        FLAGGED, because it is the same real cost SAE's `_persist` carries: if a
+        save fails, this process still holds the correct ORIGIN, but a restart
+        would resume from the last successful snapshot.
+        """
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            # A refusal left a file we could not read. Do not overwrite it - that
+            # is the whole content of "BYTE-UNTOUCHED".
+            return
+        try:
+            self.save()
+        except (OSError, TypeError, ValueError) as exc:
+            self.persist_failures.append({
+                "op": "save", "path": str(self.runtime_path), "error": repr(exc),
+                "at": datetime.now().isoformat(),
+            })
 
     # =================================================================
     # READ VIEWS - DEEP SNAPSHOTS ONLY

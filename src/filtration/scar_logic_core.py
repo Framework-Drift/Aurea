@@ -11,7 +11,7 @@ import json
 # `scar_management` imports only `src.utils.models`, so there is no cycle.
 from src.filtration.scar_management import DecayState, normalize
 from src.utils.models import Scar
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 from pathlib import Path
 
@@ -131,6 +131,43 @@ class ScarLogicCore:
         """
         return self._snapshot(self._find(scar_id))
 
+    def seed_scars_tagged(self, tag: str) -> List[Scar]:
+        """SEED records carrying a TCA tag, as SNAPSHOTS (Ruling 22).
+
+        Added for Ruling 42 res.3: RIL must resolve AUREA's CONSTITUTIONAL ORIGIN
+        without opening `data/scars.json` itself. Ruling 1 governs writes, and
+        reads are free - but a reader that opens the owner's FILE has taken a
+        second view of the owner's state, which is how two definitions of one
+        store begin. So the owner answers the question.
+
+        `is_seed` is part of the filter, not a caller's problem: a scar formed at
+        RUNTIME and tagged the same way is a runtime fact, and the constitution
+        is what she was born with.
+        """
+        return [self._snapshot(scar) for scar in self.scars
+                if scar.is_seed and tag in (scar.tca_tags or [])]
+
+    def attach_decay_owner(self, sml: Any) -> None:
+        """Bind THE decay owner (Ruling 40). `AureaCore` calls this so the
+        pipeline's single SML - the one holding the quiet-cycle counters and the
+        handle to SAE - is also the one that executes a manual retire. Without
+        it, `decay_scar` would build a private SML and the two would keep
+        separate books on the same records."""
+        self._sml = sml
+
+    def _decay_owner(self) -> Any:
+        """The bound SML, or a private one bound to this store.
+
+        The lazy branch exists for the bare `ScarLogicCore(...)` a test builds.
+        It is NOT a second owner of the FIELD - `SML` is still the only class
+        that assigns `decay_state`, which is what the Ruling 1 scanner checks -
+        it is a second bookkeeper, which is why `AureaCore` attaches the real one.
+        """
+        if getattr(self, "_sml", None) is None:
+            from src.filtration.scar_management import SML
+            self._sml = SML(scar_core=self)
+        return self._sml
+
     def decay_scar(self, scar_id: str) -> bool:
         """
         Mark a scar as decayed. Returns True if decayed, False if not found.
@@ -140,21 +177,26 @@ class ScarLogicCore:
         as a fifth state outside it. `autonomy_index` already grouped the two
         together, so nothing downstream changed meaning.
 
-        FLAGGED, AND DELIBERATELY NOT RESOLVED HERE: this is the ONE remaining
-        writer of `decay_state` outside SML. It is a MANUAL retire that predates
-        the decay owner; SML owns the SCHEDULED state machine. Two writers of one
-        field is exactly what Ruling 1 exists to prevent, and consolidating them
-        is a small ruling rather than an implementation choice - this method is
-        load-bearing for Ruling 22's fail-silent pin (`test_docket_n`), so
-        removing or re-routing it silently would take that guard with it.
-        Reported, not repaired.
+        RULING 40 (2026-07-27) - THE FLAG THIS DOCSTRING CARRIED IS DISCHARGED.
+        It read: "this is the ONE remaining writer of `decay_state` outside SML
+        ... Two writers of one field is exactly what Ruling 1 exists to prevent,
+        and consolidating them is a small ruling rather than an implementation
+        choice ... Reported, not repaired." That ruling arrived; this is the
+        repair.
+
+        THE PUBLIC SURFACE IS UNCHANGED - same name, same argument, same
+        True/False contract - and the WRITE moved to the owner. This store no
+        longer assigns `decay_state` anywhere, and an AST pin now asserts that
+        `scar_management.py` is the only module in `src/` that does.
+
+        THE CONCERN THE OLD FLAG RAISED WAS REAL AND WAS CHECKED: this method is
+        load-bearing for Ruling 22's fail-silent pin, which proves the owner's
+        own write path reaches the RECORD and not a snapshot. It still does -
+        `SML._record` resolves through `_live_scars()`, the live list, for
+        exactly the reason `_find` exists here. The pin was run against this
+        change and is BYTE-IDENTICAL.
         """
-        scar = self._find(scar_id)      # Ruling 22: the owner writes the RECORD
-        if scar:
-            scar.decay_state = DecayState.DORMANT.value
-            self.save_to_file()
-            return True
-        return False
+        return self._decay_owner().manual_retire(scar_id)
 
     def save_to_file(self) -> None:
         """

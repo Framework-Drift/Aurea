@@ -280,11 +280,48 @@ class SML:
     # THE TRANSITION - and the settle event it emits
     # =================================================================
 
-    def transition(self, scar_id: str, new_state: DecayState) -> Dict[str, Any]:
+    def manual_retire(self, scar_id: str) -> bool:
+        """RULING 40 - THE MANUAL RETIRE, EXECUTED BY THE DECAY OWNER.
+
+        `ScarLogicCore.decay_scar` used to write `decay_state` itself, which made
+        TWO writers of one field - the exact shape Ruling 1 exists to prevent, and
+        `scar_logic_core.py`'s own comment had flagged it as "Reported, not
+        repaired" since Ruling 37. This is the repair: the public surface stays,
+        the WRITE moves here.
+
+        THE JUMP PAST WANING IS AUTHORIZED FOR THE MANUAL CASE ONLY. The
+        SCHEDULED machine is strictly sequential (`active -> waning -> dormant`,
+        five quiet cycles each) because cooling is something a scar DOES over
+        time. A manual retire is not cooling - it is an operator statement that
+        this record is finished - so it does not walk the cooling path.
+
+        AND IT EMITS NO SETTLE EVENT, WHICH IS THE LOAD-BEARING HALF. Ruling 37
+        makes fermentation complete when a scar leaves ACTIVE **by decay**;
+        `_emit_fermentation` is reachable only from `ACTIVE -> WANING`, and this
+        method goes to DORMANT, so it cannot reach it even by accident. A manual
+        retire that restored mutation budget would let an operator action close
+        an epoch - restart-absolution (Ruling 34) wearing a different hat.
+
+        Returns False for an unknown id rather than raising: this is the owner's
+        `decay_scar` contract, which has always answered "no such scar" with a
+        return value.
+        """
+        if self._record(scar_id) is None:
+            return False
+        self.transition(scar_id, DecayState.DORMANT, manual=True)
+        return True
+
+    def transition(self, scar_id: str, new_state: DecayState,
+                   manual: bool = False) -> Dict[str, Any]:
         """Move a scar to a new decay state. SML is the writer.
 
         RAISES on FOSSILIZED / PURGED: canon names them, v1 has no ruled path,
         and a transition that cannot be performed is refused rather than faked.
+
+        `manual` records WHICH mechanism moved the scar. It changes no gate and
+        selects no path - the settle event is decided by the from/to pair, as it
+        always was - it makes the two causes distinguishable in the record
+        (Ruling 29's shape: one event type covering two causes is a defect).
         """
         if new_state in UNREACHABLE_STATES:
             raise DecayTransitionViolation(
@@ -304,6 +341,7 @@ class SML:
         self._quiet[scar_id] = 0               # the next transition starts fresh
 
         record = {"scar_id": scar_id, "from": was.value, "to": new_state.value,
+                  "trigger": "manual" if manual else "scheduled",
                   "settled_lineages": []}
 
         # THE SETTLE EVENT. Only on ACTIVE -> WANING, and only BY DECAY: this

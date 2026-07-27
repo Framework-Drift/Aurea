@@ -62,19 +62,51 @@ def test_ril_constructs_cleanly_with_all_deps_none():
 # ingest_scar - SCARLINE every time, ORIGIN exactly once
 # =====================================================================
 
+def _ids(entries):
+    """The record ids a list of thread entries NAMES (Ruling 42 res.2)."""
+    return [e["record_id"] for e in entries]
+
+
 def test_ingest_scar_appends_to_scarline_and_seeds_origin_once():
+    """ENTRY SHAPE UPDATED 2026-07-27 (Ruling 42 res.2) - THE ASSERTION IS
+    UNCHANGED IN FORCE, only in what it reads. Recorded per the Ruling-14
+    precedent:
+
+        OLD: assert ril.threads[IdentityThread.SCARLINE] == [first]
+             assert ril.threads[IdentityThread.ORIGIN]   == [first]
+             ... == [first, second] ... == [first]
+        NEW: the same four assertions against `_ids(...)`, i.e. against the
+             record ids the entries name.
+
+    WHY: identity threads no longer EMBED live `Scar` objects - an embedded
+    record is a write path into the scar store that the Ruling 1 scanner cannot
+    see, because nothing assigns to `scar_core.scars`. Entries are by-ID
+    references now.
+
+    NOT A WEAKENING. The subject of this test is the WRITTEN-ONCE guard on
+    ORIGIN, and every clause of it still binds: ORIGIN is seeded by the first
+    scar, is NOT overwritten by the second, and SCARLINE still accumulates both
+    in arrival order. The test would still go red under the defect it was
+    written for. What it no longer asserts is object identity with the caller's
+    `Scar` - which is precisely the property the ruling removed on purpose.
+
+    THIS RIL HAS NO SCAR OWNER, so the constitutional-origin derivation
+    (res.3) does not run and the `is_root` semantics res.4 preserves are what
+    govern here. That is the deliberate third case, not an oversight - see
+    `test_constitutional_origin_*` below.
+    """
     ril = RIL()
     first = _root_scar()
     second = Scar(id="Scar-2", name="second", origin="test")
 
     ril.ingest_scar(first)
-    assert ril.threads[IdentityThread.SCARLINE] == [first]
-    assert ril.threads[IdentityThread.ORIGIN] == [first]
+    assert _ids(ril.threads[IdentityThread.SCARLINE]) == [first.id]
+    assert _ids(ril.threads[IdentityThread.ORIGIN]) == [first.id]
 
     ril.ingest_scar(second)
-    assert ril.threads[IdentityThread.SCARLINE] == [first, second]
+    assert _ids(ril.threads[IdentityThread.SCARLINE]) == [first.id, second.id]
     # ORIGIN must NOT have been overwritten by the second scar.
-    assert ril.threads[IdentityThread.ORIGIN] == [first]
+    assert _ids(ril.threads[IdentityThread.ORIGIN]) == [first.id]
 
 
 # =====================================================================
@@ -172,17 +204,36 @@ def test_unresolved_fracture_routes_to_csa_as_request():
 # =====================================================================
 
 def test_thread_state_returns_deep_snapshot_not_a_live_reference():
+    """ENTRY SHAPE UPDATED 2026-07-27 (Ruling 42 res.2). Ruling-14 precedent:
+
+        OLD: view[SCARLINE][0].linked_doctrines.append("HACKED")
+             assert ril.threads[SCARLINE] == [scar]
+             assert ril.threads[SCARLINE][0].linked_doctrines == ["Doctrine-1"]
+        NEW: the same three, reading `["linked_doctrines"]` off the entry dict
+             and comparing record ids.
+
+    WHY: threads hold by-ID entries, so the nested mutable this test attacks is
+    now a dict key rather than an attribute.
+
+    NOT A WEAKENING - IT IS STRICTLY STRONGER IN ONE RESPECT. The deep-snapshot
+    guarantee is unchanged and still the subject. But the old version's
+    `.linked_doctrines.append("HACKED")` was attacking a `copy.deepcopy` of the
+    scar store's OWN LIVE OBJECT; the entry's `linked_doctrines` is RIL's own
+    at-ingest record, so this now proves the snapshot protects the thing RIL is
+    actually the writer of (Ruling 1). Both the top-level list and the nested
+    list are still proven unreachable from a caller.
+    """
     ril = RIL()
     scar = _root_scar(linked_doctrines=["Doctrine-1"])
     ril.ingest_scar(scar)
 
     view = ril.thread_state()
     view[IdentityThread.SCARLINE].append("INTRUDER")
-    view[IdentityThread.SCARLINE][0].linked_doctrines.append("HACKED")
+    view[IdentityThread.SCARLINE][0]["linked_doctrines"].append("HACKED")
 
-    assert ril.threads[IdentityThread.SCARLINE] == [scar]
-    assert ril.threads[IdentityThread.SCARLINE][0].linked_doctrines == ["Doctrine-1"]
+    assert _ids(ril.threads[IdentityThread.SCARLINE]) == [scar.id]
+    assert ril.threads[IdentityThread.SCARLINE][0]["linked_doctrines"] == ["Doctrine-1"]
 
     single = ril.thread_state(IdentityThread.ORIGIN)
     single[IdentityThread.ORIGIN].append("INTRUDER-2")
-    assert ril.threads[IdentityThread.ORIGIN] == [scar]
+    assert _ids(ril.threads[IdentityThread.ORIGIN]) == [scar.id]

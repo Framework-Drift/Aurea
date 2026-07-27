@@ -69,6 +69,23 @@ STORE_OWNERS: dict[str, str] = {
     # do not name a local collection after a canonical store - cuts both ways,
     # and the honest move is to register the name that IS unique.
     "touched_lineages": "src/expansion/sae.py",
+    # RULING 40 (2026-07-27). CLAUDE.md section 2 has named SML the owner of
+    # "Scar weight / decay" since before `scar_management.py` existed, and
+    # `scar_logic_core.py` carried an in-file flag saying it was the ONE
+    # remaining writer of `decay_state` outside SML - "Reported, not repaired"
+    # since Ruling 37. Two writers of one field is what Ruling 1 exists to
+    # prevent, and this is the scanner behind the claim.
+    #
+    # REGISTERED AS A PAIR with CLAUDE.md section 2's ownership table
+    # (both-or-neither), the `touched_lineages` precedent directly above: an
+    # ownership claim in prose with no scanner behind it is the completeness-claim
+    # defect, and a scanner with no prose behind it is an unexplained tripwire.
+    #
+    # THE FIELD, NOT A COLLECTION - and that is what makes it registrable here.
+    # `find_store_mutations` flags `<anything>.decay_state = ...`, and after the
+    # delegation exactly one module in `src/` does that. `srg.py` COMPARES it,
+    # which is a read and is free.
+    "decay_state": "src/filtration/scar_management.py",
 }
 
 

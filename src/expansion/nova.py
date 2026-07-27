@@ -130,11 +130,14 @@ DECLARED DORMANT (ICA dormant-trigger pattern - named, not fabricated)
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Doctrine
 
 
@@ -311,7 +314,21 @@ class NovaEngine:
     DEE). Codex is never a destination.
     """
 
-    def __init__(self) -> None:
+    STATE_VERSION = 1
+
+    def __init__(self, scar_core: Any = None,
+                 runtime_path: str = "data/runtime/nova_record.json") -> None:
+        # Ruling 42 / Ruling 39: an `__init__` DEFAULT under `data/runtime/`,
+        # redirected by name in `tests/conftest.py`. SAE's shape.
+        self.runtime_path = Path(runtime_path)
+
+        # READ handle only (Ruling 1: reads are free). Used at LOAD time to ask
+        # whether a restored echo's scar links still name records that exist.
+        # Nova does not gain a write path here - `scar_requests` stays PARKED
+        # exactly as Ruling 15 left it, and this handle must never be used to
+        # discharge one.
+        self.scar_core = scar_core
+
         # THE store (G4). Not named after any canonical store - `scars`,
         # `doctrines`, `threads` all have owners elsewhere.
         self.echo_index: Dict[str, NovaEcho] = {}
@@ -338,7 +355,24 @@ class NovaEngine:
         # _append_provenance, which raises on an existing key. Read by anyone.
         self.proposal_provenance: Dict[str, List[Dict[str, str]]] = {}
 
+        # RULING 42 res.4 - THE MINT IS PART OF THE RECORD.
+        # `_seq` was rebuilt to 0 on every construction while `proposal_provenance`
+        # persisted nowhere either. Once the record became durable and the counter
+        # did not, a restart would remint `NE-0001` over an id that had already
+        # authored - and `_append_provenance` would raise
+        # ProvenanceOverwriteViolation on a collision that was NOT a double
+        # authorship. Persisting the counter removes the false-positive CAUSE; the
+        # detector below is untouched, and still fires on the real thing.
         self._seq = 0
+
+        # Ruling 42 taxonomy. See `load` for what each outcome means here.
+        self.load_report: Optional[LoadReport] = None
+        # Echoes whose scar links name records the scar store does not hold. HELD
+        # OUT of `echo_index`, visible, reported - never silently relinked.
+        self.quarantined_echoes: List[Dict[str, Any]] = []
+        self.persist_failures: List[Dict[str, Any]] = []
+
+        self.load()
 
     def _next_id(self) -> str:
         self._seq += 1
@@ -384,6 +418,10 @@ class NovaEngine:
             scar_links=list(scar_links or []),
         )
         self.echo_index[echo.id] = echo
+        # Ruling 42 res.4: the id is MINTED here, so the counter that minted it
+        # must be durable from here. Persisting at the next boundary would leave
+        # a window in which `NE-0001` exists on disk and `_seq` does not.
+        self._persist()
         return echo
 
     # -----------------------------------------------------------------
@@ -434,6 +472,7 @@ class NovaEngine:
                 "source": source,
                 "timestamp": datetime.now().isoformat(),
             })
+            self._persist()
             return []
 
         eligible: List[str] = []
@@ -449,6 +488,7 @@ class NovaEngine:
             # for Engine v1.
             if echo.collapse_eligible:
                 eligible.append(echo.id)
+        self._persist()
         return eligible
 
     # -----------------------------------------------------------------
@@ -535,6 +575,7 @@ class NovaEngine:
                 "pressure": pressure,
                 "timestamp": datetime.now().isoformat(),
             })
+        self._persist()
         return True
 
     # -----------------------------------------------------------------
@@ -697,6 +738,11 @@ class NovaEngine:
             self._append_provenance(new_id, provenance)
             echo.spent_on = new_id
             echo.spent_at = datetime.now()
+            # Ruling 42 / SAE's rule: DURABLE AT THE MOMENT OF SPENDING, not at
+            # the next boundary. An echo is spent HERE; a process that died
+            # before a later boundary would restore it unspent and let it author
+            # a second time, which is Ruling 13 undone by a power cut.
+            self._persist()
 
             emitted[doctrine_id] = Doctrine(
                 id=new_id,
@@ -716,4 +762,248 @@ class NovaEngine:
                           for p in provenance],
             )
 
+        self._persist()
         return emitted
+
+    # -----------------------------------------------------------------
+    # CONTINUITY (Ruling 42) - the record and the mint cross the boundary
+    # -----------------------------------------------------------------
+
+    def save(self) -> None:
+        """Whole-file snapshot. Ruling 32's minimal semantics VERBATIM.
+
+        WHAT ROUND-TRIPS, exhaustively: `echo_index` (and per echo: `id`,
+        `origin_kind`, `origin_id`, `symbolic_domain`, `scar_links`, `status`,
+        `fermentation_cycles`, `collapse_attempts`, `created_at`, `spent_on`,
+        `spent_at`), `proposal_provenance`, `refusals`, `scar_requests`,
+        `csa_requests`, and `_seq`.
+
+        `scar_requests` PERSIST AND STAY PARKED (Ruling 15). They are an
+        append-only legible accumulation with zero effect, and durability does not
+        change that - it makes an accumulation that used to evaporate on restart
+        into the real forensic record Ruling 15 said it was.
+        """
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": self.STATE_VERSION,
+            "saved_at": datetime.now().isoformat(),
+            "seq": self._seq,
+            "echo_index": [self._echo_to_dict(e) for e in self.echo_index.values()],
+            "proposal_provenance": {k: list(v) for k, v
+                                    in self.proposal_provenance.items()},
+            "refusals": list(self.refusals),
+            "scar_requests": list(self.scar_requests),
+            "csa_requests": list(self.csa_requests),
+        }
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, default=str)
+
+    def load(self) -> bool:
+        """Runtime state if present, ELSE an empty index. Returns whether it resumed.
+
+        THERE IS NO SEED. An echo is something AUREA ERUPTS, never something she
+        is issued with (SAE's epoch reasoning, Ruling 34).
+
+        REFUSED leaves the file BYTE-UNTOUCHED and the engine EMPTY. Unknown
+        version, unreadable JSON, or a mint that cannot be re-derived are all the
+        same event: she cannot prove the counter is unused, so she does not assume
+        it is (the governing sentence, Ruling 42 res.1).
+
+        MIGRATED when `_seq` is absent but minted ids exist. Those ids are
+        RECORDED FACTS - `NE-0007` on disk is proof that seven ids were issued -
+        so the counter is DERIVED from them rather than restarted at zero. It is
+        reported as a derivation, never as a clean restore, because the file did
+        not carry it.
+
+        PARTIALLY_RESTORED when an echo's `scar_links` name records the scar store
+        does not hold. That echo is QUARANTINED - held out of `echo_index`, in
+        `quarantined_echoes`, visible and reported. It is NOT relinked and NOT
+        dropped: a dangling link is a reason to stop trusting the reference, not a
+        reason to destroy the record of the eruption.
+        """
+        if not self.runtime_path.exists():
+            return False
+
+        try:
+            with open(self.runtime_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            return self._refuse(f"unreadable nova record: {exc!r}")
+
+        version = data.get("version")
+        if version != self.STATE_VERSION:
+            return self._refuse(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched")
+
+        try:
+            echoes = [self._echo_from_dict(d) for d in data.get("echo_index", [])]
+        except (UngroundedEchoViolation, TypeError, ValueError, KeyError) as exc:
+            # An echo that will not reconstruct means the record is not what this
+            # build can read. Refuse the FILE rather than silently admitting the
+            # echoes that happened to parse - a half-read index of authorships is
+            # exactly the state the spent-gate cannot reason about.
+            return self._refuse(f"echo record did not reconstruct: {exc!r}")
+
+        provenance = {k: list(v) for k, v in (data.get("proposal_provenance") or {}).items()}
+
+        seq = data.get("seq")
+        derived_seq = self._derive_seq([e.id for e in echoes], provenance)
+        if isinstance(seq, int) and seq >= derived_seq:
+            migrated_seq = False
+        elif derived_seq > 0:
+            seq, migrated_seq = derived_seq, True
+        elif isinstance(seq, int):
+            migrated_seq = False
+        else:
+            return self._refuse(
+                "the mint counter is absent and no `NE-` id exists to derive it "
+                "from; a fresh counter would remint over ids that may already "
+                "have authored")
+
+        held: List[Dict[str, Any]] = []
+        kept: Dict[str, NovaEcho] = {}
+        for echo in echoes:
+            missing = self._missing_scar_links(echo)
+            if missing:
+                held.append({"echo_id": echo.id, "missing_scar_links": missing,
+                             "echo": self._echo_to_dict(echo),
+                             "reason": "scar links name records the scar store "
+                                       "does not hold"})
+            else:
+                kept[echo.id] = echo
+
+        self.echo_index = kept
+        self.proposal_provenance = provenance
+        self.refusals = list(data.get("refusals") or [])
+        self.scar_requests = list(data.get("scar_requests") or [])
+        self.csa_requests = list(data.get("csa_requests") or [])
+        self._seq = seq
+        self.quarantined_echoes.extend(held)
+
+        detail: Dict[str, Any] = {"saved_at": data.get("saved_at"), "seq": seq}
+        if held:
+            detail["quarantined"] = [h["echo_id"] for h in held]
+            outcome = RestorationOutcome.PARTIALLY_RESTORED
+        elif migrated_seq:
+            detail["derived"] = ("`seq` was absent; the mint was derived from the "
+                                 "highest recorded NE- ordinal")
+            outcome = RestorationOutcome.MIGRATED
+        else:
+            outcome = RestorationOutcome.RESTORED
+        if migrated_seq and held:
+            detail["derived"] = ("`seq` was absent; the mint was derived from the "
+                                 "highest recorded NE- ordinal")
+
+        self.load_report = LoadReport(
+            store="nova.echo_index", outcome=outcome, path=str(self.runtime_path),
+            resumed=True, detail=detail)
+        return True
+
+    @staticmethod
+    def _derive_seq(echo_ids: List[str],
+                    provenance: Mapping[str, Any]) -> int:
+        """The highest `NE-` ordinal anywhere in the record.
+
+        Reads BOTH the index and the provenance keys' embedded echo ids, because
+        an echo can be quarantined or hand-removed from the index while its
+        authorship survives in provenance - and an id that AUTHORED is the one
+        that must never be reminted. Unparseable ids contribute nothing rather
+        than raising: this is a floor, and a floor built from what is legible is
+        still a floor.
+        """
+        highest = 0
+        candidates = list(echo_ids)
+        for key, entries in provenance.items():
+            for entry in entries or []:
+                if isinstance(entry, dict) and entry.get("store") == "nova_echo_index":
+                    candidates.append(str(entry.get("record_id", "")))
+        for raw in candidates:
+            if isinstance(raw, str) and raw.startswith("NE-"):
+                tail = raw[3:]
+                if tail.isdigit():
+                    highest = max(highest, int(tail))
+        return highest
+
+    def _missing_scar_links(self, echo: "NovaEcho") -> List[str]:
+        """Scar ids this echo names that the OWNER cannot resolve.
+
+        NO SCAR OWNER MEANS NO CHECK, and that is not the same as a check that
+        passed (Docket H's NOT_COUNTABLE / NONE_FOUND cut). An engine with no
+        handle to the scar store has run no instrument, so it quarantines nothing.
+        """
+        getter = getattr(self.scar_core, "get_scar", None)
+        if not callable(getter):
+            return []
+        return [sid for sid in (echo.scar_links or []) if getter(sid) is None]
+
+    def _refuse(self, reason: str) -> bool:
+        self.echo_index = {}
+        self.proposal_provenance = {}
+        self._seq = 0
+        self.load_report = LoadReport(
+            store="nova.echo_index", outcome=RestorationOutcome.REFUSED,
+            path=str(self.runtime_path), resumed=False, detail={"reason": reason})
+        return False
+
+    def _persist(self) -> None:
+        """BEST-EFFORT save. NEVER RAISES (Ruling 11's `flush_failures` shape; the
+        trade-off was accepted at the manifest's twenty-eighth entry).
+
+        A REFUSED load makes this a NO-OP for the life of the process. "The file
+        is left BYTE-UNTOUCHED" is not a statement about the instant of the
+        refusal - a file overwritten one eruption later was not left untouched.
+        The lost durability is recorded on `load_report`, so it is legible rather
+        than silent.
+        """
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            return
+        try:
+            self.save()
+        except (OSError, TypeError, ValueError) as exc:
+            self.persist_failures.append({
+                "op": "save", "path": str(self.runtime_path), "error": repr(exc),
+                "at": datetime.now().isoformat(),
+            })
+
+    @staticmethod
+    def _echo_to_dict(echo: "NovaEcho") -> Dict[str, Any]:
+        return {
+            "id": echo.id,
+            "origin_kind": echo.origin_kind,
+            "origin_id": echo.origin_id,
+            "symbolic_domain": echo.symbolic_domain,
+            "scar_links": list(echo.scar_links),
+            "status": echo.status.value,
+            "fermentation_cycles": echo.fermentation_cycles,
+            "collapse_attempts": list(echo.collapse_attempts),
+            "created_at": echo.created_at.isoformat(),
+            "spent_on": echo.spent_on,
+            "spent_at": echo.spent_at.isoformat() if echo.spent_at else None,
+        }
+
+    @staticmethod
+    def _echo_from_dict(d: Mapping[str, Any]) -> "NovaEcho":
+        """Reconstruct through the ORDINARY CONSTRUCTOR, so G1 binds on the way
+        back in. A record that cannot satisfy the origin gate is not admitted by
+        virtue of having once been written - `erupt()` routes through the same
+        constructor and can subtract nothing from the gate, and neither can this.
+        """
+        echo = NovaEcho(
+            id=d["id"],
+            origin_kind=d["origin_kind"],
+            origin_id=d["origin_id"],
+            symbolic_domain=d.get("symbolic_domain", ""),
+            scar_links=list(d.get("scar_links") or []),
+            status=FermentationStatus(d.get("status", "dormant")),
+            fermentation_cycles=int(d.get("fermentation_cycles", 0)),
+            collapse_attempts=list(d.get("collapse_attempts") or []),
+            created_at=datetime.fromisoformat(d["created_at"]),
+            spent_on=d.get("spent_on"),
+        )
+        if d.get("spent_at"):
+            echo.spent_at = datetime.fromisoformat(d["spent_at"])
+        return echo

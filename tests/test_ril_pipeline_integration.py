@@ -45,9 +45,35 @@ def test_collapse_to_scar_to_doctrine_populates_ril_identity_threads():
     scar = result["scar_formed"]
     assert scar is not None, "expected the contradiction chamber to collapse and form a scar"
 
-    assert aurea.ril.threads[IdentityThread.SCARLINE] == [scar]
-    assert aurea.ril.threads[IdentityThread.ORIGIN] == [scar], (
-        "first scar RIL ever ingests must seed ORIGIN exactly once")
+    # UPDATED 2026-07-27 (Ruling 42 res.2 + res.3). Ruling-14 precedent,
+    # old/new verbatim:
+    #
+    #     OLD: assert aurea.ril.threads[SCARLINE] == [scar]
+    #          assert aurea.ril.threads[ORIGIN]   == [scar], (
+    #              "first scar RIL ever ingests must seed ORIGIN exactly once")
+    #     NEW: SCARLINE compared by record id; ORIGIN asserted to be the
+    #          CONSTITUTIONAL seed record `Scar-0`, with provenance.
+    #
+    # WHY, and the second half is a RULING and not a shape change:
+    #   res.2 - threads hold by-ID references, not embedded `Scar` objects.
+    #   res.3 - ORIGIN IS CONSTITUTIONAL. In a live pipeline the scar owner is
+    #     present, so RIL resolves ORIGIN from the seed record tagged `origin`
+    #     BEFORE any runtime scar exists. The first runtime scar therefore no
+    #     longer claims ORIGIN - which is the entire point of the ruling. The
+    #     old assertion documented the defect: her birth identity was whatever
+    #     she happened to collapse on first after a restart.
+    #
+    # NOT A WEAKENING. The written-once guarantee is asserted MORE strongly
+    # here than before: ORIGIN is pinned to a specific, tracked, constitutional
+    # record rather than to "whatever arrived first", and the run-to-run
+    # variability the old assertion tolerated is now a red test.
+    assert [e["record_id"] for e in aurea.ril.threads[IdentityThread.SCARLINE]] == [scar.id]
+
+    origin = aurea.ril.threads[IdentityThread.ORIGIN]
+    assert [e["record_id"] for e in origin] == ["Scar-0"], (
+        "ORIGIN is CONSTITUTIONAL (Ruling 42 res.3) - the seed record tagged "
+        "`origin`, not the first scar that happened to arrive")
+    assert origin[0]["provenance"] == "constitutional"
 
     # ---- DOCTRINE MUTATION -> RIL (Doctrine) ----
     # See module docstring: DEE's decision is controlled here because nothing in the live

@@ -28,8 +28,8 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS FOURTEEN PATHS: five resolved from class attributes, nine
-from `__init__` defaults. If you add a fifteenth and do not add it here, you
+THIS FIXTURE COVERS SEVENTEEN PATHS: five resolved from class attributes, twelve
+from `__init__` defaults. If you add an eighteenth and do not add it here, you
 have reopened the hole Ruling 31 closed.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
@@ -81,7 +81,10 @@ import pytest
 
 from src.aurea_core import AureaCore
 from src.doctrine.codex import Codex
+from src.expansion.nova import NovaEngine
 from src.expansion.sae import SAE
+from src.identity.ril import RIL
+from src.reflex.racm import RACM
 from src.expansion.tether.session_governor import TetherProtocol
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
@@ -127,10 +130,16 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         SAE, "RESTART_LOG_PATH",
         str(tmp_path / "sae_restarts.jsonl"),
     )
-    # Repoint each remaining store's path default at tmp. Ruling 32 completes
-    # this list: with the five below joining the three suspension stores and
-    # the three class-attribute paths above, THE FIXTURE NOW COVERS EVERY
-    # DURABLE STORE IN THE SYSTEM - the first time that has been true.
+    # Repoint each remaining store's path default at tmp.
+    #
+    # A SEVENTH COMPLETENESS-CLAIM INSTANCE, REMOVED 2026-07-27 (Ruling 42). This
+    # comment read "THE FIXTURE NOW COVERS EVERY DURABLE STORE IN THE SYSTEM - the
+    # first time that has been true." The docstring's version of that boast was
+    # replaced by a COUNT at Ruling 34; this copy survived the edit and went on
+    # asserting it - and it was FALSE AGAIN, because RIL, Nova and RACM held state
+    # no file has ever carried. A claim that outlives the fix it described is the
+    # completeness defect in its most durable form: it reads as verified history.
+    # The count lives in the docstring, once, where it can go visibly stale.
     #
     # For Codex / ScarLogicCore / EchoMemory it is the RUNTIME path that moves.
     # The SEED path deliberately does NOT: a test still reads AUREA's real
@@ -152,6 +161,16 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # constructs one. There is NO seed counterpart: a missing file is a
         # first run, and an epoch is accumulated rather than issued.
         (SAE, "runtime_path", "sae_epoch.json"),
+        # Ruling 42 (2026-07-27) - THE CONTINUITY PASS. Three stores that were
+        # purely in-memory until now, so a restart could make AUREA forget her
+        # origin, her authored echoes, or the pressure she deferred. Each is an
+        # `__init__` default under `data/runtime/`, resolved BY NAME below.
+        #
+        # RIL MUST be redirected before anything constructs one - `RIL.__init__`
+        # calls `load()`, exactly as `SAE.__init__` does. Same for Nova and RACM.
+        (RIL, "runtime_path", "ril_threads.json"),
+        (NovaEngine, "runtime_path", "nova_record.json"),
+        (RACM, "runtime_path", "racm_queue.json"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

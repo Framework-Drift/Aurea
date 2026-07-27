@@ -266,37 +266,64 @@ class PSI(SymbolicReflex):
         from src.identity.ril import IdentityThread
 
         state = self.ril.thread_state()
-        scarline = state[IdentityThread.SCARLINE]
+        scarline = [self._record_id(e) for e in state[IdentityThread.SCARLINE]]
+        scarline = [sid for sid in scarline if sid]
         if not scarline:
             return None
 
-        origin = state[IdentityThread.ORIGIN]
-        origin_ref = origin[0].id if origin else None
+        origin = [self._record_id(e) for e in state[IdentityThread.ORIGIN]]
+        origin_ref = next((sid for sid in origin if sid), None)
 
         bearing = max(scarline, key=self._live_weight)
 
         return PSIDirective(
-            scar_ref=bearing.id,
+            scar_ref=bearing,
             origin_ref=origin_ref,
-            fallback_bearing=origin_ref or bearing.id,
+            fallback_bearing=origin_ref or bearing,
             tone_weight=self._live_weight(bearing),
         )
 
-    def _live_weight(self, scar: Any) -> float:
-        """Current weight from the scar OWNER, falling back to the snapshot's value.
+    @staticmethod
+    def _record_id(entry: Any) -> Optional[str]:
+        """The scar id a RIL thread entry NAMES.
+
+        RULING 42 res.2: RIL's identity threads hold BY-ID REFERENCES, not embedded
+        `Scar` objects. This method is the whole of PSI's adaptation, and the
+        direction of travel is the point - PSI used to receive an object and read
+        `.id` off it; it now receives an id and asks the owner for everything else.
+        """
+        if isinstance(entry, dict):
+            return entry.get("record_id")
+        return getattr(entry, "id", None)
+
+    def _live_weight(self, scar_id: str) -> float:
+        """Current weight from the scar OWNER. NO OWNER MEANS NO WEIGHT.
 
         Exactly one float is read and the reference is dropped on return. Never
         retain it, never mutate it: weight/decay is SML's store (Ruling 1), and a
         held Scar reference is a held write path.
 
         RULING 22 (2026-07-25) made that discipline structural rather than
-        conventional: `get_scar` now returns a deep SNAPSHOT, so a retained
-        reference can no longer reach the record even by accident. This reads the
-        CURRENT weight either way - the snapshot is taken at call time. The
-        discipline above is unchanged and still correct; it is simply no longer
-        the only thing standing between a reader and the scar store."""
+        conventional: `get_scar` returns a deep SNAPSHOT, so a retained reference
+        cannot reach the record even by accident.
+
+        RULING 42 (2026-07-27) FINISHED IT. This used to fall back to
+        `getattr(scar, "weight", 0.0)` on the `Scar` OBJECT RIL had embedded in its
+        thread - which is to say, on the scar store's own live record, reached
+        through the identity layer. The fallback is GONE because the object is
+        gone: RIL records that it anchored identity to a scar, and does not carry
+        that scar's magnitudes (Ruling 15 - the owner owns the write INCLUDING its
+        magnitudes, so a non-owner holding one is a disguised write).
+
+        With no scar owner there is now no weight to report, and `0.0` is the
+        honest answer rather than a stale one. This changes NOTHING in any live
+        configuration: `aurea_core` always constructs PSI with the real
+        `scar_core`, so the owner branch is the only branch the pipeline takes.
+        And `tone_weight` REPORTS, it never GATES (Ruling 33, section 9 bar #5) -
+        nothing downstream compares it to anything.
+        """
         if self.scar_core is not None:
-            live = self.scar_core.get_scar(scar.id)
+            live = self.scar_core.get_scar(scar_id)
             if live is not None:
                 return float(live.weight)
-        return float(getattr(scar, "weight", 0.0))
+        return 0.0
