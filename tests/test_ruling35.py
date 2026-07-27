@@ -231,32 +231,18 @@ def test_a_seed_fossil_is_not_a_live_anchor_collapse():
         "output is blocked on a clean pipeline pass - she cannot speak at all")
 
 
-def test_a_runtime_fossil_IS_still_an_anchor_collapse(tmp_path):
-    """THE OTHER HALF, AND THE ONE THAT MATTERS MOST.
-
-    DEFECT WATCHED: "fixing" the above by disabling anchor collapse. A doctrine
-    that falls UNDER her is exactly the event the compass exists to catch, and
-    a narrowing that swallowed it would be far worse than the bug it replaced -
-    it would silently remove a safety trigger while looking like a bug fix.
-    """
-    from src.expansion.sae import SAE, MutationClass
-    from src.identity.compass import CompassStabilityEngine
-
-    codex = Codex(filepath=str(tmp_path / "doctrines.json"))
-    sae = SAE(codex=codex)
-
-    live = Doctrine(id="D-live", name="ground", scar_links=["scar-1"],
-                    created_at=datetime.now())
-    codex.commit(live, sae.authorize(MutationClass.MUTATE_DOCTRINE, "scar-1", "D-live"))
-    codex.fossilize("D-live",
-                    sae.authorize(MutationClass.MUTATE_DOCTRINE, "scar-1", "D-live"),
-                    reason="fell under her")
-
-    assert "D-live" in codex.fossils
-    north = CompassStabilityEngine(codex=codex)._north()
-    assert north.collapsed == ["D-live"], (
-        "a doctrine fossilized AT RUNTIME no longer registers as an anchor "
-        "collapse - the narrowing swallowed the real trigger")
+# `test_a_runtime_fossil_IS_still_an_anchor_collapse` LIVED HERE and MOVED to
+# tests/test_ruling36.py as `test_an_UNSUCCESSORED_runtime_fossil_is_still_an_anchor_collapse`.
+#
+# NOT a deletion and not a weakening: RULING 36 (2026-07-27) ruled the runtime
+# half this pin was holding open, so the pin moved WITH its ruling and gained a
+# companion (`test_a_runtime_fossil_whose_successor_lives_is_not_a_collapse`).
+# Ruling-14 precedent - a pinned test changes only when the RULING moves, and
+# the old and new text are recorded verbatim at the new site.
+#
+# Its warning is preserved and still true there: a narrowing that swallowed the
+# real trigger would be far worse than the bug it replaced. Ruling 36's answer
+# is that the trigger is AIMED, not narrowed away.
 
 
 def test_drpas_still_scans_every_active_doctrine(seeded):

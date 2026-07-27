@@ -238,8 +238,37 @@ class CompassStabilityEngine:
             if weight:
                 a.mass += weight
                 a.members.append(doctrine.id)
-        # RULING 35 CONSEQUENCE - FLAGGED, ARCHITECT-APPROVED IN SESSION
-        # 2026-07-27, AWAITING A MANIFEST RULING OF ITS OWN.
+        # RULING 36 (2026-07-27) - RULED AND CLOSED. Supersedes in place the
+        # "FLAGGED, awaiting a manifest ruling" marker this block carried after
+        # the Ruling 35 pass: the `is_seed` narrowing is RATIFIED (A) and the
+        # runtime half is now RULED (B) rather than left open.
+        #
+        #   A FOSSIL WITH A LIVE SUCCESSOR IS METABOLISM, NOT COLLAPSE.
+        #
+        # A fossilization that produced a live successor is the growth loop
+        # WORKING - `collapse -> scar -> doctrine -> identity` means survived
+        # change produces CONTINUITY, and the codebase already encodes that
+        # shape (Rulings 18/24: fossil + successor under a NEW id carrying the
+        # fallen id in `mutation_lineage`). Registering it as anchor collapse
+        # would mean her FIRST SUCCESSFUL EVOLUTION permanently mutes her -
+        # the exact inversion Ruling 34 closed for the ceiling, a guard
+        # pointed the wrong way, reproduced in the compass.
+        #
+        # A fossil with NO live successor is DIFFERENT IN KIND: something she
+        # stood on fell and NOTHING grew in its place. That is precisely the
+        # event this trigger exists for, and it is RETAINED. The trigger is
+        # AIMED, not narrowed away - every genuinely fallen-and-unreplaced
+        # anchor still fires. What stops firing is the case where firing would
+        # punish the architecture's own success.
+        #
+        # READ AT READ TIME, no caching and no event subscription: `_north()`
+        # is a sensor and computes from current store state on every call. That
+        # is what makes recovery legible in the same surface that saw the fall -
+        # fossilize -> fires -> successor commits -> clears - with zero new
+        # machinery. Pinned end-to-end as one story.
+        #
+        # The pressure-1.0 magnitude twenty lines up is PRE-EXISTING and
+        # untouched; it was never this ruling's to move.
         #
         # This read appended EVERY fossil unconditionally, and `collapsed` is
         # turned into an `anchor_collapse` trigger at pressure 1.0 twenty lines
@@ -261,11 +290,21 @@ class CompassStabilityEngine:
         # names an EVENT, and `is_seed` is already read three lines above to
         # weight the anchors. No new vocabulary, no coined magnitude.
         #
-        # NOT A BLANKET DISABLE: a doctrine fossilized at RUNTIME still reads as
-        # an anchor collapse, and that is pinned - see tests/test_ruling35.py.
+        # NOT A BLANKET DISABLE: an UNSUCCESSORED doctrine fossilized at RUNTIME
+        # still reads as an anchor collapse - pinned in tests/test_ruling36.py.
+        #
+        # The successor query lives on the Codex (`live_successors`), which owns
+        # what its own records mean. The `getattr` fallback returns NO
+        # successors, so a codex that cannot answer FIRES the trigger rather
+        # than silently suppressing it - the conservative direction for a
+        # safety read.
+        _successors = getattr(self.codex, "live_successors", lambda _id: [])
         for doctrine_id in getattr(self.codex, "fossils", {}):
-            if not getattr(self.codex.get_fossil(doctrine_id), "is_seed", False):
-                a.collapsed.append(doctrine_id)
+            if getattr(self.codex.get_fossil(doctrine_id), "is_seed", False):
+                continue                      # constitution, not an event (A)
+            if _successors(doctrine_id):
+                continue                      # metabolized: ancestry, not collapse (B)
+            a.collapsed.append(doctrine_id)
         return a
 
     def _south(self) -> AnchorReading:

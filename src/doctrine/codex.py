@@ -284,6 +284,49 @@ class Codex:
         doctrine = self.doctrines.get(doctrine_id) or self.fossils.get(doctrine_id)
         return list(doctrine.mutation_lineage) if doctrine else []
 
+    def live_successors(self, doctrine_id: str) -> List[str]:
+        """The inverse of `lineage()`: which LIVE doctrines descend from this id.
+
+        RULING 36 (2026-07-27). A fossil with a live successor is METABOLISM,
+        not collapse - identity change that left ancestry behind, which is the
+        growth loop working. The compass asks this before registering an anchor
+        collapse; it lives HERE rather than in the compass because the Codex
+        owns what its own records mean (Ruling 35's principle), and a sensor
+        that re-derived succession would be a second definition free to drift
+        from the store's.
+
+        SUCCESSION IS A RECORDED FACT. This reads `mutation_lineage` and
+        NOTHING ELSE - no name matching, no similarity measure, no coined
+        threshold. A guessed succession would let a doctrine that merely
+        RESEMBLES the fallen one silence a real anchor collapse, which is the
+        false-resolution hazard EchoNet's abstaining intuition net exists to
+        avoid, applied to a safety trigger. Structurally pinned in
+        tests/test_ruling36.py.
+
+        DIRECT CONTAINMENT IS CHAIN-ROBUST, and that is a property of the data
+        rather than an assumption: `sae.py` builds a successor as
+        `list(ancestor.mutation_lineage) + [ancestor.id]`, so lineage
+        ACCUMULATES - a grandchild carries the whole chain. If A -> B -> C and B
+        is later fossilized while C lives, C's lineage still contains both A and
+        B, so B reads as succeeded without any transitive walk. Pinned by the
+        three-generation test; if that accumulation ever changes, that pin goes
+        red rather than this silently under-reporting.
+
+        LIVE means `self.doctrines` - which is `active` PLUS `locked` (Ruling
+        35: locked is live, merely un-mutable). A locked successor is still
+        ground she stands on. Fallen doctrines are in `fossils` and cannot
+        satisfy succession, which is what stops a chain of fossils vouching
+        for each other.
+
+        IDS ONLY. No record reference escapes, so no snapshot is required and
+        no write path is handed out (Ruling 22's boundary, kept by returning
+        strings).
+        """
+        return sorted(
+            live_id for live_id, doctrine in self.doctrines.items()
+            if doctrine_id in doctrine.mutation_lineage
+        )
+
     def __len__(self) -> int:
         return len(self.doctrines)
 
