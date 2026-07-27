@@ -792,6 +792,67 @@ class RACM:
             return self.smc.lineage_match(ctx)
         return ctx.get("smc_lineage")
 
+    # -- Ruling 34-A: SAE's anti-deadlock surfacing (canon 5a:1584) --
+
+    def record_saturation_pressure(self, *, epoch: int, blocked_cycles: int,
+                                   horizon: int,
+                                   unsettled_lineages: List[str]) -> str:
+        """Log reflex-class pressure for a saturated symbolic epoch.
+
+        Canon 5a:1584 names THIS module as the logger: when SAE's mutation
+        attempts have been blocked by a saturated epoch for more than the
+        5-cycle horizon, "RACM logs reflex-class pressure and
+        `RLB.divergence_trigger` eligibility is signaled ... rather than
+        force-closing the epoch."
+
+        RACM ORIGINATES NOTHING HERE (Ruling 2). SAE sources the condition,
+        decides it is due, and asks; this method is the route to the RB log,
+        which SAE has no standing to write itself (Ruling 1 - CLAUDE.md §2 lists
+        the log's requesters as RACM and the Grid, and that table is not widened
+        by this ruling). **It does not arbitrate, does not gate, and returns no
+        verdict** - only the entry id, so SAE can record where its own signal
+        landed.
+
+        BEHAVIOR TYPE: `SUSPEND`, from the CLOSED enum (Ruling 7 - it stays
+        closed; there is no `pressure` member and none is added). SUSPEND is the
+        honest fit: the epoch's mutation capacity is HELD, unresolved, carried -
+        not denied and not resolved. Ruling 7 set the precedent by decomposing
+        GSR's cascade to the same member.
+
+        DURABLE, deliberately. Ruling 11 ties a REFLEX entry's durability to its
+        scope; SAE is not a reflex and this entry is scope-less, like RACM's own
+        lock events. The caller decides (`record(..., durable=...)`), and this
+        caller decides YES: it fires at most once per saturation episode and it
+        records that AUREA's capacity to change herself is locked. Losing that to
+        a buffer is precisely the durable-and-invisible failure Ruling 34-A names.
+        """
+        entry = self.rb.record(
+            reflex_triggered="SAE",
+            behavior_type=BehaviorType.SUSPEND,
+            trigger_conditions={
+                "condition": "saturated_symbolic_epoch",
+                "epoch": epoch,
+                "consecutive_blocked_cycles": blocked_cycles,
+                "horizon": horizon,
+            },
+            affected_systems=["SAE", "doctrine", "expansion"],
+            symbolic_context=(
+                f"anti-deadlock (5a:1584): mutation attempts blocked by a "
+                f"saturated epoch for {blocked_cycles} consecutive symbolic "
+                f"cycles (horizon {horizon}). The epoch is SURFACED, NOT "
+                f"force-closed - re-arming capacity now would re-arm it at the "
+                f"exact moment nothing has been metabolized."
+            ),
+            outcome={
+                "result": "surfaced",
+                "epoch_force_closed": False,
+                "divergence_trigger_eligible": True,
+                "unsettled_lineages": unsettled_lineages,
+            },
+            durable=True,
+        )
+        return entry.id
+
     # -- direct suppression path (2b pseudo: RACM.suppress_reflex(trigger_id)) --
 
     def suppress_reflex(self, reflex_id: str, reason: str = "external suppression") -> None:

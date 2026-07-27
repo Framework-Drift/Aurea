@@ -137,6 +137,12 @@ class AureaCore:
     # because a forensic log you can silently disable is not a forensic log.
     STRUCTURAL_LOG_PATH = "logs/structural_violations.jsonl"
 
+    # Ruling 34 res.7: was a method-parameter default on save_state/load_state -
+    # the ONE path shape `conftest.py` cannot reach, and it pointed outside
+    # `data/runtime/`. A class attribute is reachable, and the target is now
+    # runtime state rather than a stray untracked file at the repo root.
+    STATE_PATH = "data/runtime/aurea_state.json"
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Initialize AUREA core systems.
@@ -161,7 +167,6 @@ class AureaCore:
         # Doctrine layer (Ruling 5): Codex owns the store, SAE is the sole executor,
         # the Spine is structure + requests. Nothing else may write doctrine.
         self.codex = Codex()
-        self.sae = SAE(codex=self.codex)
         self.doctrine_spine = DoctrineSpine(codex=self.codex)
 
         # TCAML (Ruling 27, Stage 2 - 2026-07-26): the topology layer's anchor
@@ -175,6 +180,19 @@ class AureaCore:
         self.tcaml = TCAML()
 
         self.reflex_grid = ReflexGrid(tcaml=self.tcaml)
+
+        # SAE (Ruling 5: the sole executor of self-mutation). Constructed AFTER
+        # the Grid, and the ordering is load-bearing rather than cosmetic:
+        # Ruling 34-A routes SAE's anti-deadlock surfacing through RACM, which
+        # owns the route to the reflex behavior log (Ruling 1), and RACM does
+        # not exist until the Grid builds it. The same shape as TCAML above -
+        # build the owner first, then hand it to the requester.
+        #
+        # SAE RESUMES ITS EPOCH FROM DISK AT CONSTRUCTION (Ruling 34). A restart
+        # no longer restores mutation budget: the ceiling, the unsettled
+        # lineages and the stasis clock all cross the process boundary.
+        self.sae = SAE(codex=self.codex, racm=self.reflex_grid.racm)
+
         self.ore = ORE()
         # Ruling 33 Stage 2. ORE resolves the verdict; HAIL renders it. HAIL is
         # a PURE FUNCTION - it takes no arguments here because it holds nothing
@@ -374,6 +392,14 @@ class AureaCore:
         # a cycle advance the bound could never be crossed and the force-expiry
         # safety net would be decorative.
         self.tcaml.tick()
+
+        # SAE symbolic-cycle advance (Ruling 34-A). Deliberately the SAME site as
+        # tcaml.tick(): one pipeline pass is one symbolic cycle, and driving both
+        # from one place is what stops the two clocks drifting apart. It closes
+        # the accounting for the cycle just ended - a cycle in which every
+        # mutation attempt was refused by a saturated epoch increments the stasis
+        # count; a cycle in which one executed resets it.
+        self.sae.advance_cycle()
 
         try:
             # Step 1: Perception layer
@@ -1335,32 +1361,60 @@ class AureaCore:
         lines.append("="*60)
         return "\n".join(lines)
         
-    def save_state(self, filepath: str = "data/aurea_state.json"):
-        """Save current system state to disk."""
-        state_path = Path(filepath)
+    def save_state(self, filepath: Optional[str] = None):
+        """Save current system state to disk.
+
+        RULING 34 res.7 - THE PATH IS NO LONGER A METHOD-PARAMETER DEFAULT.
+        It was `filepath: str = "data/aurea_state.json"`, which is reachable by
+        NEITHER of `tests/conftest.py`'s two mechanisms: it is not a class
+        attribute and not an `__init__` default. That is Ruling 31's
+        unreachable-by-construction defect in its THIRD location - the shape
+        Ruling 31's sweep was never specified on - and its target sat OUTSIDE
+        `data/runtime/`, so a real run left an untracked file in the tree: the
+        exact pre-Ruling-31 condition. `STATE_PATH` is a class attribute,
+        resolved at WRITE time, redirected by the fixture, and pointed under
+        `data/runtime/`. The parameter survives as the EXPLICIT override, the
+        same way Ruling 32 kept `filepath=` on the stores.
+
+        RULING 34 res.8 - THE save/load ASYMMETRY IS CLOSED. `system_status` (a
+        RENDERED REPORT STRING from `get_system_status()`) was written into the
+        data file and never read back: Docket L's stale-status-line shape in its
+        worst possible location, guaranteed to go stale against the data beside
+        it with nothing ever reading it to notice. DROPPED, not moved.
+
+        WHAT ROUND-TRIPS NOW, exhaustively: `statistics` and `suspension_state`
+        are written and read. `timestamp` and `version` are written and NOT read
+        back - they are metadata ABOUT the file rather than state, which is a
+        different thing from a rendered view of state that pretends to be data.
+        """
+        state_path = Path(filepath or self.STATE_PATH)
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         state = {
+            'version': 1,
             'timestamp': datetime.now().isoformat(),
             'statistics': self.stats,
-            'system_status': self.get_system_status(),
             'suspension_state': {
                 'suspended': self.processing_suspended,
                 'reason': self.suspension_reason
             }
         }
-        
+
         with open(state_path, 'w') as f:
             json.dump(state, f, indent=2, default=str)
-            
-        # Also save modules
+
+        # Also save modules. SAE joins them (Ruling 34): its epoch state is
+        # ALREADY durable at every mutation, so this is a consistency snapshot
+        # rather than the mechanism - if this were the only save point, a process
+        # kill would still restore her budget.
         self.scar_core.save_to_file()
         self.codex.save_to_file()
         self.tca.topology.save_to_file()
-        
-    def load_state(self, filepath: str = "data/aurea_state.json"):
-        """Load system state from disk."""
-        state_path = Path(filepath)
+        self.sae.save()
+
+    def load_state(self, filepath: Optional[str] = None):
+        """Load system state from disk. Symmetrical with `save_state` (res.8)."""
+        state_path = Path(filepath or self.STATE_PATH)
         if state_path.exists():
             with open(state_path, 'r') as f:
                 state = json.load(f)

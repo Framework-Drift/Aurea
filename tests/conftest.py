@@ -28,10 +28,25 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-AS OF RULING 32 THIS FIXTURE COVERS EVERY DURABLE STORE IN THE SYSTEM - the
-first time that has been true. Eleven paths: three resolved from class
-attributes, eight from `__init__` defaults. If you add a twelfth and do not
-add it here, you have reopened the hole Ruling 31 closed.
+THIS FIXTURE COVERS FOURTEEN PATHS: five resolved from class attributes, nine
+from `__init__` defaults. If you add a fifteenth and do not add it here, you
+have reopened the hole Ruling 31 closed.
+
+A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
+This docstring previously read "AS OF RULING 32 THIS FIXTURE COVERS EVERY
+DURABLE STORE IN THE SYSTEM - the first time that has been true." **It was
+false when written.** `AureaCore.save_state` wrote a durable artifact and
+called three store saves, and its path came from a METHOD-PARAMETER default -
+a THIRD shape neither mechanism below can reach, and one Ruling 31's sweep was
+never specified on. The claim is defensible only if `AureaCore` is not a store,
+and no reader will take it that way.
+
+**SIXTH INSTANCE of the completeness-claim defect - this time in the file whose
+docstring IS the isolation principle.** A coverage claim is exactly as dangerous
+as the coverage it asserts: the appearance of completeness is what stops anyone
+looking (Ruling 31's own finding, turned on its own remedy). So this docstring
+now states a COUNT and a SHAPE RULE rather than a completeness claim, because a
+count goes visibly stale and a boast does not.
 
 WHY THE FIFTH PATH ESCAPED FOR SO LONG (Ruling 31, 2026-07-26)
 ---------------------------------------------------------------
@@ -66,6 +81,7 @@ import pytest
 
 from src.aurea_core import AureaCore
 from src.doctrine.codex import Codex
+from src.expansion.sae import SAE
 from src.expansion.tether.session_governor import TetherProtocol
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
@@ -98,6 +114,19 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         GSR, "GSR_ALERT_PATH",
         str(tmp_path / "gsr_alerts.jsonl"),
     )
+    # Ruling 34 res.7: `AureaCore.save_state` resolved its path from a METHOD-
+    # PARAMETER default, the one shape neither mechanism below can reach, and
+    # wrote outside `data/runtime/`. Now a class attribute, so it is reachable.
+    monkeypatch.setattr(
+        AureaCore, "STATE_PATH",
+        str(tmp_path / "aurea_state.json"),
+    )
+    # Ruling 34 res.4: SAE's restart record. Class attribute resolved at WRITE
+    # time (the GSR shape), so it binds even for an already-constructed SAE.
+    monkeypatch.setattr(
+        SAE, "RESTART_LOG_PATH",
+        str(tmp_path / "sae_restarts.jsonl"),
+    )
     # Repoint each remaining store's path default at tmp. Ruling 32 completes
     # this list: with the five below joining the three suspension stores and
     # the three class-attribute paths above, THE FIXTURE NOW COVERS EVERY
@@ -117,6 +146,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         (EchoMemory, "runtime_path", "echoes.jsonl"),
         (TopologicalSpace, "filepath", "tca_map.json"),
         (TetherProtocol, "telemetry_path", "tether_telemetry.jsonl"),
+        # Ruling 34 res.1: SAE's epoch state. An `__init__` default (resolved by
+        # NAME below), and it MUST be redirected before anything constructs an
+        # SAE - `SAE.__init__` calls `load()`, and `AureaCore.__init__`
+        # constructs one. There is NO seed counterpart: a missing file is a
+        # first run, and an epoch is accumulated rather than issued.
+        (SAE, "runtime_path", "sae_epoch.json"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 
