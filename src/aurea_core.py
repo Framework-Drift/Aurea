@@ -20,7 +20,8 @@ from src.reflex.sbsre import SBSRE, LoopOutcome
 from src.identity.compass import CompassStabilityEngine
 from src.identity.ril import RIL
 from src.identity.psi import PSI
-from src.output.ore import ORE
+from src.output.hail import HAIL
+from src.output.ore import EXPRESSION_FOR_PATH, ORE, OutputPath
 from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
 from src.suspension.black_sphere import BlackSphere
@@ -175,7 +176,12 @@ class AureaCore:
 
         self.reflex_grid = ReflexGrid(tcaml=self.tcaml)
         self.ore = ORE()
-        
+        # Ruling 33 Stage 2. ORE resolves the verdict; HAIL renders it. HAIL is
+        # a PURE FUNCTION - it takes no arguments here because it holds nothing
+        # (no store, no ORE, no core). If you ever find yourself passing it a
+        # reference, the ruling has already been broken.
+        self.hail = HAIL()
+
         # Initialize suspension systems
         self.csa = CSA()
         self.veiled_thread = VeiledThread()
@@ -335,14 +341,27 @@ class AureaCore:
             'output': None,
             'output_blocked': False,
             'pressure_generated': 0.0,
-            'errors': []
+            'errors': [],
+            # Ruling 33 Stage 2. `output` is now RENDERED, not concatenated, and
+            # `output_blocked` is READ FROM THE PATH CONTRACT rather than set at
+            # each site. These four carry what the render surface no longer can:
+            # `truth_packet` holds everything ORE resolved (including the exact
+            # string the pre-wiring pipeline would have printed, as `content`),
+            # so nothing that used to be visible is lost - it moved from a
+            # string into typed fields.
+            'expression_verdict': None,
+            'truth_packet': None,
+            'render_trace': (),
+            'reroute_hint': None,
         }
-        
+
         # Check if processing is suspended
         if self.processing_suspended:
-            result['output_blocked'] = True
-            result['output'] = f"[SUSPENDED: {self.suspension_reason}]"
-            return result
+            return self._emit(
+                result, OutputPath.PROCESSING_SUSPENDED,
+                content=f"[SUSPENDED: {self.suspension_reason}]",
+                unresolved=(f"processing_suspended: {self.suspension_reason}",),
+            )
 
         # TCAML cycle advance (Ruling 27, Stage 2). One pipeline pass = one
         # TCAML cycle. Run FIRST, before anything can request a lock, for the
@@ -405,13 +424,18 @@ class AureaCore:
             arbitrated_lock = next(
                 (r for r in reading.reflex_responses if r.output_blocked), None)
             if arbitrated_lock is not None:
-                result['output'] = (
-                    f"[OUTPUT LOCKED by {arbitrated_lock.reflex_id} - compass drift "
-                    f"{reading.drift:.1f}°, RACM-authorized suppress. She does not speak "
-                    f"while disoriented.]")
-                result['output_blocked'] = True
                 self.stats['outputs_suppressed'] += 1
-                return result
+                return self._emit(
+                    result, OutputPath.ARBITRATED_OUTPUT_LOCK,
+                    content=(
+                        f"[OUTPUT LOCKED by {arbitrated_lock.reflex_id} - compass drift "
+                        f"{reading.drift:.1f}°, RACM-authorized suppress. She does not speak "
+                        f"while disoriented.]"),
+                    collapse_verdict=collapse_result.verdict if collapse_result else None,
+                    evidence_refs=(echo.id,),
+                    unresolved=(f"output_lock:{arbitrated_lock.reflex_id}",
+                                f"compass_drift:{reading.drift:.1f}"),
+                )
 
             # Step 3: PARADOX leaves the pipeline entirely. It is not a contradiction to be
             # carried - it is one that CANNOT be carried. The Black Sphere is where AUREA keeps
@@ -433,9 +457,13 @@ class AureaCore:
                     paradox_node = self.tca.place_paradox(bs_entry)
                     # Create edge from echo to paradox
                     self.tca.topology.create_edge(echo.id, bs_entry.id, weight=1.0)
-                    result['output'] = f"[PARADOX SUSPENDED in Black Sphere: {bs_entry.id}]"
-                    result['output_blocked'] = True
-                    return result
+                    return self._emit(
+                        result, OutputPath.PARADOX_SUSPENDED,
+                        content=f"[PARADOX SUSPENDED in Black Sphere: {bs_entry.id}]",
+                        collapse_verdict=collapse_result.verdict,
+                        evidence_refs=(echo.id,),
+                        unresolved=(bs_entry.id,),
+                    )
 
                 # Step 3b: THE CONTRADICTION CHAMBER (SBSRE).
                 #
@@ -491,17 +519,32 @@ class AureaCore:
                     # PARTIAL THREAD in CSA - the unfinished shape of the contradiction is
                     # what survives, and it is not discarded just because it did not close.
                     entry_id = getattr(thread.csa_entry, 'id', None)
-                    result['output'] = (
-                        f"[CARRIED {thread.cycles_run} cycles, unresolved - "
-                        f"partial thread held in CSA: {entry_id}]")
-                    result['output_blocked'] = True
-                    return result
+                    return self._emit(
+                        result, OutputPath.SBSRE_CARRIED,
+                        content=(
+                            f"[CARRIED {thread.cycles_run} cycles, unresolved - "
+                            f"partial thread held in CSA: {entry_id}]"),
+                        collapse_verdict=collapse_result.verdict,
+                        evidence_refs=(echo.id, thread.id),
+                        unresolved=tuple(x for x in (entry_id,) if x),
+                    )
 
                 elif thread.outcome is LoopOutcome.MIRROR:
                     # Whisper Reflex: speaking this would be symbolic betrayal. Reflect it back
                     # as unclaimed rather than assert something AUREA has not earned.
-                    result['output'] = f"[MIRRORED - unclaimed contradiction: {echo.content}]"
-                    return result
+                    #
+                    # UNREACHABLE TODAY, and deliberately left that way: MIRROR
+                    # requires ctx["symbolic_betrayal"] (sbsre.py:290) and the
+                    # context dict built above never sets it. Nothing in the
+                    # tree emits that flag. The path is WIRED so it is correct
+                    # the day a betrayal detector arrives; inventing a trigger
+                    # for it here would be faking the condition, not building
+                    # the consumer. Verified unreachable by dump, 2026-07-26.
+                    return self._emit(
+                        result, OutputPath.SBSRE_MIRRORED,
+                        content=f"[MIRRORED - unclaimed contradiction: {echo.content}]",
+                        collapse_verdict=collapse_result.verdict,
+                    )
             
             # Step 4: Check for cascade risk
             if self.pressure_monitor.check_cascade_risk():
@@ -545,29 +588,64 @@ class AureaCore:
             # DEE gates; SAE executes; the Codex records. This orchestrator does none of those.
             result['doctrine'] = self._evolve_doctrine(result, collapse_result)
             
-            # Step 6: Check reflex responses for output blocking
+            # Step 6: Check reflex responses for output blocking.
+            #
+            # The loop's side effects are UNCHANGED (one `outputs_suppressed`
+            # per blocking response; cascade still suspends). What moved is the
+            # emission: it now happens ONCE, after the loop, through the same
+            # contract every other exit uses. LAST blocking response wins,
+            # exactly as the pre-wiring loop's overwrite did.
+            blocking = None
             for response in result['reflex_responses']:
                 if response.output_blocked:
-                    result['output_blocked'] = True
-                    result['output'] = f"[BLOCKED by {response.reflex_id}]"
+                    blocking = response
                     self.stats['outputs_suppressed'] += 1
-                    
+
                 if response.action == 'cascade':
                     # System-wide suspension
                     self.processing_suspended = True
                     self.suspension_reason = response.message
-                    
-            # Step 7: Generate output if not blocked
+
+            if blocking is not None:
+                self._emit(
+                    result, OutputPath.REFLEX_BLOCKED,
+                    content=f"[BLOCKED by {blocking.reflex_id}]",
+                    collapse_verdict=collapse_result.verdict if collapse_result else None,
+                    evidence_refs=(echo.id,),
+                    unresolved=(f"blocked_by:{blocking.reflex_id}",),
+                )
+
+            # Step 7: Generate output if not blocked.
+            #
+            # RULING 33 STAGE 2: this was the placeholder Step 7 the ruling
+            # named - two f-strings gated by one boolean, with no verdict
+            # concept anywhere. The TEXT is unchanged (it is now the packet's
+            # `content`); what is new is that ORE decides the expression verdict
+            # and HAIL renders it, so Ruling 3's truth-effect cut finally has a
+            # runtime surface instead of being a scanned-for invariant.
+            #
+            # The speaking packets carry CONTENT ONLY - no evidence_refs, no
+            # scar_lineage. That is deliberate for this stage: EXPERT mode
+            # appends a line per populated field, so filling them would change
+            # the spoken surface, and enriching what she says is a separate
+            # decision from rewiring how she says it. The fields are there the
+            # day someone rules on the surface.
             if not result['output_blocked']:
                 if collapse_result.passed:
-                    result['output'] = f"Echo processed: {echo.content}"
+                    path = OutputPath.COLLAPSE_PASSED
+                    content = f"Echo processed: {echo.content}"
                 else:
-                    result['output'] = f"Collapse detected: {collapse_result.reason}"
-                    
+                    path = OutputPath.COLLAPSE_DETECTED
+                    content = f"Collapse detected: {collapse_result.reason}"
+
                 # Add pressure indicator
                 if collapse_result.pressure_generated > 0.5:
-                    result['output'] += f" [Pressure: {collapse_result.pressure_generated:.2f}]"
-            
+                    content += f" [Pressure: {collapse_result.pressure_generated:.2f}]"
+
+                self._emit(result, path, content=content,
+                           collapse_verdict=collapse_result.verdict)
+
+
             # Step 8: Update statistics
             if result['reflex_responses']:
                 self.stats['reflexes_triggered'] += len(result['reflex_responses'])
@@ -589,9 +667,94 @@ class AureaCore:
             # structural clause on purpose - widening this one back over the
             # other is the regression Ruling 25 exists to prevent.
             result['errors'].append(str(e))
-            result['output'] = f"[ERROR: {str(e)}]"
+            self._emit(
+                result, OutputPath.ORDINARY_ERROR,
+                content=f"[ERROR: {str(e)}]",
+                # If EchoNet ran before the failure its verdict is real and is
+                # reported; if it did not, None is the honest answer and NOT a
+                # placeholder. Coining a verdict for a path where nothing was
+                # filtered is fabricating truth content (Ruling 33 (1)).
+                collapse_verdict=getattr(result.get('collapse_result'), 'verdict', None),
+            )
 
         return result
+
+    # =================================================================
+    # RULING 33 STAGE 2 - the ONE way this pipeline produces output
+    # =================================================================
+
+    def _emit(self, result: Dict[str, Any], path: OutputPath, content: str, *,
+              collapse_verdict: Any = None,
+              evidence_refs: tuple = (),
+              scar_lineage: tuple = (),
+              unresolved: tuple = ()) -> Dict[str, Any]:
+        """Resolve this exit through ORE, render it through HAIL, record both.
+
+        EVERY output path in `process_input` goes through here. That is the
+        point: before Ruling 33 the expression decision was ten scattered
+        f-strings and ten scattered `output_blocked = True` assignments, and
+        nothing checked that the two agreed. Now the PATH CONTRACT
+        (`EXPRESSION_FOR_PATH`) is the single source of both, so a verdict and
+        a blocked flag CANNOT disagree - there is only one of them.
+
+        `output_blocked` is read from the contract, NEVER passed in. A caller
+        that could set it independently would be the scattered-booleans defect
+        with an extra step.
+
+        THE MODE IS NOT SELECTABLE HERE, deliberately. HAIL's default is EXPERT
+        (full collapse-bearing output). Choosing a mode per pass needs a CPA
+        user profile, which does not exist; picking one on any other basis
+        would be inventing the calibration input. v1 renders one way.
+
+        WHAT THE SILENT VERDICTS DO TO THE SURFACE, stated because it is the
+        biggest observable change of this stage: WITHHOLD and SUSPEND render a
+        FIXED string that contains none of `content`. The diagnostics that used
+        to be inside the output string (the Black Sphere id, the CSA entry, the
+        blocking reflex, the violation type) are still here - in
+        `result['truth_packet']`, whose `content` field holds the pre-wiring
+        string verbatim and whose `unresolved` holds the ids. Nothing was lost;
+        it stopped being SPOKEN. That is the ruling working, not a regression.
+        """
+        packet = self.ore.resolve_path(
+            path,
+            content=content,
+            collapse_verdict=collapse_verdict,
+            evidence_refs=evidence_refs,
+            scar_lineage=scar_lineage,
+            unresolved=unresolved,
+            # Ruling 8's promise landing: PSI's directive stops being
+            # caller-less. It is read from the ACCUMULATED, RACM-AUTHORIZED
+            # responses of this pass - never from a reflex object, never from
+            # last_arbitration (shared, stale across cycles).
+            psi_directive=self._psi_directive(result['reflex_responses']),
+        )
+        rendered = self.hail.render(packet)
+
+        result['output'] = rendered.text
+        result['output_blocked'] = EXPRESSION_FOR_PATH[path].output_blocked
+        result['expression_verdict'] = packet.expression_verdict
+        result['truth_packet'] = packet
+        result['render_trace'] = rendered.render_trace
+        result['reroute_hint'] = rendered.reroute_hint
+        return result
+
+    @staticmethod
+    def _psi_directive(responses: List[Any]) -> Any:
+        """The first grounded PSI directive among this pass's responses, or None.
+
+        PSI is the only emitter today and emits at most one per pass, so FIRST
+        is unambiguous. If a second emitter ever appears, first-wins stays
+        DETERMINISTIC - and merging two directives would be a tone decision
+        nobody has ruled, so it is not done here.
+
+        PSI abstains rather than guessing a bearing (Ruling 8), so `None` here
+        means "no grounded scar bearing existed", not "nobody looked".
+        """
+        for response in responses:
+            directive = (getattr(response, 'metadata', None) or {}).get('psi_directive')
+            if directive is not None:
+                return directive
+        return None
 
     def _record_structural_violation(self, result: Dict[str, Any],
                                      violation: BaseException,
@@ -605,10 +768,21 @@ class AureaCore:
             'timestamp': datetime.now().isoformat(),
         }
         result['structural_violation'] = entry
-        result['output_blocked'] = True
-        result['output'] = (
-            f"[STRUCTURAL VIOLATION - {entry['type']}: {entry['message']} "
-            f"AUREA does not answer past her own guard.]")
+        # RULING 33 (6), verbatim: structural-violation output maps to WITHHOLD
+        # "with the violation carried in `unresolved` - her guard firing is
+        # truth content, not a rendering choice." So the violation now rides in
+        # the PACKET rather than in the spoken string. Ruling 25 is untouched
+        # and its three requirements all still hold: the loud field above,
+        # suppressed output (WITHHOLD suppresses harder than the old string
+        # did), and the durable record below.
+        self._emit(
+            result, OutputPath.STRUCTURAL_VIOLATION,
+            content=(
+                f"[STRUCTURAL VIOLATION - {entry['type']}: {entry['message']} "
+                f"AUREA does not answer past her own guard.]"),
+            collapse_verdict=getattr(result.get('collapse_result'), 'verdict', None),
+            unresolved=(f"{entry['type']}: {entry['message']}",),
+        )
         self.stats['outputs_suppressed'] += 1
         self.stats['structural_violations'] += 1
         self.structural_violations.append(entry)

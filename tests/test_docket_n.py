@@ -523,7 +523,33 @@ def test_a_structural_violation_is_not_flattened_into_errors():
 
 def test_a_structural_violation_suppresses_normal_output():
     """AUREA does not answer as though nothing happened when her own guard
-    just fired. The refusal IS the answer."""
+    just fired. The refusal IS the answer.
+
+    CHANGED BY A RULING, 2026-07-26 (HAIL Stage 2) - the ONE legitimate reason
+    a pinned test moves, per the Ruling-14 precedent. Recorded verbatim:
+
+        OLD (Ruling 25, 2026-07-25):
+            assert "ProvenanceOverwriteViolation" in result["output"]
+
+        NEW (Ruling 33 (6), 2026-07-26):
+            assert "ProvenanceOverwriteViolation" in " ".join(
+                result["truth_packet"].unresolved)
+
+    WHY: Ruling 33 (6) rules this exact case in as many words - "Structural-
+    violation output (Ruling 25) maps to WITHHOLD with the violation carried in
+    `unresolved` - her guard firing is truth content, not a rendering choice."
+    A WITHHOLD renders a fixed string that structurally cannot contain the
+    content (hail._render_silent takes one enum; the packet is not in its
+    scope), so the violation type CANNOT appear in result["output"] any more.
+
+    NOTHING WAS WEAKENED. Ruling 25's three requirements are each still pinned:
+    the loud field (test_a_structural_violation_is_not_flattened_into_errors),
+    the durable record (test_..._recorded_durably_and_does_not_crash), and
+    suppressed output - which is now suppressed HARDER than before, since the
+    old string still narrated the violation and the new one says nothing at
+    all. The violation moved from the spoken surface into the packet, which is
+    where Ruling 33 put it, and the assertion followed it there.
+    """
     aurea = _armed_pipeline()
 
     result = aurea.process_input("Honesty is pointless.", source="test")
@@ -532,7 +558,12 @@ def test_a_structural_violation_suppresses_normal_output():
     assert not result["output"].startswith("[ERROR:"), (
         "a guard firing must not read as a typo")
     assert "Echo processed" not in (result["output"] or "")
-    assert "ProvenanceOverwriteViolation" in result["output"]
+    assert "ProvenanceOverwriteViolation" in " ".join(
+        result["truth_packet"].unresolved), (
+        "the violation must remain legible - Ruling 33 moved it from the "
+        "rendered string into the packet, it did not drop it")
+    assert "ProvenanceOverwriteViolation" not in result["output"], (
+        "a WITHHOLD renders no content, including the violation's own name")
 
 
 def test_a_structural_violation_is_recorded_durably_and_does_not_crash():
