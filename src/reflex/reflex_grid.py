@@ -271,7 +271,7 @@ class GSR(SymbolicReflex):
     # GSR instance that already exists. There is deliberately no injectable
     # no-op sink - a forensic log you can silently disable is not a forensic
     # log (Ruling 11's standing refusal).
-    GSR_ALERT_PATH = "data/collapse_logs/gsr_alerts.jsonl"
+    GSR_ALERT_PATH = "data/runtime/collapse_logs/gsr_alerts.jsonl"
 
     def _default_alert(self, message: str, severity: str):
         """Default alert mechanism - writes to file."""

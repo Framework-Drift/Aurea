@@ -230,7 +230,7 @@ class TopologicalSpace:
     This is the substrate for all symbolic thought.
     """
     
-    def __init__(self, filepath: str = "data/topology/tca_map.json"):
+    def __init__(self, filepath: str = "data/runtime/topology/tca_map.json"):
         self.filepath = Path(filepath)
         
         # All nodes in the space

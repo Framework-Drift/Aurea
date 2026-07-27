@@ -23,7 +23,7 @@ class VeiledThread(SuspensionSystem):
     - Resonant content lacking structural support
     """
     
-    def __init__(self, capacity: int = 100, filepath: str = "data/suspension/veiled_thread.json"):
+    def __init__(self, capacity: int = 100, filepath: str = "data/runtime/suspension/veiled_thread.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.VEILED
         self.filepath = Path(filepath)

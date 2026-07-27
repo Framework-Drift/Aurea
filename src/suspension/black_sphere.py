@@ -27,7 +27,7 @@ class BlackSphere(SuspensionSystem):
     It orbits perpetually, exerting gravitational influence on nearby processing.
     """
     
-    def __init__(self, capacity: int = 30, filepath: str = "data/suspension/black_sphere.json"):
+    def __init__(self, capacity: int = 30, filepath: str = "data/runtime/suspension/black_sphere.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.BLACK_SPHERE
         self.filepath = Path(filepath)

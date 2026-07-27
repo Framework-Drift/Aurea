@@ -314,7 +314,7 @@ class AureaTest:
         # Save test results
         print("\n💾 Saving test results...")
         self.save_results()
-        print("Results saved to data/test_results.json")
+        print("Results saved to data/runtime/test_results.json")
         
         print("\n" + "═"*60)
         print("TEST COMPLETE")
@@ -322,7 +322,7 @@ class AureaTest:
     
     def save_results(self):
         """Save test results to file."""
-        results_path = Path("data/test_results.json")
+        results_path = Path("data/runtime/test_results.json")
         results_path.parent.mkdir(parents=True, exist_ok=True)
         
         with open(results_path, 'w') as f:

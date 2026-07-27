@@ -194,7 +194,7 @@ class SAE:
     # path is a CLASS ATTRIBUTE or an `__init__` default - the only two shapes
     # `tests/conftest.py` can reach - and it is resolved at WRITE time so a
     # redirect binds even for an already-constructed SAE.
-    RESTART_LOG_PATH = "logs/sae_restarts.jsonl"
+    RESTART_LOG_PATH = "data/runtime/logs/sae_restarts.jsonl"
 
     def __init__(self, codex: Codex, cae: Any = None,
                  ceiling: int = SELF_MUTATION_CEILING, racm: Any = None,

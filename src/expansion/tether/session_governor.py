@@ -139,7 +139,7 @@ class TetherProtocol:
         ore: ORE,
         budget: Optional[TetherBudget] = None,
         policy: Optional[TetherPolicy] = None,
-        telemetry_path: str = "data/collapse_logs/tether_telemetry.jsonl",
+        telemetry_path: str = "data/runtime/collapse_logs/tether_telemetry.jsonl",
         on_escalate: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         on_suspend: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         on_abort: Optional[Callable[[str, Dict[str, Any]], None]] = None,

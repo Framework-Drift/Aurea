@@ -23,7 +23,7 @@ class CSA(SuspensionSystem):
     - Symbolic toxicity identified
     """
     
-    def __init__(self, capacity: int = 50, filepath: str = "data/suspension/csa.json"):
+    def __init__(self, capacity: int = 50, filepath: str = "data/runtime/suspension/csa.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.CSA
         self.filepath = Path(filepath)

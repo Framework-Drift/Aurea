@@ -729,6 +729,157 @@ def test_no_durable_write_resolves_its_path_from_a_method_parameter_default():
     )
 
 
+RUNTIME_PREFIX = "data/runtime/"
+
+
+def _pathish(value) -> bool:
+    """A path-looking string constant. Prose is EXCLUDED by the space test.
+
+    The first draft of this scanner flagged `EchoNet._LOGIC_UNCOUNTABLE` - a
+    paragraph of explanatory prose containing a slash. A scanner that cries wolf
+    on documentation gets narrowed by whoever it annoys, so it excludes spaces
+    rather than growing an ignore-list.
+    """
+    return (isinstance(value, str) and " " not in value
+            and ("/" in value or value.endswith((".json", ".jsonl", ".log", ".txt"))))
+
+
+def find_default_paths(tree: ast.AST) -> list[tuple[int, str, str]]:
+    """(lineno, name, value) for every class-attribute and `__init__`-default
+    path constant - the two shapes `conftest.py` can reach, and therefore the
+    two shapes Ruling 39 governs."""
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant) \
+                        and _pathish(stmt.value.value):
+                    for t in stmt.targets:
+                        if isinstance(t, ast.Name):
+                            out.append((stmt.lineno, f"{node.name}.{t.id}",
+                                        stmt.value.value))
+        if isinstance(node, ast.FunctionDef) and node.name == "__init__":
+            a = node.args
+            pairs = list(zip(a.args[len(a.args) - len(a.defaults):], a.defaults))
+            pairs += [(x, d) for x, d in zip(a.kwonlyargs, a.kw_defaults) if d]
+            for arg, d in pairs:
+                if isinstance(d, ast.Constant) and _pathish(d.value):
+                    out.append((node.lineno, arg.arg, d.value))
+    return out
+
+
+def test_every_default_write_path_resolves_under_data_runtime():
+    """RULING 39 - ISOLATION BY CONSTRUCTION, NOT BY FIXTURE.
+
+    The fixture protects tests; nothing protects scripts, notebooks, or a real
+    run - and nothing SHOULD have to. Ruling 32 established that runtime state
+    never writes to a TRACKED path; 39 finishes the thought: it never writes to
+    an UNIGNORED path either, BY DEFAULT.
+
+    SEED PATHS ARE EXEMPT AND MUST STAY THAT WAY. They are READ-ONLY INPUT
+    (Ruling 32) with no writer at all; moving one under `data/runtime/` would be
+    the exact opposite remedy, and the exemption is by NAME so it cannot quietly
+    widen.
+    """
+    violations = []
+    for path in H.src_files():
+        tree = H.parse(path)
+        if tree is None:
+            continue
+        for lineno, name, value in find_default_paths(tree):
+            if name.endswith("SEED_PATH"):
+                assert not value.startswith("data/runtime/"), (
+                    f"{H.rel(path)}:{lineno} {name} was moved under runtime - "
+                    "a seed has NO writer and belongs on its tracked path")
+                continue
+            if not value.startswith(RUNTIME_PREFIX):
+                violations.append(f"{H.rel(path)}:{lineno} {name} = {value!r}")
+
+    assert not violations, (
+        "\n".join(violations) + "\n\n"
+        "  Every default write path in src/ resolves under `data/runtime/`\n"
+        "  (Ruling 39). `data/runtime/` is GITIGNORED, NOT EPHEMERAL -\n"
+        "  git-invisibility is not impermanence, and forensic logs keep their\n"
+        "  append-only Ruling 31 semantics wherever they live.\n")
+
+
+@pytest.mark.parametrize("source", [
+    "class C:\n    LOG = 'logs/a.jsonl'\n",
+    "class C:\n    def __init__(self, p='data/suspension/x.json'):\n        pass\n",
+    "class C:\n    ALERTS = 'data/collapse_logs/x.jsonl'\n",
+])
+def test_the_runtime_prefix_scanner_actually_fires(source):
+    """Fed a violation, per the scanner-fires precedent."""
+    found = find_default_paths(ast.parse(source))
+    assert found and not any(v.startswith(RUNTIME_PREFIX) for _l, _n, v in found)
+
+
+def test_an_unfixtured_full_pass_leaves_the_tree_clean():
+    """RULING 39's BEHAVIORAL HALF, and the one that would have caught the
+    original defect.
+
+    Runs a REAL `AureaCore` pass with the autouse fixture's redirects UNDONE -
+    which is the whole point: the fixture is what hides this class of defect,
+    so the assertion has to step outside it (Ruling 32's recorded stratum).
+    `git status --porcelain` empty is the assertion.
+
+    Before Ruling 39 this left `data/suspension/`, `data/topology/` and
+    `data/test_results.json` untracked in the tree on every script run, and
+    appended to the real forensic logs - the fixture protects tests, and
+    nothing protected anything else.
+
+    IT CLEANS UP AFTER ITSELF, and that is not fastidiousness: CI asserts
+    `data/runtime/` is EMPTY after the suite, which is what catches a store
+    added without a `conftest.py` redirect. This test deliberately writes there
+    with the REAL defaults, so it removes exactly the files it created and
+    leaves any that were already present.
+    """
+    import subprocess
+    from src.aurea_core import AureaCore
+
+    root = H.repo_root()
+    runtime = root / "data" / "runtime"
+
+    def _snapshot():
+        return {p for p in runtime.rglob("*") if p.is_file()} if runtime.exists() else set()
+
+    pre_runtime = _snapshot()
+    before = subprocess.run(["git", "status", "--porcelain"], cwd=root,
+                            capture_output=True, text=True).stdout
+
+    core = AureaCore()
+    core.process_input("A claim that runs the whole pass.")
+    core.save_state()
+
+    after = subprocess.run(["git", "status", "--porcelain"], cwd=root,
+                           capture_output=True, text=True).stdout
+
+    for created in _snapshot() - pre_runtime:
+        created.unlink(missing_ok=True)
+    for d in sorted((p for p in runtime.rglob("*") if p.is_dir()),
+                    key=lambda p: -len(p.parts)) if runtime.exists() else []:
+        if not any(d.iterdir()):
+            d.rmdir()
+    if runtime.exists() and not pre_runtime and not any(runtime.iterdir()):
+        runtime.rmdir()
+
+    assert after == before, (
+        "an unfixtured AureaCore pass dirtied the working tree:\n"
+        f"{set(after.splitlines()) - set(before.splitlines())}\n"
+        "Every default write path must resolve under `data/runtime/` (Ruling 39).")
+
+
+def test_the_runtime_prefix_scanner_ignores_prose():
+    """DEFECT WATCHED: flagging a docstring that happens to contain a slash.
+
+    This is not hypothetical - it fired on `EchoNet._LOGIC_UNCOUNTABLE` during
+    the Ruling 39 sweep.
+    """
+    prose = ("class C:\n"
+             "    NOTE = 'logic reads the claim/text: not a path at all'\n")
+    assert find_default_paths(ast.parse(prose)) == []
+
+
 @pytest.mark.parametrize("source", [
     "def save(self, filepath='data/x.json'):\n"
     "    with open(filepath, 'w') as f:\n        f.write('x')\n",

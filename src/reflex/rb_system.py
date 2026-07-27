@@ -121,7 +121,7 @@ class RBSystem:
     # every RBSystem - including ones modules build internally - somewhere
     # disposable. There is deliberately NO injectable no-op sink: a forensic
     # log you can silently disable is not a forensic log. Redirect the path.
-    DEFAULT_LOG_PATH = "logs/reflex_behavior.jsonl"
+    DEFAULT_LOG_PATH = "data/runtime/logs/reflex_behavior.jsonl"
 
     # COINED (Ruling 11, 2026-07-21): canon names the durability tiers but no
     # buffer magnitude. One grid pressure cycle yields single-digit RB entries

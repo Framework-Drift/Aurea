@@ -136,7 +136,7 @@ class AureaCore:
     # construction (the RBSystem.DEFAULT_LOG_PATH shape) so the suite can
     # REDIRECT it into tmp - there is deliberately no injectable no-op sink,
     # because a forensic log you can silently disable is not a forensic log.
-    STRUCTURAL_LOG_PATH = "logs/structural_violations.jsonl"
+    STRUCTURAL_LOG_PATH = "data/runtime/logs/structural_violations.jsonl"
 
     # Ruling 34 res.7: was a method-parameter default on save_state/load_state -
     # the ONE path shape `conftest.py` cannot reach, and it pointed outside
