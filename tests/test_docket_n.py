@@ -658,13 +658,30 @@ def test_the_owners_own_write_paths_still_reach_the_record(scars):
     public read accessor and mutated what came back. Snapshotting the accessor
     without re-pointing that lookup at the record would make the owner's own
     write vanish silently - the worst possible outcome of this change, and
-    invisible to every other test in the suite."""
+    invisible to every other test in the suite.
+
+    VOCABULARY UPDATED 2026-07-27 (Ruling 37 (2)) - the ASSERTION IS UNCHANGED
+    IN FORCE, only in spelling. Recorded per the Ruling-14 precedent:
+
+        OLD: assert scars.get_scar(scar_id).decay_state == "retired"
+             assert scars.scars[1].decay_state == "retired", "the RECORD changed"
+        NEW: the same two assertions against `DecayState.DORMANT`.
+
+    WHY: Ruling 37 gave `decay_state` a typed closed vocabulary and ruled that
+    `"retired"` maps INTO it rather than surviving as a fifth state outside it.
+    The pin still asserts exactly what it always did - that the owner's write
+    reached the RECORD and not a snapshot - and it would still go red under the
+    fail-silent defect it was written for. The literal moved because the RULING
+    moved, not because the test was inconvenient.
+    """
+    from src.filtration.scar_management import DecayState
+
     scar_id = scars.scars[1].id
 
     assert scars.decay_scar(scar_id) is True
 
-    assert scars.get_scar(scar_id).decay_state == "retired"
-    assert scars.scars[1].decay_state == "retired", "the RECORD changed"
+    assert scars.get_scar(scar_id).decay_state == DecayState.DORMANT
+    assert scars.scars[1].decay_state == DecayState.DORMANT, "the RECORD changed"
     assert len(scars.get_active_scars()) == 1
     assert scars.decay_scar("no-such-scar") is False
 

@@ -64,13 +64,24 @@ def _sae(tmp_path, name="epoch.json", **kw):
                runtime_path=str(tmp_path / name), **kw)
 
 
-# The obligations `_spend_full_budget` actually records. NOTE the asymmetry and
-# that it is PRE-EXISTING, not introduced here: a bare `authorize()` mints a
-# token and spends a slot but records NO touched lineage - only the three
-# counted-class methods call `_touch`. So the third spend below is invisible to
-# the settle condition. Flagged in the report; deliberately not "fixed" here,
-# because making `authorize` touch would change what closes an epoch.
-_SPENT_LINEAGES = {"scar-a", "scar-b"}
+# The obligations `_spend_full_budget` records. ALL THREE, since Ruling 37 (4).
+#
+# SUPERSEDED 2026-07-27 (Ruling 37 part 4), old text verbatim because it
+# described a real defect that this constant's value used to encode:
+#
+#   "NOTE the asymmetry and that it is PRE-EXISTING, not introduced here: a
+#    bare `authorize()` mints a token and spends a slot but records NO touched
+#    lineage - only the three counted-class methods call `_touch`. So the third
+#    spend below is invisible to the settle condition. Flagged in the report;
+#    deliberately not "fixed" here, because making `authorize` touch would
+#    change what closes an epoch."
+#
+# It DOES change what closes an epoch, and Ruling 37 ruled that change correct:
+# a slot spent invisibly to the settle condition is BUDGET WITHOUT DEBT.
+# `_touch` now lives in `authorize()`, so the bare-`authorize` spend below
+# ("scar-c") records its obligation like every other. The flagged asymmetry is
+# closed; the value moved because the RULING moved.
+_SPENT_LINEAGES = {"scar-a", "scar-b", "scar-c"}
 
 
 def _spend_full_budget(sae):
@@ -201,7 +212,7 @@ def test_closure_discharges_what_settled_and_carries_what_did_not(tmp_path):
     assert sae.stabilization_event("scar_fermentation", lineage="scar-a") is True
     assert sae.epoch == 1 and sae.epoch_count == 0
 
-    assert sae.touched_lineages == {"scar-b"}, (
+    assert sae.touched_lineages == {"scar-b", "scar-c"}, (
         "closure erased obligations that never settled - scar-b and scar-c are "
         "still owed and must cross into the next epoch")
 
@@ -215,7 +226,7 @@ def test_the_carry_survives_a_restart_too(tmp_path):
 
     resumed = _sae(tmp_path)
     assert resumed.epoch == 1
-    assert resumed.touched_lineages == {"scar-b"}
+    assert resumed.touched_lineages == {"scar-b", "scar-c"}
 
 
 # =========================================================================
@@ -250,7 +261,7 @@ def test_anchor_consolidation_on_a_touched_lineage_does_close(tmp_path):
     _spend_full_budget(sae)
     assert sae.stabilization_event("anchor_consolidation", lineage="scar-b") is True
     assert sae.epoch == 1 and sae.epoch_count == 0
-    assert sae.touched_lineages == {"scar-a"}
+    assert sae.touched_lineages == {"scar-a", "scar-c"}
 
 
 # =========================================================================

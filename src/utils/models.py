@@ -14,7 +14,14 @@ class Scar:
     type: str = ""                # Symbolic type/category ("ethical", etc.)
     weight: float = 0.0
     created_at: datetime = field(default_factory=datetime.now)
-    decay_state: str = "active"   # active | dormant | fossil | locked
+    # Canon decay vocabulary (Lexicon section 3), owned and typed by
+    # `scar_management.DecayState` since Ruling 37:
+    #     active -> waning -> dormant   (v1)
+    #     fossilized | purged           (DECLARED, no v1 path)
+    # Stored as the member's string VALUE so persisted records stay plain JSON.
+    # This comment previously read "active | dormant | fossil | locked", which
+    # named neither the canon sequence nor anything the code wrote.
+    decay_state: str = "active"
     linked_doctrines: List[str] = field(default_factory=list)
     last_accessed: Optional[datetime] = None
     description: str = ""         # Human-readable meaning

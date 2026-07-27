@@ -5,6 +5,11 @@ Handles storage, access, and management of Scar objects.
 
 import copy
 import json
+# Ruling 37 (2): the canon decay vocabulary lives with its OWNER (SML). This
+# module reads it rather than re-declaring the strings - a second copy of a
+# closed vocabulary is a second definition free to drift from the first.
+# `scar_management` imports only `src.utils.models`, so there is no cycle.
+from src.filtration.scar_management import DecayState, normalize
 from src.utils.models import Scar
 from typing import List, Optional
 from datetime import datetime
@@ -117,7 +122,7 @@ class ScarLogicCore:
         Return all active scars, as SNAPSHOTS (Ruling 22).
         """
         return [self._snapshot(scar) for scar in self.scars
-                if scar.decay_state == "active"]
+                if normalize(scar.decay_state) is DecayState.ACTIVE]
 
     def get_scar(self, scar_id: str) -> Optional[Scar]:
         """
@@ -128,12 +133,25 @@ class ScarLogicCore:
 
     def decay_scar(self, scar_id: str) -> bool:
         """
-        Mark a scar as decayed/retired.
-        Returns True if decayed, False if not found.
+        Mark a scar as decayed. Returns True if decayed, False if not found.
+
+        RULING 37 (2): the bare `"retired"` literal this wrote is GONE - it maps
+        into the canon vocabulary as `DecayState.DORMANT` rather than surviving
+        as a fifth state outside it. `autonomy_index` already grouped the two
+        together, so nothing downstream changed meaning.
+
+        FLAGGED, AND DELIBERATELY NOT RESOLVED HERE: this is the ONE remaining
+        writer of `decay_state` outside SML. It is a MANUAL retire that predates
+        the decay owner; SML owns the SCHEDULED state machine. Two writers of one
+        field is exactly what Ruling 1 exists to prevent, and consolidating them
+        is a small ruling rather than an implementation choice - this method is
+        load-bearing for Ruling 22's fail-silent pin (`test_docket_n`), so
+        removing or re-routing it silently would take that guard with it.
+        Reported, not repaired.
         """
         scar = self._find(scar_id)      # Ruling 22: the owner writes the RECORD
         if scar:
-            scar.decay_state = "retired"
+            scar.decay_state = DecayState.DORMANT.value
             self.save_to_file()
             return True
         return False

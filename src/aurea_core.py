@@ -6,6 +6,7 @@ Orchestrates the flow: Input -> SPL -> EchoNet -> Reflexes -> Scars -> Output
 from src.perception.spl import SPL
 from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 from src.filtration.scar_logic_core import ScarLogicCore
+from src.filtration.scar_management import SML
 from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
@@ -17,7 +18,7 @@ from src.expansion.nova import (NovaEngine, FermentationStatus, StoreFragment,
                                 UngroundedFragmentViolation)
 from src.reflex.reflex_grid import ReflexGrid, UngatedReflexViolation
 from src.reflex.sbsre import SBSRE, LoopOutcome
-from src.identity.compass import CompassStabilityEngine
+from src.identity.compass import ANCHOR_DRIFT_CAP, CompassStabilityEngine
 from src.identity.ril import RIL
 from src.identity.psi import PSI
 from src.output.hail import HAIL
@@ -192,6 +193,12 @@ class AureaCore:
         # no longer restores mutation budget: the ceiling, the unsettled
         # lineages and the stasis clock all cross the process boundary.
         self.sae = SAE(codex=self.codex, racm=self.reflex_grid.racm)
+
+        # SML (Ruling 37): the DECAY OWNER, and the sender that finally makes an
+        # epoch closeable. Constructed after SAE because it EMITS to it - SML
+        # calls `stabilization_event`; SAE never polls SML, because the
+        # budget-holder must not be the judge of its own debts (Ruling 37 (5)).
+        self.sml = SML(scar_core=self.scar_core, sae=self.sae)
 
         self.ore = ORE()
         # Ruling 33 Stage 2. ORE resolves the verdict; HAIL renders it. HAIL is
@@ -408,6 +415,14 @@ class AureaCore:
         # count; a cycle in which one executed resets it.
         self.sae.advance_cycle()
 
+        # SML symbolic-cycle advance (Ruling 37). THE SAME SITE, deliberately:
+        # one pipeline pass is one symbolic cycle, and driving TCAML, SAE and
+        # SML from a single place is what stops three clocks drifting apart.
+        # This is the call that can close an epoch - a scar that has been quiet
+        # for a full canon horizon cools out of ACTIVE, and if its lineage is
+        # one SAE touched, SML emits the fermentation settle event.
+        self.sml.advance_cycle()
+
         try:
             # Step 1: Perception layer
             echo = self.spl.process_input(raw_input, source)
@@ -454,6 +469,20 @@ class AureaCore:
             # a shared field, stale across cycles and clobbered same-cycle by the later
             # GSR/scar_density calls below (Steps 4-5).
             result['reflex_responses'].extend(reading.reflex_responses)
+
+            # Ruling 37: the two compass-sourced halves of the settle contract.
+            #
+            # (a) DRIFT IS A DISTURBANCE. Past the canon cap the cycle is not
+            #     quiet for ANY scar - drift is a system-wide reading, so there
+            #     is no honest way to scope it. Delayed cooling holds the epoch
+            #     closed, which is the side to err on.
+            # (b) CONSOLIDATION IS OBSERVED, NEVER INDUCED (Ruling 15). CSE
+            #     reports that stability returned and HELD; it steers nothing.
+            if reading.drift > ANCHOR_DRIFT_CAP:
+                self.sml.note_drift_event()
+            result['consolidations'] = self.compass.observe_consolidation(
+                reading, self.sae)
+
             arbitrated_lock = next(
                 (r for r in reading.reflex_responses if r.output_blocked), None)
             if arbitrated_lock is not None:
@@ -540,6 +569,11 @@ class AureaCore:
                     if scar is not None:
                         result['scar_formed'] = scar
                         self.stats['scars_formed'] += 1
+                        # Ruling 37: a NEW scar on a lineage is a DISTURBANCE -
+                        # the cycle is not quiet for anything that scar touches,
+                        # and every affected count restarts. Fermentation
+                        # interrupted is fermentation restarted.
+                        self.sml.note_scar_formed(scar)
                         self.tca.place_scar(scar)
                         self.tca.topology.create_edge(
                             echo.id, scar.id, weight=collapse_result.pressure_generated)
@@ -1216,7 +1250,20 @@ class AureaCore:
         # Pressure signals: which doctrines does this scar bear on?
         signals: Dict[str, Dict[str, Any]] = {}
         pressure = float(getattr(collapse_result, 'pressure_generated', 0.0))
-        for doctrine in self.codex.view().values():
+        # RULING 38 (2026-07-27): `active()`, NOT `view()`. The Ruling 35
+        # principle applied to its last unreviewed consumer - the Codex owns
+        # what LIVE-AND-MUTABLE means, and a builder that admits locked ids is a
+        # second definition of eligibility drifting from the first.
+        #
+        # This closes the WASTE (dead signal entries for a locked doctrine that
+        # DRPAS, scanning `active()`, never looked up) and - the part that
+        # matters - the GATE: `_nova_proposals` uses `doctrine_id not in
+        # signals` as a membership check, so a locked doctrine can no longer
+        # ENTER the proposal path, INDEPENDENT of whether DRPAS upstream ever
+        # flags it. Defence in depth is the point, not the dead entry: the
+        # defect between two gates is nobody's defect until it is everybody's
+        # incident.
+        for doctrine in self.codex.active():
             touched = bool(set(doctrine.scar_links) & {scar.id}) or \
                       bool(set(scar.linked_doctrines or []) & {doctrine.id})
             signals[doctrine.id] = {

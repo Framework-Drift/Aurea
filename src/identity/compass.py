@@ -75,6 +75,17 @@ class Direction(Enum):
 
 # --- Thresholds. The two that matter are CANON; the rest are COINED. ---
 ANCHOR_DRIFT_CAP = 20.0        # CANON: >20° → escalation (RACM EscalationLogic, DEE §II)
+
+# Ruling 37-A (B). RECOVERED, not coined - the canon 5-cycle horizon, EIGHTH
+# reuse, registered in COINED_CONSTANTS.md ahead of this code. One full symbolic
+# horizon of HELD stability IS "new stability forms" (2a:75); a lull is shorter
+# than a horizon by definition of the horizon. DELIBERATELY the same magnitude
+# as SCAR_DECAY_CYCLES - inventing a different number for one of the two would
+# itself be the coining, and nothing in canon distinguishes the rates.
+#
+# STRICT, the SATURATION_HORIZON precedent: consolidation is observed on the
+# SIXTH consecutive stable cycle (`count > CONSOLIDATION_WINDOW`).
+CONSOLIDATION_WINDOW = 5
 ANCHOR_COLLAPSE_DEGREES = 25.0 # CANON: >25° → Anchor Collapse Reflex hard-kills (2c)
 OUTPUT_LOCK_DEGREES = 25.0     # COINED: "locks output if collapse risk exceeds threshold"
                                #   pinned to the Anchor Collapse line rather than inventing
@@ -160,6 +171,14 @@ class CompassStabilityEngine:
 
         self.baseline: Optional[List[float]] = None    # the orientation she started from
         self.history: List[CompassReading] = []
+
+        # Ruling 37 (3): the consolidation observer's counters. PROCESS STATE,
+        # deliberately NOT persisted - see `observe_consolidation`. CSE owns no
+        # store and gains none here: these are the observer's own eyes, not a
+        # record of anything.
+        self._stable_cycles = 0
+        self._consolidation_fired = False
+        self.consolidations: List[Dict[str, Any]] = []
 
     # =================================================================
     # READING THE ANCHORS  (derived from the owners, every time)
@@ -349,6 +368,93 @@ class CompassStabilityEngine:
     # =================================================================
     # DRIFT
     # =================================================================
+
+    # =================================================================
+    # RULING 37 (3) - THE CONSOLIDATION OBSERVER
+    # =================================================================
+
+    def observe_consolidation(self, reading: "CompassReading",
+                              sae: Any = None) -> List[str]:
+        """Report that disturbed orientation RETURNED AND HELD. Never induce it.
+
+        CONSOLIDATION IS OBSERVED, NEVER INDUCED - Ruling 15 is untouched by
+        this method. CSE already reads every input to the condition and owns no
+        store; observing-and-reporting extends its contract, whereas STEERING
+        toward stability would break it. Nothing here moves an anchor.
+
+        STABLE means all three, per Ruling 37 (3): drift back under
+        `ANCHOR_DRIFT_CAP`, ZERO collapsed anchors (the post-Ruling-36 read -
+        unsuccessored non-seed fossils only, so a metabolized fossil does not
+        block consolidation forever), and fallbacks not exhausted. ANY
+        disturbance resets the count: consecutive means consecutive.
+
+        ONCE PER EPISODE. An unbroken calm is ONE formation, not a pulse train -
+        re-firing requires a real disturbance-and-recovery, so the episode flag
+        clears on disturbance rather than on a timer.
+
+        THE COUNTER IS PROCESS STATE AND IS DELIBERATELY NOT PERSISTED.
+        A consolidation is WITNESSED by a running compass; Ruling 34's
+        continuity covers OBLIGATIONS (what she still owes), and an in-flight
+        observation interrupted by process death is an observation that did not
+        happen - the same reading that keeps SAE's within-cycle accumulators out
+        of its snapshot. FLAGGED as the one seam here most open to argument: the
+        opposite reading (persist the count) would let a restart complete a
+        stability window it never actually observed, which is restart-absolution
+        wearing the observer's clothes.
+        """
+        stable = (
+            reading.drift < ANCHOR_DRIFT_CAP
+            and not reading.disoriented
+            and not any(a.collapsed for a in reading.anchors.values())
+        )
+
+        if not stable:
+            self._stable_cycles = 0
+            self._consolidation_fired = False    # disturbance ENDS the episode
+            return []
+
+        self._stable_cycles += 1
+        if self._stable_cycles <= CONSOLIDATION_WINDOW:
+            return []
+        if self._consolidation_fired or sae is None:
+            return []
+
+        self._consolidation_fired = True
+        fired: List[str] = []
+        for lineage in sorted(getattr(sae, "touched_lineages", set()) or set()):
+            if not self._anchors_a_recovered_direction(lineage, reading):
+                continue
+            if sae.stabilization_event("anchor_consolidation", lineage):
+                fired.append(lineage)
+        self.consolidations.append({
+            "stable_cycles": self._stable_cycles,
+            "drift": reading.drift,
+            "lineages": fired,
+        })
+        return fired
+
+    def _anchors_a_recovered_direction(self, lineage: str,
+                                       reading: "CompassReading") -> bool:
+        """Does this touched lineage anchor one of the recovered directions?
+
+        The SAME lineage-key ambiguity SML documents: `touched_lineages` is
+        filled from `collapse_lineage`, which live call sites populate with a
+        SCAR id, while the anchors hold DOCTRINE ids. Both readings are checked
+        (Ruling 26's bidirectional shape) rather than one being guessed - a
+        wrong guess here fires no consolidation ever, silently.
+        """
+        members: set = set()
+        for anchor in reading.anchors.values():
+            members.update(anchor.members)
+        if lineage in members:
+            return True
+        if self.codex is None:
+            return False
+        for doctrine_id in members:
+            doctrine = self.codex.get(doctrine_id)
+            if doctrine is not None and lineage in (doctrine.scar_links or []):
+                return True
+        return False
 
     def _drift(self, vector: List[float]) -> float:
         """Angular divergence between where she points now and where she has been pointing.

@@ -288,6 +288,22 @@ class SAE:
 
         self.epoch_count += 1
         self._cycle_executed = True
+        # RULING 37 (4): EVERY SPENT SLOT CREATES A SETTLE OBLIGATION.
+        #
+        # `_touch` used to live at the FOUR counted-class call sites, which left
+        # a bare `authorize()` - how MSP Stage_2 spends a module-generation slot
+        # - spending budget while recording NO obligation. That is BUDGET
+        # WITHOUT DEBT: the epoch could close on fermentation of every VISIBLE
+        # lineage while an untracked spend rode through, which is
+        # restart-absolution's shape relocated from the process boundary to the
+        # CLOSURE boundary.
+        #
+        # The single SPEND site is now the single TOUCH site, so the two cannot
+        # drift apart. This CHANGES what closes an epoch - a module-generation
+        # spend now creates an obligation on its lineage - and that is the
+        # ruling's intent, not a side effect: module generation is a change she
+        # must metabolize like any other.
+        self._touch(collapse_lineage)
         cae_id = self._audit(mutation_class, target_id, collapse_lineage)
         # Ruling 34: the spend is durable AT THE MOMENT OF SPENDING. Persisting
         # only on an explicit save_state would leave a process kill restoring the
@@ -366,7 +382,6 @@ class SAE:
         new_form.last_mutated = datetime.now()
         committed = self.codex.commit(new_form, auth)
 
-        self._touch(collapse_lineage)
         self.history.append(record)
         return committed
 
@@ -439,7 +454,6 @@ class SAE:
             epoch=self.epoch,
             cae_id=auth.cae_id,
         ))
-        self._touch(collapse_lineage)
         return committed
 
     # =================================================================
@@ -461,7 +475,6 @@ class SAE:
             cae_id=auth.cae_id,
         )
         self.history.append(record)
-        self._touch(collapse_lineage)
         # NOTE: the reflex-side write executes in the Reflex Grid registry, which owns
         # the reflex objects. SAE authorizes; it does not reach into another store.
         # The `change` payload rides with the authorization to that owner.
@@ -489,7 +502,6 @@ class SAE:
             epoch=self.epoch,
             cae_id=auth.cae_id,
         ))
-        self._touch(collapse_lineage)
         return auth
 
     def authorize_module_retirement(self, module_id: str,
