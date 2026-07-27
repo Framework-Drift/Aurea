@@ -37,16 +37,20 @@ STORE_OWNERS: dict[str, str] = {
     "threads": "src/identity/ril.py",
     # Ruling 12 G4 (2026-07-21) put the Nova Echo Index in the ownership
     # tables; registered here 2026-07-22 (Ruling-13 pass) so the assertion is
-    # SCANNED, not just asserted. Trivially green while Nova is unwired -
-    # load-bearing the moment Stage 2 gives other modules a Nova handle.
+    # SCANNED, not just asserted. It was registered while Nova was unwired and
+    # was trivially green then; NOVA HAS BEEN WIRED SINCE 2026-07-24, so this
+    # is now LOAD-BEARING - `aurea_core` holds a Nova handle and must reach the
+    # index only through `erupt()`.
     "echo_index": "src/expansion/nova.py",
     # Ruling 27 / TCAML Stage 1 (2026-07-26). CLAUDE.md 2 has named TCAML the
     # sole writer of compass anchor state since before TCAML existed; the organ
     # now exists, so the claim becomes SCANNED rather than merely asserted.
     # CSE calls `anchor_feedback_update` / `trigger_anchor_realignment` - it
     # REPORTS what it measured and ASKS; it never reaches into the store and
-    # straightens the needle itself. Registered while TCAML is still unwired,
-    # the same way `echo_index` was registered before Nova Stage 2.
+    # straightens the needle itself. Registered while TCAML was still unwired,
+    # the same way `echo_index` was registered before Nova Stage 2 - and, like
+    # that one, NOW LOAD-BEARING: TCAML has been wired since 2026-07-26 and
+    # both RACM and CSE hold a handle to it.
     "anchor_state": "src/topology/tcaml.py",
     # Ruling 34 (2026-07-27) made SAE's epoch state DURABLE, which is what
     # turns it into a store rather than a counter. `touched_lineages` is the

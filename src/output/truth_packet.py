@@ -1,5 +1,9 @@
 """
-truth_packet.py - the ORE -> HAIL boundary object (Ruling 33, Stage 1).
+truth_packet.py - the ORE -> HAIL boundary object (Ruling 33). WIRED.
+
+The type landed 2026-07-26 and carries live traffic: every `process_input`
+exit builds one. The header used to carry a bare "Stage 1" label, which in this
+repo reads as "not wired yet".
 
 Canon/ruling: CLAUDE.md Ruling 3 (truth-effect cut) + Ruling 33 (the HAIL
 grounding contract, manifest fifth addendum 2026-07-26). This module holds the

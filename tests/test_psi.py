@@ -1,5 +1,10 @@
 """
-test_psi.py - Ruling 8 Stage 1: the PSI reflex face, ISOLATED (no Grid wiring yet).
+test_psi.py - Ruling 8: the PSI reflex face, pinned ISOLATED (no Grid in THIS FILE).
+
+Scope statement, not a status claim: PSI has been registered on the Grid by
+`aurea_core` since 2026-07-20, and its render directive reaches HAIL since
+2026-07-26. This file builds PSI directly so the isolated guarantees are the
+ones under test; `test_psi_arbitration.py` pins the wired behaviour.
 
 PSI is built directly with a real RIL (the actual sole-writer identity store, so the
 deep-snapshot guarantee under test is the real one) and a minimal scar-core stub whose

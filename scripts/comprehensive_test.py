@@ -69,14 +69,19 @@ class AureaTest:
             status = "SURVIVED ✓" if cr.passed else "COLLAPSED ✗"
             print(f"Collapse: {status}")
             
-            # Show dimension failures
-            if cr.contradictions:
-                dims = [c['dimension'] for c in cr.contradictions]
-                print(f"Failed Dimensions: {', '.join(dims)}")
-            
-            # Show tags
-            if cr.tags:
-                print(f"Tags: {', '.join(cr.tags)}")
+            # REPAIRED 2026-07-27 (docstring-sync pass). This block read
+            # `cr.contradictions` and `cr.tags`, which have not existed since
+            # the EchoNet rebuild - every run raised AttributeError here.
+            # CollapseResult's real shape is nets / failed_nets /
+            # pressure_type / reason (see echonet.py).
+            if cr.failed_nets:
+                print(f"Failed Nets: {', '.join(cr.failed_nets)}")
+
+            print(f"Verdict: {cr.verdict.value}")
+            if cr.pressure_type:
+                print(f"Pressure Type: {cr.pressure_type}")
+            if cr.reason:
+                print(f"Reason: {cr.reason}")
         
         # Scar formation
         if result['scar_formed']:

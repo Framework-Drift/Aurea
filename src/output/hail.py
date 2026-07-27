@@ -1,5 +1,9 @@
 """
-hail.py - HAIL++: the Human-Aligned Interaction Layer (Ruling 33, Stage 1).
+hail.py - HAIL++: the Human-Aligned Interaction Layer (Ruling 33). WIRED.
+
+Organ landed 2026-07-26 and was wired the same day: every `process_input` exit
+renders through `ORE.resolve_path()` -> `HAIL.render()`. The header used to
+carry a bare "Stage 1" label, which in this repo reads as "not wired yet".
 
 Canon: HAIL++ v2.0 (Symbolic Interface module) + Lexicon section 8.
 Ruling: CLAUDE.md Ruling 3 (truth-effect cut) + Ruling 33 (grounding contract).

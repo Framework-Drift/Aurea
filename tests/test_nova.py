@@ -10,7 +10,10 @@ These tests pin the grounding contract (CLAUDE.md 1 row 12):
   code path from elapsed cycles to MUTATED. The only writer of MUTATED is
   record_collapse_result(success=True) on an ELIGIBLE echo.
 
-No wiring is exercised here - Stage 1 has none. DO NOT weaken these tests.
+No wiring is exercised IN THIS FILE - it pins the organ in isolation, and that
+is its scope, not a claim about Nova. (This line used to read "Stage 1 has
+none"; Nova has been wired since 2026-07-24 - see `test_nova_stage2a.py` and
+`test_nova_stage2b.py`.) DO NOT weaken these tests.
 They pin an architect ruling.
 
 RULING 20 (2026-07-25) MOVED THE FIXTURE, NOT THE ASSERTIONS. An echo may now

@@ -1,0 +1,86 @@
+name: suite
+
+# The twenty-ninth entry's finding was narrow: with no `.github/`, the suite
+# baseline is verifiable only by local run and commit record. One green run
+# closes it. Deliberately minimal - no lint, no matrix, no coverage gate.
+# Adding one is a decision, not a default.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # -B / PYTHONDONTWRITEBYTECODE: the .pyc header stores source mtime at
+      # ONE-SECOND granularity, which has produced FALSE SURVIVORS in this
+      # repo's mutation runs. CI does not mutate, but the flag is free and the
+      # habit is the point.
+      - name: Full suite
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m pytest tests/ -q
+
+      - name: Invariants
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m pytest tests/invariants/ -v
+
+      # RULING 32 ENFORCED ON EVERY PUSH. The seed is READ-ONLY INPUT and has
+      # no writer; `data/runtime/` is the only write target. A suite run that
+      # modifies a seed is identity replacement, not log pollution, and it is
+      # exactly the failure a green test suite would not notice - the stores
+      # reload fine, they are just not hers any more.
+      #
+      # git blob hashes, not content diffs: byte-for-byte, and they are the
+      # same values the session reports carry.
+      - name: Seed integrity (Ruling 32)
+        run: |
+          set -e
+          expected_doctrines=80ff8579112da113dd82fb89f8c64b0d40e95c66
+          expected_scars=99891f58c36934cbf1a0cb51b8ecab4be5d1848f
+          expected_echoes=e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+          actual_doctrines=$(git hash-object data/doctrines.json)
+          actual_scars=$(git hash-object data/scars.json)
+          actual_echoes=$(git hash-object data/echoes.jsonl)
+
+          fail=0
+          for pair in \
+            "doctrines.json $expected_doctrines $actual_doctrines" \
+            "scars.json     $expected_scars     $actual_scars" \
+            "echoes.jsonl   $expected_echoes    $actual_echoes"
+          do
+            set -- $pair
+            if [ "$2" != "$3" ]; then
+              echo "SEED MODIFIED: $1"
+              echo "  expected $2"
+              echo "  actual   $3"
+              fail=1
+            else
+              echo "ok: $1 ($3)"
+            fi
+          done
+
+          # The suite must also leave no runtime state behind: `conftest.py`
+          # redirects every durable store into tmp, so anything appearing here
+          # means a store was added without a redirect (Ruling 31's rule).
+          if [ -d data/runtime ] && [ -n "$(ls -A data/runtime 2>/dev/null)" ]; then
+            echo "data/runtime/ is non-empty after the suite:"
+            ls -la data/runtime
+            fail=1
+          fi
+
+          exit $fail

@@ -1,5 +1,9 @@
 """
-test_tcaml.py - TCAML Stage 1 (organ only). Ruling 27.
+test_tcaml.py - the TCAML ORGAN, pinned in isolation. Ruling 27.
+
+Scope statement, not a status claim: TCAML has been wired into the pipeline
+since 2026-07-26. This file pins the organ's own guarantees; `test_tcaml_wiring.py`
+pins the wire. (The header used to read "TCAML Stage 1 (organ only)".)
 
 Every pin here is BEHAVIORAL (Ruling 17): it calls the function and asserts the
 bound. No test in this file asserts that a string appears in a source file. Each
@@ -253,8 +257,9 @@ def test_expiry_is_considered_first_in_the_housekeeping_pass():
 
     RED if any housekeeping step is moved above `ttl_expiry` in `tick()`.
 
-    HONEST LIMIT, REPORTED NOT PAPERED: in Stage 1 the only other housekeeping
-    step (`stability_recovery`) can never be DUE at the same time as an
+    HONEST LIMIT, REPORTED NOT PAPERED, and re-verified 2026-07-27 AFTER
+    wiring: the only other housekeeping step (`stability_recovery`) can never
+    be DUE at the same time as an
     expiry, because Rule 3's revoke-on-onset makes "lock held" and "status
     unhealthy" disjoint states. So priority is currently unfalsifiable by
     real competition and is pinned by ORDER instead. It becomes load-bearing

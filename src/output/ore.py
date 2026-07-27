@@ -8,19 +8,24 @@ with no verdict concept, `hail.py` was 0 bytes, and `process_input` decided
 expression with ONE boolean (`output_blocked`). Ruling 3 was, as the
 third-party audit said, runtime-vacuous. This module makes it executable.
 
-WHAT STAGE 1 ADDS (Ruling 33 (6), manifest fifth addendum 2026-07-26)
-----------------------------------------------------------------------
+WHAT RULING 33 ADDED (manifest fifth addendum 2026-07-26) - AND IT IS WIRED
+----------------------------------------------------------------------------
   * `resolve(...)  -> TruthPacket`   the typed boundary ORE hands HAIL.
   * `OutputPath` + `EXPRESSION_FOR_PATH`  the verdict-mapping table: every
     existing `process_input` output path -> EXACTLY ONE `ExpressionVerdict`.
   * `resolve_path(...)` derives the verdict from that table.
 
 The three `format_*` helpers are UNCHANGED and still work - `srg.py` and
-`session_governor.py` import this class, and Stage 1 breaks no caller.
+`session_governor.py` import this class, and the Ruling 33 work broke no caller.
 
-NOTHING HERE IS WIRED. `process_input` is untouched; no caller consults
-`EXPRESSION_FOR_PATH` yet. That is the PSI / Nova / TCAML staging precedent -
-build the organ, pin it, wire it in a separate stage under its own bar. The
+SUPERSEDED 2026-07-26 (Stage 2), AND THIS IS THE LINE THAT MATTERED MOST: this
+block used to read "NOTHING HERE IS WIRED. `process_input` is untouched; no
+caller consults `EXPRESSION_FOR_PATH` yet." IT IS WIRED. All ten
+`process_input` exits emit through `AureaCore._emit` -> `ORE.resolve_path()` ->
+`HAIL.render()`, and `result['output_blocked']` is READ FROM THE PATH CONTRACT
+at exactly one assignment site (AST-pinned). The staging REASONING it cited -
+build the organ, pin it, wire it in a separate stage under its own bar - was
+followed to completion; only the status sentence went stale. The
 table lives HERE rather than in the orchestrator because choosing the
 expression verdict IS the truth-effect decision, and Ruling 3 puts that in ORE.
 An `aurea_core` that picked verdicts inline would be the arbiter originating

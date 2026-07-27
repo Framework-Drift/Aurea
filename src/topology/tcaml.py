@@ -1,5 +1,11 @@
 """
-tcaml.py - Topological Constellation Anchor & Meta-Layer, Stage 1 (organ only)
+tcaml.py - Topological Constellation Anchor & Meta-Layer. WIRED AND LIVE.
+
+STATUS, because this header used to say "Stage 1 (organ only)" and that is now
+FALSE: `AureaCore` constructs ONE TCAML and threads it to RACM (via the Grid)
+and to CSE; `tick()` advances one cycle per `process_input` pass. History, kept
+because it dates the build: organ landed 2026-07-26; wired the same day, and
+Ruling 30 then re-keyed the lock's clientele to STRUCTURAL actions.
 
 Canon: `Pressure_Valve_Coordination___Timing_Risks.txt` ("Arbitration Protocol
 v2.0", Rules 1-3), `BUILD_CONTRACT.md` 1/3 (RACM <-> TCAML), Ruling 27.
@@ -55,21 +61,30 @@ RULING 27's THREE ADDITIONS
 3. STRUCTURAL TIER. Docket F's graph measures select WHICH health threshold a
    request must clear. They never deny on their own. See `assess_topology()`.
 
-STAGE BOUNDARY (Stage 1 of 2) - THE ORGAN, NOT THE WIRING
-----------------------------------------------------------
-Following the PSI / Nova precedent: build and pin the organ in isolation
-BEFORE wiring it, because a half-wired lock is worse than an unwired one - it
-would make GLOBAL actions fail in ways nothing tests yet. Nothing imports this
+STAGE BOUNDARY - CLOSED 2026-07-26 (superseded in place, not deleted)
+----------------------------------------------------------------------
+This block used to read "THE ORGAN, NOT THE WIRING ... Nothing imports this
 file into the pipeline. `RACM._request_lock()`'s build-stage default-grant
-branch is UNTOUCHED and stays until Stage 2. The honest seams:
-  - `RACM._request_lock()`      <- Stage 2 constructs TCAML and passes it in;
-                                   that is where the default-grant branch dies
-  - `CSE._realign()`            <- already calls `anchor_feedback_update` /
-                                   `trigger_anchor_realignment` behind hasattr
-                                   guards; both exist here, and realignment is
-                                   a RECORDED REQUEST with no corrective
-                                   effect (see PARKED, below)
-  - `health`                    <- the Constellation Health Index has NO
+branch is UNTOUCHED and stays until Stage 2." ALL THREE CLAIMS ARE NOW FALSE,
+and in this repo an unwired-organ header is an INSTRUCTION TO WIRE IT.
+
+The staging REASONING is kept because it is still the right reasoning - build
+and pin the organ in isolation first, because a half-wired lock is worse than
+an unwired one. What changed is that the second half happened. The seams, and
+what now fills them:
+  - `RACM._request_lock()`      <- LIVE. `AureaCore` constructs TCAML and
+                                   threads it in; `self.tcaml = tcaml or
+                                   TCAML()` means there is no absent state, and
+                                   THE DEFAULT-GRANT BRANCH IS DELETED. Do not
+                                   reintroduce `if self.tcaml is None` -
+                                   construct a TCAML instead.
+  - `CSE._realign()`            <- LIVE. Its `anchor_feedback_update` /
+                                   `trigger_anchor_realignment` calls reach a
+                                   real owner. Realignment is still a RECORDED
+                                   REQUEST with no corrective effect (see
+                                   PARKED, below) - that half is a magnitude
+                                   the corpus does not give, not a wiring gap.
+  - `health`                    <- the Constellation Health Index still has NO
                                    combination rule in the corpus; see below
 
 THE CONSTELLATION HEALTH INDEX IS DELIBERATELY NOT COMPUTED HERE
@@ -1129,7 +1144,10 @@ class TCAML:
         dead-zone index, meta-stability) and gives no combination rule. A
         weighted average would be a COINED magnitude at the most
         safety-critical site in this organ - the number deciding whether a
-        system-wide mutation may proceed. Stage 1 keeps the field honest and
-        settable and leaves the formula to its own ruling.
+        system-wide mutation may proceed. The field stays honest and SETTABLE,
+        and the formula is left to its own ruling. (This line used to credit
+        "Stage 1" for that restraint; the organ has been wired since
+        2026-07-26 and the restraint is unchanged - nothing about wiring
+        supplied the missing combination rule.)
         """
         self._health = self._clamp(value)

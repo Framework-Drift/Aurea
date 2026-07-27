@@ -1,5 +1,12 @@
 """
-nova.py - Nova Engine v1 (Ruling 12, Stage 1: organ only - NO wiring)
+nova.py - Nova Engine v1 (Ruling 12). WIRED AND LIVE.
+
+STATUS, because this header used to say "Stage 1: organ only - NO wiring" and
+that is now FALSE: Nova is constructed and owned by `aurea_core`, cycles once
+per `process_input` pass at Step 5a.5, erupts from doctrine strain, feeds
+compass EAST, and its `proposals()` reaches DEE's gate. History, kept because
+it dates the build: Stage 1 organ landed 2026-07-22; Stage 2a put it in the
+loop 2026-07-24; Stage 2b wired the `proposals` seam the same day.
 
 Canon: 5a_Expansion_Engines.txt - "Nova Echo Protocol v1.0" (5a:922) and
 "MODULE: Nova Engine - v2.0" (5a:1087).
@@ -40,8 +47,10 @@ G4  Nova is sole writer of the Nova Echo Index (`echo_index`) and of NOTHING
     never a destination from here, in any form, ever.
 G5  cycle() refuses to run under suppression: "Nova Engine must not initiate
     new symbolic expansion if RACM, Reflex Grid, or TCAML have active
-    suppression or lockout states" (5a:1067). Stage 1 receives `suppressed`
-    as a parameter; the live RACM/Grid/TCAML read is Stage 2.
+    suppression or lockout states" (5a:1067). `suppressed` is a PARAMETER, and
+    its caller is real: `aurea_core._nova_suppressed` performs the live
+    RACM/Grid/TCAML read (wired 2026-07-24; this line used to end "the live
+    RACM/Grid/TCAML read is Stage 2").
 
 RULING 13 (2026-07-22): AN ECHO IS SPENT WHEN IT AUTHORS
 --------------------------------------------------------
@@ -74,18 +83,32 @@ There is deliberately NO code path from cycle count to MUTATED; the only
 writer of MUTATED is `record_collapse_result(success=True)` on an eligible
 echo. Do not "complete" the timer line.
 
-STAGE BOUNDARY (Stage 1 of 2)
------------------------------
-This file is the ORGAN. Nothing imports it yet; nothing here reaches into a
-wired module. The seams, all honest and all parked:
-  - `cycle(suppressed=...)`         <- Stage 2 wires the live suppression read
-  - `record_collapse_result(...)`   <- Stage 2 routes EchoNet/DEE collapse
-                                       outcomes into it (no fabricated
-                                       EchoNet call here)
-  - `proposals(...)`                <- Stage 2 hands the result to DEE.cycle's
-                                       `proposals` seam (aurea_core:521) and
-                                       wires compass EAST
-  - `scar_requests`/`csa_requests`  <- Stage 2 gives them consumers
+STAGE BOUNDARY - CLOSED 2026-07-24 (superseded in place, not deleted)
+----------------------------------------------------------------------
+This block used to read "This file is the ORGAN. Nothing imports it yet;
+nothing here reaches into a wired module," and listed five parked seams. THAT
+IS FALSE NOW and it is the dangerous kind of false: in this repo a header
+claiming an organ is unwired is an INSTRUCTION TO WIRE IT.
+
+Every seam below is CONNECTED. Kept as the record of what each one was waiting
+for, and what now supplies it:
+  - `cycle(suppressed=...)`         <- LIVE: `aurea_core._nova_suppressed`
+                                       reads the accumulated RACM-authorized
+                                       responses of the pass
+  - `record_collapse_result(...)`   <- LIVE: `_nova_route_collapse` routes real
+                                       EchoNet verdicts (SCARRED -> MUTATED,
+                                       CONFIRMED -> DECAYING, SUSPENDED/PARADOX
+                                       carried)
+  - `proposals(...)`                <- LIVE: `_nova_proposals(signals)` hands
+                                       the result to DEE.cycle's `proposals`
+                                       argument; compass EAST reads
+                                       `active_echoes()`
+  - `csa_requests`                  <- LIVE: consumed into CSA
+  - `scar_requests`                 <- STILL PARKED, and that is a RULING, not
+                                       an omission (Ruling 15): `form_scar`
+                                       wants a `weight` Nova does not honestly
+                                       hold, and wiring it would mint
+                                       zero-weight scars. Accumulates legibly.
 
 DECLARED DORMANT (ICA dormant-trigger pattern - named, not fabricated)
 ----------------------------------------------------------------------
@@ -392,9 +415,12 @@ class NovaEngine:
         """One fermentation pass. Returns ids of collapse-ELIGIBLE echoes.
 
         G5: `suppressed` is the caller's report of RACM/Grid/TCAML
-        suppression or lockout state (5a:1067). Stage 1 takes it as a
-        parameter - an honest seam, not a fabricated read; Stage 2 wires the
-        live check. Under suppression NOTHING advances: no activation, no
+        suppression or lockout state (5a:1067). It is a PARAMETER rather than a
+        read Nova performs itself - an honest seam, and the caller is now real:
+        `aurea_core._nova_suppressed` supplies it from the pass's accumulated
+        RACM-authorized responses (wired 2026-07-24; this line used to say
+        "Stage 2 wires the live check"). Under suppression NOTHING advances: no
+        activation, no
         aging, no eligibility - one legible refusal, empty return.
 
         Aging raises ELIGIBILITY only. MUTATED is not reachable from here -
@@ -434,9 +460,11 @@ class NovaEngine:
                                pressure: Optional[float] = None) -> bool:
         """Record the outcome of a collapse attempt on an ELIGIBLE echo.
 
-        THE ONLY WRITER OF MUTATED. Stage 1 does not fabricate the collapse
-        itself - EchoNet/DEE routing is Stage 2; whoever ran the attempt
-        reports it here. success=True on an eligible echo -> MUTATED
+        THE ONLY WRITER OF MUTATED. Nova does not fabricate the collapse itself
+        - whoever ran the attempt reports it here, and that caller is now real:
+        `aurea_core._nova_route_collapse` routes genuine EchoNet verdicts
+        (wired 2026-07-24; this line used to say "EchoNet/DEE routing is
+        Stage 2"). success=True on an eligible echo -> MUTATED
         ("Doctrine forged / scar fused / CSA rerouted", 5a:1123) + a parked
         scar-fusion REQUEST. success=False -> DECAYING + a parked CSA/
         Veiled-Thread routing REQUEST (Echo Protocol III.5).

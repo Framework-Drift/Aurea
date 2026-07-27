@@ -208,14 +208,21 @@ class AureaCore:
         # Initialize Topological Constellation Architecture
         self.tca = TCAIntegration()
 
-        # Nova (Ruling 12, Stage 2a): the doctrine AUTHOR, now constructed and
-        # owned here. Sole writer of `echo_index` (G4, scanned by the Ruling-1
-        # invariant); everything else it wants is a REQUEST list or a return
-        # value. ZERO MUTATION RISK in 2a: the `proposals` seam below stays
-        # None, so nothing Nova holds can reach SAE - doctrine mutation remains
-        # structurally impossible until 2b opens that path. Compass EAST reads
-        # this engine live (below), and it cycles once per pipeline pass
-        # (see _nova_cycle).
+        # Nova (Ruling 12): the doctrine AUTHOR, constructed and owned here.
+        # Sole writer of `echo_index` (G4, scanned by the Ruling-1 invariant);
+        # everything else it wants is a REQUEST list or a return value.
+        #
+        # SUPERSEDED 2026-07-24 (Stage 2b): this comment used to say "ZERO
+        # MUTATION RISK in 2a: the `proposals` seam below stays None, so
+        # nothing Nova holds can reach SAE". THE SEAM IS WIRED - see
+        # `_nova_proposals` and `_evolve_doctrine`. Doctrine mutation is now
+        # STRUCTURALLY POSSIBLE, gated by DEE's five CMTE criteria and SAE's
+        # Self-Mutation Ceiling rather than by an unconnected argument. (The
+        # rest of the superseded sentence, verbatim: "doctrine mutation remains
+        # structurally impossible until 2b opens that path.")
+        #
+        # Compass EAST reads this engine live (below), and it cycles once per
+        # pipeline pass (see _nova_cycle).
         self.nova = NovaEngine()
         # Ruling 14: G2's guarantee is CHECKED here, not assumed. A proposal
         # whose backing echo is not MUTATED-and-scar-linked is a G2 BREACH -
@@ -602,12 +609,16 @@ class AureaCore:
                     )
                     result['reflex_responses'].extend(density_responses)
 
-            # Step 5a.5: NOVA (Stage 2a). Cycle Nova ONCE here, AFTER all reflex
+            # Step 5a.5: NOVA. Cycle Nova ONCE here, AFTER all reflex
             # arbitration this pass (compass-read Step 2.5 + GSR cascade Step 4 +
             # scar-density Step 5 have all appended their RACM-authorized returns
             # to result['reflex_responses']) and BEFORE _evolve_doctrine (so the
-            # echo state Docket C reads is current). Ferment + erupt; never
-            # proposes - proposals stays None in _evolve_doctrine (2a boundary).
+            # echo state Docket C reads is current). Ferment + erupt only -
+            # THIS step never proposes. (Superseded 2026-07-24: the rest of
+            # this line used to read "proposals stays None in _evolve_doctrine
+            # (2a boundary)". It does not; `_evolve_doctrine` passes
+            # `_nova_proposals(signals)`. What remains true is the SCOPE of
+            # this step - proposals are emitted there, not here.)
             self._nova_cycle(result['reflex_responses'])
 
             # Step 5b: DOCTRINE EVOLUTION. A new scar is pressure on everything it touches.
@@ -863,10 +874,21 @@ class AureaCore:
         return None    # SUSPENDED: unresolved is not the same as refuted. Carry it.
 
     def _nova_cycle(self, reflex_responses: List[Any]) -> None:
-        """Nova Stage 2a: one fermentation-and-eruption pass, ZERO mutation risk.
+        """One fermentation-and-eruption pass. Nova proposes NOTHING in here.
 
-        Nova ferments its echoes and may erupt new ones; it NEVER proposes here
-        (proposals stays None in _evolve_doctrine). G5 first: if expansion is
+        Nova ferments its echoes and may erupt new ones; it NEVER proposes AT
+        THIS STEP - and that is a statement about this method's scope, verified
+        against the call graph: `_nova_cycle` calls `nova.cycle()` and the
+        eruption helper, and never `nova.proposals()`. Emission happens in
+        `_evolve_doctrine`, via `_nova_proposals`.
+
+        SUPERSEDED 2026-07-24 (Stage 2b): the parenthetical here used to read
+        "(proposals stays None in _evolve_doctrine)". That is FALSE now - the
+        seam is wired and doctrine mutation is structurally possible. The
+        method's own guarantee is unchanged; only the claim about its
+        neighbour was stale.
+
+        G5 first: if expansion is
         under an authorized suspension this cycle, cycle() records its own
         refusal and advances nothing, and we skip eruption too - deference is
         total, not cosmetic.
@@ -921,8 +943,11 @@ class AureaCore:
         against the index by origin) - a doctrine strained for N cycles yields
         one echo, not N. The full Nova Echo Crosscheck (5a:82) is NOT-YET-WIRED.
         EchoNet filtration residue, CSA fragments, and scar-conflict eruption
-        (all built and available) are ALSO NOT-YET-WIRED sources - Stage 2a
-        wires exactly one, honestly, per the contract.
+        (all built and available) are ALSO NOT-YET-WIRED sources - re-verified
+        2026-07-27 and still accurate: exactly ONE eruption source is wired,
+        honestly, per the contract. (Nova's collapse ROUTING was wired at
+        Stage 2b; that is a different seam - it reports outcomes, it does not
+        erupt echoes.)
         """
         existing = {(e.origin_kind, e.origin_id)
                     for e in self.nova.echo_index.values()}
