@@ -133,6 +133,26 @@ class DRPAS:
 
     Surveys the ACTIVE Codex for symbolic strain before contradiction fully surfaces.
     Detects; never decides.
+
+    RULING 35 (2026-07-27) - WHAT THE SCAN ACTUALLY ITERATES, superseding this
+    docstring's older heritage claim in place. The scan reads `codex.active()`,
+    the status-filtered surface, NOT `codex.view()`. It previously iterated the
+    whole live map with zero status checks anywhere, and against the real seed
+    that map contained a FALLEN doctrine and a LOCKED one.
+
+    That is not a reporting nicety. The stagnation trigger below makes an
+    unexamined doctrine a MUTATION-PRESSURE candidate, so the fallen doctrine
+    could be nominated for evolution - doctrine-evolution work built above this
+    would have evolved a fallen belief.
+
+        LOCKED STAYS LIVE AND READABLE. It is excluded from mutation SCANNING,
+        not from the store: `codex.get("Doctrine-0")` still returns it. SAE
+        §10.G's hard exclusions are the same principle one layer down - a
+        locked doctrine is not a mutation candidate.
+
+    `active()` is used rather than a local status filter deliberately: the
+    Codex owns what its status vocabulary means, and a sensor that re-derives
+    that is a second definition waiting to drift from the first.
     """
 
     def scan(self, codex: Any, signals: Optional[Dict[str, Dict[str, Any]]] = None
@@ -141,7 +161,9 @@ class DRPAS:
         flags: List[PressureFlag] = []
 
         # Reads the Codex snapshot. DRPAS is a sensor - it holds no write path.
-        for doctrine_id, doctrine in codex.view().items():
+        # Ruling 35: `active()` snapshots too, and filters out fallen/locked.
+        for doctrine in codex.active():
+            doctrine_id = doctrine.id
             sig = signals.get(doctrine_id, {})
             triggers = self._triggers_for(doctrine, sig)
             pressure = float(sig.get("pressure", 0.0))

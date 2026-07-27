@@ -48,6 +48,23 @@ STORE_OWNERS: dict[str, str] = {
     # straightens the needle itself. Registered while TCAML is still unwired,
     # the same way `echo_index` was registered before Nova Stage 2.
     "anchor_state": "src/topology/tcaml.py",
+    # Ruling 34 (2026-07-27) made SAE's epoch state DURABLE, which is what
+    # turns it into a store rather than a counter. `touched_lineages` is the
+    # load-bearing half - sae.py's own annotation calls it "what must settle to
+    # close the epoch" - and the Self-Mutation Ceiling is downstream of it, so a
+    # foreign write here is a write to AUREA's mutation budget.
+    #
+    # REGISTERED AS A PAIR with CLAUDE.md §2's ownership table (both-or-neither):
+    # the previous pass declined to add the table row alone, because a claim of
+    # ownership in prose with no scanner behind it is the completeness-claim
+    # defect in its purest form.
+    #
+    # `epoch`/`epoch_count`/`history` are deliberately NOT registered: `history`
+    # collides with EchoNet's and CSE's own `self.history` (three modules, one
+    # name), so registering it would flag correct code. Ruling 1's own warning -
+    # do not name a local collection after a canonical store - cuts both ways,
+    # and the honest move is to register the name that IS unique.
+    "touched_lineages": "src/expansion/sae.py",
 }
 
 

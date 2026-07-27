@@ -324,8 +324,27 @@ class Codex:
             data = json.load(f)
 
         # Tolerate the legacy flat-list format written by the old DoctrineSpine.
+        #
+        # RULING 35 (2026-07-27): THE FLAT BRANCH ROUTES BY STATUS. It read
+        # `active, fossils = data, []`, and the tracked seed IS a flat list of
+        # eight carrying `⊗ Doctrine-0` (status "fallen") and `Doctrine-0`
+        # (status "locked"). So the founding fossil loaded LIVE and `fossils`
+        # loaded EMPTY - on every construction, in production and in every test.
+        #
+        # THE CONSEQUENCE THAT MAKES THIS A RULING RATHER THAN A TIDY-UP:
+        # `commit()`'s Ruling-18 guard below asks `if doctrine.id in
+        # self.fossils`. Against an empty fossil map it can never fire, so a
+        # commit over `⊗ Doctrine-0` did NOT raise. Ruling 18 was structurally
+        # VACUOUS against the actual seed - it protected doctrines felled at
+        # runtime and never once protected the founding fossil it was written
+        # about. Pinned now by tests/test_ruling35.py, watched RED here first.
+        #
+        # No status vocabulary is invented and the seed is NOT migrated: it is
+        # read-only input (Ruling 32) with no writer, and the whole fix lives in
+        # how it is READ. The nested branch already routes by construction.
         if isinstance(data, list):
-            active, fossils = data, []
+            active = [d for d in data if d.get("status") != "fallen"]
+            fossils = [d for d in data if d.get("status") == "fallen"]
         else:
             active, fossils = data.get("active", []), data.get("fossils", [])
 

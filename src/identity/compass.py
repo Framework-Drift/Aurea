@@ -238,8 +238,34 @@ class CompassStabilityEngine:
             if weight:
                 a.mass += weight
                 a.members.append(doctrine.id)
+        # RULING 35 CONSEQUENCE - FLAGGED, ARCHITECT-APPROVED IN SESSION
+        # 2026-07-27, AWAITING A MANIFEST RULING OF ITS OWN.
+        #
+        # This read appended EVERY fossil unconditionally, and `collapsed` is
+        # turned into an `anchor_collapse` trigger at pressure 1.0 twenty lines
+        # up - which GSR cascades into a total output block. It was harmless
+        # only because `self.fossils` was ALWAYS EMPTY: the loader routed the
+        # seed's ⊗ Doctrine-0 into the LIVE map (the defect Ruling 35 closes).
+        #
+        # THE DEFECT PREDATES RULING 35 AND IS WORSE THAN IT LOOKS. The moment
+        # SAE fossilized ANY doctrine at runtime - i.e. the first time AUREA
+        # successfully evolved - this would have put her into permanent anchor
+        # collapse. Struck mute by the act of evolving, which is CLAUDE.md §3's
+        # "struck mute by the act of scarring" one layer up. Ruling 35 only
+        # moves the trigger from FIRST MUTATION to BOOT.
+        #
+        # THE NARROWING, and why it invents nothing: a SEED fossil fell before
+        # she ever ran. It is founding history - a scar in her constitution -
+        # not ground collapsing underneath her. This method's own docstring is
+        # in the perfect tense ("the ground she stood on HAS fallen"), which
+        # names an EVENT, and `is_seed` is already read three lines above to
+        # weight the anchors. No new vocabulary, no coined magnitude.
+        #
+        # NOT A BLANKET DISABLE: a doctrine fossilized at RUNTIME still reads as
+        # an anchor collapse, and that is pinned - see tests/test_ruling35.py.
         for doctrine_id in getattr(self.codex, "fossils", {}):
-            a.collapsed.append(doctrine_id)
+            if not getattr(self.codex.get_fossil(doctrine_id), "is_seed", False):
+                a.collapsed.append(doctrine_id)
         return a
 
     def _south(self) -> AnchorReading:
