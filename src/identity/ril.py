@@ -154,6 +154,16 @@ class IdentityThread(Enum):
 # RIL raises the pressure, it does not pick ICA's severity for it. Register in
 # Aurea Build/COINED_CONSTANTS.md the next time that file is in scope (this session is
 # ril.py-only).
+#
+# ^ THAT ASK IS DISCHARGED, and the sentence above is kept rather than deleted
+#   because it is the record of when the debt was taken on. SUPERSEDED 2026-07-28
+#   (Ruling 43 rider): `IDENTITY_FRACTURE_PRESSURE` HAS a full row in
+#   `Aurea Build/COINED_CONSTANTS.md`, in the RIL section, stamped
+#   `[coined 2026-07-19]` - i.e. it was registered the same day the note asked,
+#   and the note has been stale ever since. VERIFIED BY READING THAT FILE THIS
+#   PASS, not assumed: an in-file note that asks for something already done reads
+#   as an open debt forever, and a false open debt is the same defect as a false
+#   completeness claim wearing the opposite sign.
 IDENTITY_FRACTURE_PRESSURE = 0.75
 
 # Ruling 42 res.3. The tag the scar owner's SEED records carry to mark AUREA's

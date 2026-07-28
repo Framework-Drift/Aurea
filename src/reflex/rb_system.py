@@ -148,6 +148,30 @@ class RBSystem:
         self._seq = 0
 
     def next_id(self) -> str:
+        """RULING 44 - CYCLE-SCOPED ANNOTATION, EXEMPT FROM CONTINUITY STATE.
+
+        `_seq` restarts at 0 every process, so `RB-0001` is minted again into an
+        append-only log that DOES persist. That is a real id collision in a
+        durable file, and it is EXEMPT rather than unnoticed: an `RB-` id is an
+        annotation scoped to the cycle that produced it. Nothing resolves one -
+        `Decision.rb_entry_id` is read inside the cycle that created it and never
+        after - and every line carries a timestamp and full trigger context, so
+        two `RB-0001` entries from different eras stay distinguishable by what is
+        already written beside them.
+
+        Persisting this counter would give the OBSERVER a state file it can
+        refuse to load, and an observer that can refuse is an observer that can
+        gate the observed (Ruling 11). That trade is why the exemption exists.
+
+            THE EXEMPTION EXPIRES THE MOMENT ANY CODE RESOLVES AN `RB-` ID
+            ACROSS A CYCLE OR PROCESS BOUNDARY.
+
+        At that moment this counter becomes continuity state and falls under
+        Ruling 42 res.4 - the mint persists WITH the record, or a restart remints
+        over an id that already means something. Grep `RB-` before you write such
+        a reader; the surveyed classification is in the Ruling 42 report's
+        ID-generator sweep.
+        """
         self._seq += 1
         return f"RB-{self._seq:04d}"
 

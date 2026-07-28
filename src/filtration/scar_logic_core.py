@@ -9,7 +9,7 @@ import json
 # module reads it rather than re-declaring the strings - a second copy of a
 # closed vocabulary is a second definition free to drift from the first.
 # `scar_management` imports only `src.utils.models`, so there is no cycle.
-from src.filtration.scar_management import DecayState, normalize
+from src.filtration.scar_management import LIVE_STATES, DecayState, normalize
 from src.utils.models import Scar
 from typing import Any, List, Optional
 from datetime import datetime
@@ -119,10 +119,39 @@ class ScarLogicCore:
 
     def get_active_scars(self) -> List[Scar]:
         """
-        Return all active scars, as SNAPSHOTS (Ruling 22).
+        Return all LIVE scars, as SNAPSHOTS (Ruling 22).
+
+        RULING 43 - AND THIS IS THE CHANGE THAT NEEDED THE MOST CARE IN THAT
+        PASS, because it is the one Ruling 37 left a standing requirement about:
+        a decay-vocabulary migration must not silently change which scars this
+        returns. Three consumers depend on it - EchoNet's resonance net, EchoNet's
+        dynamic threshold, and the compass SOUTH anchor.
+
+        The filter reads `LIVE_STATES`, not `is ACTIVE`, and the difference is
+        exactly `LOCKED`. Once `normalize()` stopped mis-reading the seed's
+        literals as ACTIVE, a bare `is ACTIVE` test would have dropped BOTH
+        `Scar-0` (weight 100, the heaviest record she has) and `Δ91` (weight 99)
+        out of this set - stripping 199 of 835 SOUTH bearing mass and removing
+        The Origin Collapse from her resonance substrate, as a side effect of a
+        fix aimed at the decay schedule. That is precisely the silent, load-
+        bearing consequence Ruling 37's requirement exists to catch.
+
+        SO THE TWO RECORDS ARE TREATED DIFFERENTLY, ON PURPOSE, EACH WITH A
+        CITED AUTHORITY:
+          * `Scar-0` is LOCKED and STAYS. Ruling 35 already ruled what `locked`
+            means here - LIVE and readable, excluded from the change machinery
+            only. It resonates and carries bearing exactly as it did yesterday.
+          * `Δ91` is FOSSILIZED and LEAVES, and that is the one intended
+            behavioral change of the pass. A fossil has matured out of live
+            crisis: `autonomy_index` has grouped `"fossil"` with
+            `"retired"`/`"dormant"` since before SML existed, and Ruling 37
+            pinned the principle in terms - "cooling is exactly what 'stops
+            exerting live resonance' means." It is a DECISION ON THE RECORD, in
+            the same form Ruling 37 recorded WANING's departure, and it is
+            pinned.
         """
         return [self._snapshot(scar) for scar in self.scars
-                if normalize(scar.decay_state) is DecayState.ACTIVE]
+                if normalize(scar.decay_state) in LIVE_STATES]
 
     def get_scar(self, scar_id: str) -> Optional[Scar]:
         """

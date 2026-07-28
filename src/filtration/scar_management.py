@@ -70,6 +70,27 @@ dormant-trigger pattern: named so the vocabulary is complete and an emitter can
 arrive without editing this file, refused so no half-implementation invites use.
 A pin fails if a path appears without a ruling.
 
+THE CONSTITUTION DOES NOT COOL (Ruling 43)
+--------------------------------------------
+`normalize()`'s unknown-reads-ACTIVE fallback was swallowing the seed's own two
+literals - `Scar-0`'s `"locked"` and `Δ91`'s `"fossil"` - so both loaded as
+ACTIVE and both entered the schedule above. **The Origin Collapse, weight 100,
+the heaviest record in the seed and the one canon protects by name (5a:1391),
+was six quiet cycles from a WANING transition that emits a settle event and
+restores mutation budget.** Ruling 35's exact class, scar-side: a defect in how a
+recorded status is READ, invisible to every test that loads, fixed entirely on
+the read side. The seed is byte-identical.
+
+Two questions had collapsed into one predicate, and separating them is the whole
+fix (see `LIVE_STATES`):
+
+    IS THIS SCAR LIVE?            -> resonance, bearing, `get_active_scars()`
+    DOES IT COOL ON A SCHEDULE?   -> membership in `DECAY_SEQUENCE`
+
+LOCKED answers YES to the first and NO to the second. That is not a new idea: it
+is what Ruling 35 already ruled a `locked` DOCTRINE means - live and readable,
+excluded from mutation scanning only.
+
 WHAT THIS ORGAN DOES NOT OWN
 -----------------------------
 The SML/SDS split in the Lexicon is DEFERRED - one organ until two are needed
@@ -81,7 +102,7 @@ adjustment has no ruled schedule and inventing one is bar #5 again.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional
 
 from src.utils.models import Scar
 
@@ -94,7 +115,19 @@ SCAR_DECAY_CYCLES = 5
 
 
 class DecayState(str, Enum):
-    """The canon decay vocabulary (Lexicon section 3), closed.
+    """The decay vocabulary, closed. TWO SOURCES, AND BOTH ARE CANON.
+
+    Lexicon section 3 names the state MACHINE (`active -> waning -> dormant ->
+    fossilized | purged`). **The SEED names states of its own** - `data/scars.json`
+    carries `"locked"` on `Scar-0` and `"fossil"` on `Δ91` - and until Ruling 43
+    this enum knew only the first source.
+
+    RULING 43: A VOCABULARY THAT CANNOT READ ITS OWN FOUNDING RECORDS IS NOT
+    CLOSED, IT IS INCOMPLETE. `normalize()`'s unknown-reads-ACTIVE fallback was
+    swallowing both literals, which enrolled The Origin Collapse - the record
+    every other scar is downstream of, protected BY NAME at 5a:1391 - in the
+    scheduled decay machine, six quiet cycles from a WANING transition that emits
+    a settle event and restores mutation budget. The constitution must not cool.
 
     A `str` Enum, and that is a DELIBERATE DEPARTURE from `ExpressionVerdict` /
     `Countability`, which are pointedly non-`str`. Those are non-`str` because
@@ -114,10 +147,16 @@ class DecayState(str, Enum):
     # DECLARED, UNREACHABLE IN v1. `transition()` raises on either.
     FOSSILIZED = "fossilized"
     PURGED = "purged"
+    # RULING 43 (2). The SEED's own word for a record that is PROTECTED rather
+    # than cooled. A scar may ARRIVE locked; nothing may move it, and nothing may
+    # lock anything else - see `transition()`.
+    LOCKED = "locked"
 
 
-# The v1 state machine. FOSSILIZED / PURGED are absent BY CONSTRUCTION, not by a
-# check that could be forgotten.
+# The v1 state machine. FOSSILIZED / PURGED / LOCKED are absent BY CONSTRUCTION,
+# not by a check that could be forgotten - which is what makes Ruling 43 (4) true
+# WITHOUT touching `advance_cycle`: a state that is not a key here is skipped by
+# the loop's existing `state not in DECAY_SEQUENCE: continue`.
 DECAY_SEQUENCE: Dict[DecayState, DecayState] = {
     DecayState.ACTIVE: DecayState.WANING,
     DecayState.WANING: DecayState.DORMANT,
@@ -125,6 +164,29 @@ DECAY_SEQUENCE: Dict[DecayState, DecayState] = {
 
 # Transitions canon names and v1 has no ruled path for.
 UNREACHABLE_STATES = frozenset({DecayState.FOSSILIZED, DecayState.PURGED})
+
+# RULING 43 (3). States a scar may ARRIVE in but may never be MOVED OUT OF.
+IMMOVABLE_STATES = frozenset({DecayState.LOCKED})
+
+# RULING 43 - THE SEPARATION THIS PASS IS REALLY ABOUT.
+#
+# One predicate was answering two different questions:
+#     "is this scar LIVE?"          -> resonance, bearing, `get_active_scars()`
+#     "does this scar COOL on a schedule?" -> membership in DECAY_SEQUENCE
+# Conflating them is the shape of Ruling 30 (two senses of "scope" in one value)
+# and of Ruling 35 (a `locked` doctrine is LIVE and READABLE, excluded from
+# mutation SCANNING only). Ruling 35 already decided what `locked` MEANS in this
+# codebase, and this is that decision applied scar-side:
+#
+#     LOCKED IS LIVE. It exerts resonance and carries bearing exactly as before;
+#     it is excluded from the DECAY SCHEDULE and from nothing else.
+#
+# FOSSILIZED is deliberately NOT here, and that is the one intended behavioral
+# change: a fossil has matured out of live crisis. `autonomy_index` has grouped
+# `"fossil"` with `"retired"`/`"dormant"` as "survived and integrated" since
+# before this file existed, and Ruling 37 pinned the principle in terms -
+# "cooling is exactly what 'stops exerting live resonance' means."
+LIVE_STATES: FrozenSet[DecayState] = frozenset({DecayState.ACTIVE, DecayState.LOCKED})
 
 # RULING 37 (2): `"retired"` maps INTO the canon vocabulary rather than
 # surviving as a fifth state.
@@ -136,8 +198,20 @@ UNREACHABLE_STATES = frozenset({DecayState.FOSSILIZED, DecayState.PURGED})
 # set gets wired in later." This is that later. The mapping is therefore
 # BEHAVIOURALLY INERT for the one module that reads the distinction, which is
 # the strongest evidence available that it is the right reading.
+#
+# RULING 43 (1): `"fossil"` -> FOSSILIZED. The seed spells it short; the enum
+# spells it long. LOADING IS NOT TRANSITIONING - `transition()`'s refusal to
+# PERFORM fossilization governs runtime state CHANGES, not READS of a record that
+# arrived fossilized. That is the distinction Ruling 35 drew for `⊗ Doctrine-0`
+# (a fallen doctrine LOADS as a fossil; nothing fossilizes it at runtime),
+# applied to the scar store.
+#
+# `"locked"` needs no alias: Ruling 43 (2) made it a MEMBER, so it matches by
+# value. It is named here only so a reader looking for the seed's vocabulary
+# finds both literals in one place.
 LEGACY_DECAY_ALIASES: Dict[str, DecayState] = {
     "retired": DecayState.DORMANT,
+    "fossil": DecayState.FOSSILIZED,
 }
 
 
@@ -152,11 +226,24 @@ class DecayTransitionViolation(Exception):
 def normalize(raw: Any) -> DecayState:
     """Read any stored decay value as a canon state.
 
-    Handles the legacy `"retired"` literal and unrecognised strings alike:
-    anything unknown reads as ACTIVE, which is the CONSERVATIVE direction - an
-    unclassifiable scar is treated as still live, never as already cooled.
-    Cooling a scar nobody can classify would discharge an obligation on a record
-    we do not understand.
+    Handles the legacy literals and unrecognised strings alike: anything unknown
+    reads as ACTIVE, which is the CONSERVATIVE direction - an unclassifiable scar
+    is treated as still live, never as already cooled. Cooling a scar nobody can
+    classify would discharge an obligation on a record we do not understand.
+
+    RULING 43 - AND HERE IS WHAT THAT ARGUMENT MISSED:
+
+        "TREAT THE UNCLASSIFIABLE AS LIVE" IS CONSERVATIVE FOR *WOUNDS* AND
+        ANTI-CONSERVATIVE FOR *EXEMPTIONS*.
+
+    A wound read as live keeps an obligation open, which is safe. But `"locked"`
+    is not a wound - it is an EXEMPTION, and reading an exemption as live ENROLLS
+    the protected record in the very machine it was exempted from. The fallback
+    was doing the right thing to the wrong class of value, and the class it got
+    wrong was the constitution.
+
+    THE FALLBACK SURVIVES, AIMED. Genuine junk still reads ACTIVE and still
+    should. What changed is that the seed's own words are no longer junk.
     """
     if isinstance(raw, DecayState):
         return raw
@@ -332,11 +419,51 @@ class SML:
                 f"half-implementation the declaration exists to prevent."
             )
 
+        # RULING 43 (3), the TO direction. A DIFFERENT refusal from the one above
+        # and it carries a different reason, because one message covering two
+        # causes is Ruling 29's defect. FOSSILIZED/PURGED are refused because the
+        # path is UNBUILT. LOCKED is refused because locking is NOT A RUNTIME ACT
+        # AT ALL: it is a property a record ARRIVES with, declared in the seed.
+        # Were this permitted, any caller could lock any scar and thereby remove
+        # it from the settle machinery forever - a silent way to withhold the
+        # pressure that closes an epoch.
+        if new_state in IMMOVABLE_STATES:
+            raise DecayTransitionViolation(
+                f"nothing may transition a scar INTO '{new_state.value}' "
+                f"(Ruling 43 (3)). Locking is not something that happens to a "
+                f"scar at runtime - it is what the SEED declares about a record "
+                f"AUREA was founded on. There is no ruled path for minting a new "
+                f"exemption, and a scar locked at runtime would be permanently "
+                f"exempt from the decay schedule that closes epochs."
+            )
+
         scar = self._record(scar_id)
         if scar is None:
             raise DecayTransitionViolation(f"no scar '{scar_id}' to transition")
 
         was = normalize(scar.decay_state)
+
+        # RULING 43 (3), the FROM direction - and it is checked AFTER the record
+        # is resolved and BEFORE the write, so the refusal costs nothing and the
+        # record is never touched.
+        #
+        # AN OPERATOR CANNOT RETIRE THE ORIGIN COLLAPSE, AND THAT IS NOT A
+        # MISSING FEATURE.
+        #
+        # `manual_retire` reaches this line too, deliberately: Ruling 40's
+        # ACTIVE -> DORMANT jump is an operator statement that a record is
+        # finished, and the one record no operator gets to finish is the one
+        # every other scar is downstream of (5a:1391).
+        if was in IMMOVABLE_STATES:
+            raise DecayTransitionViolation(
+                f"scar '{scar_id}' is {was.value.upper()} and may not be "
+                f"transitioned to '{new_state.value}' (Ruling 43 (3)). An "
+                f"operator cannot retire The Origin Collapse, and that is not a "
+                f"missing feature - it is the protection canon names at 5a:1391. "
+                f"A locked record is READ, weighed and resonated against like any "
+                f"other; it is never moved."
+            )
+
         scar.decay_state = new_state.value
         self._quiet[scar_id] = 0               # the next transition starts fresh
 
