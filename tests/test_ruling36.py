@@ -42,6 +42,7 @@ from src.expansion.sae import SAE, MutationClass
 from src.identity.compass import CompassStabilityEngine
 from src.utils.models import Doctrine
 from tests.invariants import _ast as H
+from tests.proof_support import minimal_proof
 
 
 # =========================================================================
@@ -293,13 +294,31 @@ def test_lineage_still_accumulates_through_the_real_mutation_path(store):
 
     DEFECT WATCHED: this file's helpers setting `mutation_lineage` by hand and
     thereby testing its own fixture instead of the engine.
+
+    RULING 45 (2026-07-28), Ruling-14 precedent. Both calls gained a `proof`:
+
+        OLD: sae.mutate_doctrine("gen-A", Doctrine(...), collapse_lineage="scar-1")
+        NEW: the same call, plus `proof=minimal_proof(...)`.
+
+    WHY: `proof` is REQUIRED and has no default - an implicit one would be a
+    fabricated argument. NOT A WEAKENING: the assertion is unchanged, and it is
+    still asserted THROUGH THE REAL MUTATION PATH, which is this test's whole
+    subject. Adding a required argument to that path does not make the path less
+    real - if anything the chain now carries its own lineage twice, once in
+    `mutation_lineage` and once in each proof.
     """
     codex, sae = store
     _commit(codex, sae, "gen-A")
     sae.mutate_doctrine("gen-A", Doctrine(id="gen-B", name="B", created_at=datetime.now()),
-                        collapse_lineage="scar-1")
+                        collapse_lineage="scar-1",
+                        proof=minimal_proof("chain-robustness probe, generation B",
+                                            scar_lineage=("scar-1",),
+                                            ancestor_id="gen-A"))
     sae.mutate_doctrine("gen-B", Doctrine(id="gen-C", name="C", created_at=datetime.now()),
-                        collapse_lineage="scar-1")
+                        collapse_lineage="scar-1",
+                        proof=minimal_proof("chain-robustness probe, generation C",
+                                            scar_lineage=("scar-1",),
+                                            ancestor_id="gen-B"))
 
     assert codex.get("gen-C").mutation_lineage == ["gen-A", "gen-B"], (
         "SAE stopped accumulating lineage - direct containment is no longer "

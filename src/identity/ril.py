@@ -601,6 +601,52 @@ class RIL:
     # READ VIEWS - DEEP SNAPSHOTS ONLY
     # =================================================================
 
+    def identity_conflict(self, doctrine_id: str) -> bool:
+        """CMTE criterion 4: does RIL flag this doctrine as contradicting selfhood?
+
+        RULING 45. CMTE has asked `context.get("ril_identity_conflict")` since it
+        was written, and NOTHING HAS EVER SUPPLIED THE KEY - `aurea_core`'s
+        context builder passes `echo_origin` and nothing else, so criterion 4 has
+        passed by absence in every run AUREA has performed. This is the supplier.
+
+        GROUND IT OR ABSTAIN, and this method invents no heuristic beyond what the
+        threads already record. The VOID thread is, in this module's own words,
+        "RIL's own record of identity fractures it has detected - absence, not of
+        data, but of continuity: a belief that was identity-anchoring, gone." A
+        doctrine NAMED in one of those records is flagged BY RIL'S OWN RECORD;
+        there is nothing to infer.
+
+        So: True iff a VOID FRACTURE entry names this doctrine - either as the
+        successor whose arrival fractured identity (`doctrine_id`) or as the
+        anchored ancestor that fell (`fallen_ancestor`). Both are facts RIL wrote
+        down after grounding them on two observable checks (see the module
+        docstring's FRACTURE section); neither is re-derived here.
+
+        WHAT IS DELIBERATELY NOT CONSULTED:
+          * DISCONTINUITY entries (`record_type == "discontinuity"`) - those
+            record that a question was UNRESOLVABLE (Ruling 42's constitutional
+            origin), which is not a fracture and names no doctrine.
+          * anything about how RECENT, how HEAVY or how MANY. A count would need
+            a threshold, and that threshold would be a coined magnitude at a
+            mutation gate (section 9 standing bar #5).
+
+        ABSTAINS BY RETURNING FALSE, and the caller's absent-key path means the
+        same thing: no grounds is not a clean bill of health, it is silence. The
+        proof records that silence as ABSENT rather than PASS, which is where the
+        distinction is kept honest (`CriterionResult`).
+        """
+        if not doctrine_id:
+            return False
+        for entry in self.threads[IdentityThread.VOID]:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("record_type") == RECORD_TYPE_DISCONTINUITY:
+                continue
+            if doctrine_id in (entry.get("doctrine_id"),
+                               entry.get("fallen_ancestor")):
+                return True
+        return False
+
     def dominant_thread(self) -> Optional[IdentityThread]:
         """Whichever thread currently carries the most entries. COINED: the corpus
         names the five threads but does not define "dominant" as a magnitude, so this

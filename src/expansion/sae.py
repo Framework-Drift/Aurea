@@ -98,6 +98,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.doctrine.cae import CAE
+from src.doctrine.mutation_proof import DoctrineMutationProof, validate_proof
 from src.doctrine.codex import (
     Codex,
     CodexWriteViolation,
@@ -181,6 +183,13 @@ class MutationRecord:
     pre_state: Optional[Doctrine]
     epoch: int
     cae_id: Optional[str] = None
+    # RULING 45. Optional on the RECORD though required on the CALL, and the
+    # asymmetry is deliberate: only `mutate_doctrine` carries a proof, while
+    # `MutationRecord` also records reflex mutations and module generation. A
+    # record loaded from a state file written before this docket carries None,
+    # and that absence is A FACT ABOUT ITS ERA - those mutations really were
+    # performed without one - not a value to backfill.
+    proof: Optional[DoctrineMutationProof] = None
     executed_at: datetime = field(default_factory=datetime.now)
     reverted: bool = False
 
@@ -200,7 +209,17 @@ class SAE:
                  ceiling: int = SELF_MUTATION_CEILING, racm: Any = None,
                  runtime_path: str = "data/runtime/sae_epoch.json"):
         self.codex = codex
-        self.cae = cae                                  # append-only audit lineage
+        # RULING 45 - DEFAULT BY CONSTRUCTION. `cae or CAE()` follows RACM's
+        # `tcaml or TCAML()` idiom (Ruling 27) and it is what let the
+        # `if self.cae is None: return None` branch in `_audit` be DELETED rather
+        # than softened: there is no "CAE absent" state left to special-case.
+        # `aurea_core` injects ONE shared instance into SAE and DEE.
+        #
+        # Before this, that branch plus an unwired `aurea_core` meant canon
+        # 3a:111 - "no doctrine may be mutated, collapsed, or discarded without a
+        # CAE entry" - was a docstring above a soft return, and every `cae_id` in
+        # every real run was None.
+        self.cae = cae or CAE()                         # append-only audit lineage
         self.ceiling = ceiling
         # RACM owns the route to the reflex behavior log (CLAUDE.md §2: the RB
         # log's requesters are RACM and the Grid). SAE SOURCES the saturation
@@ -257,11 +276,14 @@ class SAE:
     # =================================================================
 
     def authorize(self, mutation_class: MutationClass, collapse_lineage: str,
-                  target_id: str = "") -> MutationAuthorization:
+                  target_id: str = "", **audit_extra: Any) -> MutationAuthorization:
         """Mint the single-use write token. This is where the ceiling BITES.
 
         Called directly by MSP Stage_2 for module-generation authorization, and
         internally by mutate_doctrine / mutate_reflex.
+
+        `audit_extra` rides into the CAE entry unchanged - `mutate_doctrine`
+        passes the `DoctrineMutationProof` through it (Ruling 45).
         """
         if not collapse_lineage:
             # AVT.017. A mutation with no scar behind it is not self-authorship;
@@ -304,7 +326,7 @@ class SAE:
         # ruling's intent, not a side effect: module generation is a change she
         # must metabolize like any other.
         self._touch(collapse_lineage)
-        cae_id = self._audit(mutation_class, target_id, collapse_lineage)
+        cae_id = self._audit(mutation_class, target_id, collapse_lineage, **audit_extra)
         # Ruling 34: the spend is durable AT THE MOMENT OF SPENDING. Persisting
         # only on an explicit save_state would leave a process kill restoring the
         # budget, which is the bypass this ruling exists to close.
@@ -327,15 +349,24 @@ class SAE:
             )
 
     def _audit(self, mutation_class: MutationClass, target_id: str,
-               lineage: str) -> Optional[str]:
-        """3a: no doctrine may be mutated, collapsed, or discarded without a CAE entry."""
-        if self.cae is None:
-            return None
+               lineage: str, **extra: Any) -> str:
+        """3a: no doctrine may be mutated, collapsed, or discarded without a CAE entry.
+
+        RULING 45: the `if self.cae is None: return None` branch that used to sit
+        here is GONE, and the return type is no longer Optional. The ledger is
+        constructed by default (see `__init__`), so there is no absent state to
+        return None for - and a None here was the exact shape of the protection
+        failing silently while its own docstring cited the canon forbidding it.
+
+        `extra` carries the `DoctrineMutationProof` on a doctrine mutation, so
+        the argument that forced the change is IN the audit entry.
+        """
         return self.cae.record(
             event=mutation_class.value,
             target=target_id,
             collapse_lineage=lineage,
             epoch=self.epoch,
+            **extra,
         )
 
     # =================================================================
@@ -343,8 +374,22 @@ class SAE:
     # =================================================================
 
     def mutate_doctrine(self, doctrine_id: str, new_form: Doctrine,
-                        collapse_lineage: str, reason: str = "re-pressure") -> Doctrine:
+                        collapse_lineage: str, proof: DoctrineMutationProof,
+                        reason: str = "re-pressure") -> Doctrine:
         """Execute a doctrine mutation. The ONLY path by which doctrine content changes.
+
+        RULING 45 - `proof` IS REQUIRED AND HAS NO DEFAULT.
+
+        That is the enforcement, and the absence of a default is the whole of it.
+        A default proof would be a FABRICATED ARGUMENT: every mutation would
+        carry one, so carrying one would mean nothing, and the field would
+        document the shape of an argument rather than the fact of one. A
+        proof-less call is UNWRITABLE - a `TypeError` at the call site - rather
+        than discouraged (CLAUDE.md section 3).
+
+        It is positioned BEFORE `reason` deliberately: `reason` is a sentence for
+        a human, `proof` is the argument, and a caller that supplies only the
+        sentence should not silently satisfy the signature.
 
         The ancestor is not overwritten. It is ⊗-marked and archived to the Fossil Layer
         with its scar trace intact, and the new version records what it descends from.
@@ -356,8 +401,13 @@ class SAE:
         mutation does not also spend a ceiling slot and a CAE entry on a write that
         never happened.
         """
+        # Ruling 45: the proof is checked with the OTHER pre-flight refusals, so
+        # an unsupportable argument costs no ceiling slot and no CAE entry -
+        # Ruling 24's spend/refuse boundary, extended to cover the new parameter.
+        validate_proof(proof)
         self._preflight(doctrine_id, new_form)
-        auth = self.authorize(MutationClass.MUTATE_DOCTRINE, collapse_lineage, doctrine_id)
+        auth = self.authorize(MutationClass.MUTATE_DOCTRINE, collapse_lineage,
+                              doctrine_id, proof=proof.as_dict())
         ancestor = self.codex.get(doctrine_id)
 
         record = MutationRecord(
@@ -368,6 +418,7 @@ class SAE:
             pre_state=ancestor,
             epoch=self.epoch,
             cae_id=auth.cae_id,
+            proof=proof,
         )
 
         if ancestor is not None:
@@ -862,6 +913,13 @@ class SAE:
                           if record.pre_state is not None else None),
             "epoch": record.epoch,
             "cae_id": record.cae_id,
+            # Ruling 45: ADDITIVE and OPTIONAL, so `STATE_VERSION` does NOT move.
+            # An older file simply has no `proof` key and its records load with
+            # `proof=None` - a truthful statement about mutations performed
+            # before proofs existed. Bumping the version would REFUSE those files
+            # (Ruling 42's version gate is a refusal), which would discard real
+            # epoch state to record the absence of a field that was never owed.
+            "proof": record.proof.as_dict() if record.proof is not None else None,
             "executed_at": record.executed_at.isoformat(),
             "reverted": record.reverted,
         }
@@ -877,6 +935,7 @@ class SAE:
             pre_state=Doctrine(**Codex._from_dict(pre)) if pre is not None else None,
             epoch=d.get("epoch", 0),
             cae_id=d.get("cae_id"),
+            proof=DoctrineMutationProof.from_dict(d.get("proof")),
             executed_at=datetime.fromisoformat(d["executed_at"]),
             reverted=d.get("reverted", False),
         )

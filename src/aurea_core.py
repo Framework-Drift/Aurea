@@ -7,6 +7,7 @@ from src.perception.spl import SPL
 from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
+from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
@@ -192,7 +193,13 @@ class AureaCore:
         # SAE RESUMES ITS EPOCH FROM DISK AT CONSTRUCTION (Ruling 34). A restart
         # no longer restores mutation budget: the ceiling, the unsettled
         # lineages and the stasis clock all cross the process boundary.
-        self.sae = SAE(codex=self.codex, racm=self.reflex_grid.racm)
+        # CAE (Ruling 45): the append-only audit ledger canon 3a:111 has required
+        # since before this code existed and which NOTHING WIRED until now. ONE
+        # shared instance, injected into both writers - SAE records executions,
+        # DEE records rulings and overrides, and neither writes the other's
+        # entries. Constructed BEFORE SAE because SAE takes it.
+        self.cae = CAE()
+        self.sae = SAE(codex=self.codex, cae=self.cae, racm=self.reflex_grid.racm)
 
         # SML (Ruling 37): the DECAY OWNER, and the sender that finally makes an
         # epoch closeable. Constructed after SAE because it EMITS to it - SML
@@ -275,6 +282,7 @@ class AureaCore:
             codex=self.codex,
             sae=self.sae,
             veiled_thread=self.veiled_thread,
+            cae=self.cae,               # Ruling 45: the SAME ledger SAE writes
             reflex_grid=self.reflex_grid,
         )
         # RIL: the identity terminus. Accumulates the five identity threads from what
@@ -1305,8 +1313,26 @@ class AureaCore:
         # so the ordinary case is unchanged: eligible doctrines FERMENT.
         proposals = self._nova_proposals(signals)
         proposal_map = proposals or {}
+        #
+        # RULING 45 - CRITERION 4 IS SUPPLIED AT LAST. `ril_identity_conflict`
+        # has been read by CMTE since CMTE was written and written by NOTHING,
+        # so criterion 4 passed by absence in every run. RIL answers it from its
+        # own VOID thread, ground-or-abstain: a doctrine named in a fracture RIL
+        # itself recorded is flagged; anything else is silence, not clearance.
+        #
+        # CRITERION 5 (`distortion_detected`) STAYS ABSENT, AND THE ABSENCE IS
+        # DECLARED HERE rather than left to be discovered. ASIS and EchoTrace are
+        # UNBUILT; a coined distortion flag would be false pressure at a mutation
+        # gate, and a hardcoded False would be Docket C's shape with the opposite
+        # sign - honest only until a detector arrives. The same reasoning
+        # `echo_resonance` already gets, two lines up. An unsupplied key reads as
+        # "not contradicted" inside CMTE, and the proof records it as ABSENT
+        # rather than PASS so the difference survives into the audit entry.
         context: Dict[str, Dict[str, Any]] = {
-            doctrine_id: {'echo_origin': self._echo_origin(doctrine_id, proposal_map)}
+            doctrine_id: {
+                'echo_origin': self._echo_origin(doctrine_id, proposal_map),
+                'ril_identity_conflict': self.ril.identity_conflict(doctrine_id),
+            }
             for doctrine_id in signals
         }
 

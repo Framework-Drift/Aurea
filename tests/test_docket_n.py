@@ -47,6 +47,22 @@ from src.expansion.nova import (FERMENTATION_ELIGIBILITY_CYCLES,
 from src.expansion.sae import SAE, MutationClass, MutationPreflightViolation
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.utils.models import Doctrine
+# RULING 45 (2026-07-28), Ruling-14 precedent. The FOUR `mutate_doctrine` calls
+# below each gained `proof=minimal_proof(...)`:
+#
+#     OLD: sae.mutate_doctrine("D-live", same_id, collapse_lineage="Δ-1")
+#     NEW: the same call, plus `proof=minimal_proof("<what forced it>")`.
+#
+# WHY: `proof` is REQUIRED and has no default, because an implicit default proof
+# would be a fabricated argument (Ruling 45 Part 2.2). A proof-less call is a
+# TypeError, which is the enforcement.
+#
+# NOT A WEAKENING. Every assertion in all four tests is unchanged in force and in
+# spelling - Ruling 24's three preflight refusals still fire, and the legitimate
+# path still executes. The helper's `preserved_invariants` default is ALL-ABSENT,
+# which is the TRUTHFUL record for a call that drives SAE directly and therefore
+# never ran CMTE; it claims nothing these tests did not do.
+from tests.proof_support import minimal_proof
 
 # Two REAL seed doctrines under real strain, with DISJOINT scar sets - which
 # is what makes the contamination assertion sharp. Verified against
@@ -392,7 +408,8 @@ def test_successor_may_not_wear_its_ancestors_id(executor):
                        created_at=datetime.now())
 
     with pytest.raises(MutationPreflightViolation):
-        sae.mutate_doctrine("D-live", same_id, collapse_lineage="Δ-1")
+        sae.mutate_doctrine("D-live", same_id, collapse_lineage="Δ-1",
+                            proof=minimal_proof("Ruling 24 preflight (i) probe"))
 
     assert codex.get("D-live") is not None, "the ancestor did NOT vanish"
     assert codex.get_fossil("D-live") is None, "nothing was written at all"
@@ -421,7 +438,8 @@ def test_successor_may_not_take_a_fossilized_id(executor):
     with pytest.raises(MutationPreflightViolation):
         sae.mutate_doctrine("D-live", Doctrine(
             id="D-dead", name="revenant", description="successor",
-            created_at=datetime.now()), collapse_lineage="Δ-1")
+            created_at=datetime.now()), collapse_lineage="Δ-1",
+            proof=minimal_proof("Ruling 24 preflight (ii) probe"))
 
     assert codex.get("D-live") is not None, "the ancestor did NOT vanish"
     assert codex.get_fossil("D-live") is None
@@ -443,7 +461,8 @@ def test_successor_may_not_clobber_a_live_doctrine(executor):
     with pytest.raises(MutationPreflightViolation):
         sae.mutate_doctrine("D-live", Doctrine(
             id="D-other", name="usurper", description="successor",
-            created_at=datetime.now()), collapse_lineage="Δ-1")
+            created_at=datetime.now()), collapse_lineage="Δ-1",
+            proof=minimal_proof("Ruling 24 preflight (iii) probe"))
 
     assert codex.get("D-other").name == "Bystander", "the bystander survived"
     assert codex.get("D-other").description == "untouched"
@@ -458,7 +477,10 @@ def test_preflight_passes_and_the_legitimate_mutation_still_executes(executor):
     successor = Doctrine(id="D-live::nova::NE-0001", name="Successor",
                          description="new form", created_at=datetime.now())
 
-    out = sae.mutate_doctrine("D-live", successor, collapse_lineage="Δ-1")
+    out = sae.mutate_doctrine("D-live", successor, collapse_lineage="Δ-1",
+                              proof=minimal_proof("Ruling 24 legitimate path",
+                                                  scar_lineage=("Δ-1",),
+                                                  ancestor_id="D-live"))
 
     assert out.id == "D-live::nova::NE-0001"
     assert codex.get("D-live::nova::NE-0001") is not None

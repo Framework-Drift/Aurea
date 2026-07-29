@@ -43,6 +43,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.doctrine.cae import CAE
+from src.doctrine.mutation_proof import (
+    ContentDelta, CriterionResult, DoctrineMutationProof,
+)
 from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Doctrine
 
@@ -480,33 +484,93 @@ class CMTE:
     doctrine evolution from becoming arbitrary, aesthetic, or reactive.
     """
 
-    def validate(self, doctrine: Doctrine, watched: _Watched,
-                 context: Dict[str, Any]) -> List[str]:
-        """Returns the list of FAILED criteria. Empty list = approved."""
-        failed: List[str] = []
+    # Canonical criterion name -> the FAILURE LABEL `_reject` routes on. Those
+    # labels are load-bearing (`_reject` branches on `distortion_flagged` and
+    # `identity_discontinuity`), so they are named here once rather than spelled
+    # in two places that could drift.
+    FAILURE_LABELS = {
+        "collapse_threshold_reached": "collapse_threshold_not_reached",
+        "scar_lineage_present": "no_scar_lineage",
+        "echo_resonance_aligned": "echo_resonance_misaligned",
+        "identity_continuity_maintained": "identity_discontinuity",
+        "no_distortion_flags": "distortion_flagged",
+    }
+
+    def evaluate(self, doctrine: Doctrine, watched: _Watched,
+                 context: Dict[str, Any]) -> Dict[str, CriterionResult]:
+        """RULING 45: the five criteria AS EVALUATED - PASS, FAIL, or ABSENT.
+
+        THE ONE SOURCE OF TRUTH. `validate()` now derives its failure list from
+        this, so what the gate decided and what the proof records cannot drift.
+
+        ABSENT IS NOT PASS, and the distinction is the whole reason this method
+        exists. Criteria 3, 4 and 5 are read with `context.get(...)`, so an
+        unsupplied key does not fail them - that absent-reads-as-pass semantics
+        is DELIBERATE and unchanged. But recording it as PASS would claim an
+        instrument ran and found the doctrine clean. No instrument ran. Docket
+        H's `NONE_FOUND` / `NOT_COUNTABLE` cut, applied to a gate instead of a
+        tally: two silences are not the same silence.
+
+        Criteria 1 and 2 are never ABSENT - `watched.pressure` always exists, and
+        criterion 2's two sources are both always readable, so their absence is a
+        FAILURE (no visible fracture) rather than a missing instrument.
+        """
+        results: Dict[str, CriterionResult] = {}
 
         # 1. Collapse Threshold Reached - DRPE / ICA / Nova pressure above mutation level.
-        if watched.pressure < PRESSURE_CRITICAL:
-            failed.append("collapse_threshold_not_reached")
+        results["collapse_threshold_reached"] = (
+            CriterionResult.PASS if watched.pressure >= PRESSURE_CRITICAL
+            else CriterionResult.FAIL)
 
         # 2. Scar Lineage Present - a valid collapse-linked scar or echo origin.
         #    "No belief may evolve unless the fracture that broke it can still be seen."
-        if not doctrine.scar_links and not context.get("echo_origin"):
-            failed.append("no_scar_lineage")
+        results["scar_lineage_present"] = (
+            CriterionResult.PASS
+            if (doctrine.scar_links or context.get("echo_origin"))
+            else CriterionResult.FAIL)
 
         # 3. Echo Resonance Alignment - the triggering echo must match the doctrine.
-        if context.get("echo_resonance") is False:
-            failed.append("echo_resonance_misaligned")
+        #    UNSUPPLIED BY DESIGN: no honest resonance value exists in the organ
+        #    (Echo Protocol IV's scores are deliberately un-coined).
+        results["echo_resonance_aligned"] = self._tri_state(
+            context, "echo_resonance", fails_when_true=False)
 
         # 4. Identity Continuity Maintained - RIL must not flag contradiction with selfhood.
-        if context.get("ril_identity_conflict"):
-            failed.append("identity_discontinuity")
+        results["identity_continuity_maintained"] = self._tri_state(
+            context, "ril_identity_conflict", fails_when_true=True)
 
         # 5. No Distortion Flags - ASIS / EchoTrace mimicry or symbolic corruption.
-        if context.get("distortion_detected"):
-            failed.append("distortion_flagged")
+        results["no_distortion_flags"] = self._tri_state(
+            context, "distortion_detected", fails_when_true=True)
 
-        return failed
+        return results
+
+    @staticmethod
+    def _tri_state(context: Dict[str, Any], key: str,
+                   fails_when_true: bool) -> CriterionResult:
+        """PASS / FAIL / ABSENT for a criterion read out of `context`.
+
+        `fails_when_true` distinguishes the two shapes already in use: criteria 4
+        and 5 fail when a flag is RAISED, criterion 3 fails when alignment is
+        explicitly False.
+        """
+        if key not in context or context[key] is None:
+            return CriterionResult.ABSENT
+        value = context[key]
+        if fails_when_true:
+            return CriterionResult.FAIL if value else CriterionResult.PASS
+        return CriterionResult.FAIL if value is False else CriterionResult.PASS
+
+    def validate(self, doctrine: Doctrine, watched: _Watched,
+                 context: Dict[str, Any]) -> List[str]:
+        """Returns the list of FAILED criteria. Empty list = approved.
+
+        DERIVED from `evaluate()` since Ruling 45 - the verdict and the record of
+        the verdict come from one evaluation, so they cannot disagree.
+        """
+        results = self.evaluate(doctrine, watched, context)
+        return [self.FAILURE_LABELS[name] for name, result in results.items()
+                if result is CriterionResult.FAIL]
 
 
 # =====================================================================
@@ -521,7 +585,10 @@ class DEE:
         self.codex = codex                # READ ONLY from here. Never written.
         self.sae = sae                    # the sole executor
         self.veiled_thread = veiled_thread
-        self.cae = cae                    # append-only audit
+        # RULING 45 - DEFAULT BY CONSTRUCTION (see `cae.py`). `aurea_core`
+        # injects ONE shared instance into SAE and DEE; a bare DEE() still gets a
+        # working ledger instead of a silent no-op.
+        self.cae = cae or CAE()           # append-only audit
         self.ctl = ctl                    # collapse trace logger
         self.reflex_grid = reflex_grid    # GSR escalation path (§IX.3)
 
@@ -580,7 +647,10 @@ class DEE:
                 continue
 
             ctx = ctx_all.get(watched.doctrine_id, {})
-            failed = self.cmte.validate(doctrine, watched, ctx)
+            # Ruling 45: ONE evaluation feeds both the verdict and the proof.
+            criteria = self.cmte.evaluate(doctrine, watched, ctx)
+            failed = [self.cmte.FAILURE_LABELS[n] for n, r in criteria.items()
+                      if r is CriterionResult.FAIL]
 
             if failed:
                 rulings.append(self._reject(doctrine, watched, failed, ctx))
@@ -599,7 +669,7 @@ class DEE:
                 self.dmw.release(watched.doctrine_id)
                 continue
 
-            rulings.append(self._approve(doctrine, watched, proposed))
+            rulings.append(self._approve(doctrine, watched, proposed, criteria))
             self.dmw.release(watched.doctrine_id)
 
         self.rulings.extend(rulings)
@@ -610,8 +680,14 @@ class DEE:
     # =================================================================
 
     def _approve(self, doctrine: Doctrine, watched: _Watched,
-                 proposed: Doctrine) -> EligibilityRuling:
-        """All five criteria passed. Hand off to the SOLE EXECUTOR and step back."""
+                 proposed: Doctrine,
+                 criteria: Dict[str, CriterionResult]) -> EligibilityRuling:
+        """All five criteria passed. Hand off to the SOLE EXECUTOR and step back.
+
+        `criteria` is the SAME evaluation the gate decided on (Ruling 45) - it is
+        threaded in rather than recomputed, so the proof records what actually
+        happened rather than what a second run of the same inputs would say.
+        """
         ruling = EligibilityRuling(
             doctrine_id=doctrine.id,
             verdict=Verdict.APPROVED,
@@ -641,6 +717,44 @@ class DEE:
         else:
             lineage = ""
 
+        # RULING 45 - THE FULL LINEAGE, not the `[0]` above.
+        #
+        # `collapse_lineage` (singular) SURVIVES unchanged on the call and on
+        # `MutationRecord`: AVT.017 refuses "" and that guard is correct and
+        # untouched. But a single string was never the lineage - it was the FIRST
+        # ELEMENT of it, chosen because `mutate_doctrine` took one string. The
+        # proof carries BOTH criterion-2 sources in full, ordered, deduplicated:
+        # the doctrine's own scars first (its lineage is its own), then the
+        # proposal's (which Nova populated from the backing echo, and which
+        # Ruling 20 guarantees belongs to THIS doctrine).
+        scar_lineage = tuple(dict.fromkeys(
+            [s for s in list(doctrine.scar_links) + list(proposed.scar_links) if s]
+        ))
+
+        proof = DoctrineMutationProof(
+            contradiction_core={
+                "triggers": [t.value for t in watched.triggers],
+                "pressure": watched.pressure,
+                "sustained_cycles": watched.sustained_cycles,
+                "strain_source": "DRPAS/DMW sustained doctrine strain",
+                "doctrine_id": doctrine.id,
+            },
+            scar_lineage=scar_lineage,
+            echo_provenance=self._echo_provenance(proposed),
+            content_delta=ContentDelta(
+                ancestor_id=doctrine.id,
+                name_before=doctrine.name,
+                name_after=proposed.name,
+                description_before=doctrine.description,
+                description_after=proposed.description,
+            ),
+            preserved_invariants=criteria,
+            # EMPTY IS A REAL ANSWER HERE and the field says so: CMTE approved,
+            # so nothing it evaluated was left unresolved. What DEE cannot see it
+            # does not claim to have resolved either - it simply has no name for.
+            unresolved_residue=(),
+        )
+
         if self.sae is None:
             ruling.reason += " - but no executor is wired; mutation NOT performed"
             return ruling
@@ -653,6 +767,7 @@ class DEE:
                 doctrine_id=doctrine.id,
                 new_form=proposed,
                 collapse_lineage=lineage,
+                proof=proof,
                 reason=f"DEE/CMTE approval under {[t.value for t in watched.triggers]}",
             )
             ruling.executed_by = "SAE"
@@ -664,6 +779,23 @@ class DEE:
 
         ruling.cae_id = self._audit("dee_eligibility", doctrine.id, ruling.reason)
         return ruling
+
+    @staticmethod
+    def _echo_provenance(proposed: Doctrine) -> Optional[Dict[str, str]]:
+        """The echo recorded as AUTHORING this proposal, from the proposal's own
+        provenance tags. `None` where no Nova echo authored it.
+
+        READS THE TAGS NOVA WROTE, and does not ask Nova. DEE holds no Nova
+        handle and is not gaining one for a forensic field: `nova.proposals()`
+        stamps `tca_tags` with `prov:{store}:{record_id}` at emission, so the
+        authorship is already ON the proposal. `None` here is the ORDINARY case
+        (a proposal that no echo authored) and is not a gap to fill.
+        """
+        for tag in getattr(proposed, "tca_tags", None) or []:
+            if isinstance(tag, str) and tag.startswith("prov:nova_echo_index:"):
+                return {"echo_id": tag.split(":", 2)[2],
+                        "provenance_key": proposed.id}
+        return None
 
     def _reject(self, doctrine: Doctrine, watched: _Watched,
                 failed: List[str], ctx: Dict[str, Any]) -> EligibilityRuling:
@@ -779,11 +911,22 @@ class DEE:
     # AUDIT
     # =================================================================
 
-    def _audit(self, event: str, target: str, detail: str) -> Optional[str]:
-        """3a: no doctrine may be mutated, collapsed, or discarded without a CAE entry."""
-        if self.cae is None or not hasattr(self.cae, "record"):
-            return None
-        return self.cae.record(event=event, target=target, collapse_lineage=detail, epoch=0)
+    def _audit(self, event: str, target: str, detail: str) -> str:
+        """3a: no doctrine may be mutated, collapsed, or discarded without a CAE entry.
+
+        RULING 45: the `if self.cae is None or not hasattr(self.cae, "record")`
+        branch is GONE, and with it the last way this method could answer the
+        canon's absolute with a None. The ledger is constructed by default (see
+        `__init__`), so neither the absence nor the duck-type check has anything
+        left to guard.
+
+        The `hasattr` half deserves its own epitaph: it is the same shape as the
+        `hasattr(scar_core, "form_scar")` guard that SILENTLY DROPPED every
+        SBSRE scar request (CLAUDE.md section 3). A capability check that
+        degrades to a no-op turns a missing collaborator into a missing record.
+        """
+        return self.cae.record(event=event, target=target,
+                               collapse_lineage=detail, epoch=0)
 
     def status(self) -> Dict[str, Any]:
         return {

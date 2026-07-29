@@ -28,9 +28,9 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS NINETEEN PATHS: five resolved from class attributes,
-fourteen from `__init__` defaults. If you add a twentieth and do not add it here,
-you have reopened the hole Ruling 31 closed.
+THIS FIXTURE COVERS TWENTY PATHS: five resolved from class attributes, fifteen
+from `__init__` defaults. If you add a twenty-first and do not add it here, you
+have reopened the hole Ruling 31 closed.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
 This docstring previously read "AS OF RULING 32 THIS FIXTURE COVERS EVERY
@@ -80,6 +80,7 @@ import inspect
 import pytest
 
 from src.aurea_core import AureaCore
+from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex
 from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
@@ -184,6 +185,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # not persistence - see `tca_core.load_from_file`.
         (TCAML, "runtime_path", "tcaml_lock.json"),
         (DMW, "runtime_path", "dmw_queue.json"),
+        # Ruling 45: the CAE audit ledger. Append-only forensics (Ruling 31's
+        # semantics), so a test driving a mutation on purpose must not append to
+        # the real record of what AUREA actually changed about herself. SAE and
+        # DEE both construct one by DEFAULT when none is injected, so this MUST
+        # be redirected before anything constructs either.
+        (CAE, "ledger_path", "cae_audit.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 
