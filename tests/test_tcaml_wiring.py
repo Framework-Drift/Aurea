@@ -249,7 +249,7 @@ def test_the_sweep_never_touches_another_modules_lock():
     assert racm.self_lock_sweeps == []
 
 
-def test_a_stale_release_is_recorded_not_raised_through_the_finally():
+def test_a_stale_release_is_recorded_not_raised_through_the_finally(tmp_path):
     """Ruling 29 + Ruling 11's principle, at their intersection.
 
     The Grid releases from a `finally`, and an exception raised inside a
@@ -269,7 +269,16 @@ def test_a_stale_release_is_recorded_not_raised_through_the_finally():
     assert "REVOKED" in racm.stale_lock_releases[0]["detail"]
 
     # ...but the exception type itself is still real and still structural.
-    tcaml2 = TCAML()
+    #
+    # ISOLATION UPDATED 2026-07-28 (Ruling 42 Slice 2) - NO ASSERTION MOVED.
+    # Ruling-14 precedent:  OLD: tcaml2 = TCAML()
+    #                       NEW: tcaml2 = TCAML(runtime_path=str(tmp_path / ...))
+    # WHY: TCAML's lock state is DURABLE now, so a second instance on the
+    # fixture's single redirected path LOADS the first one's META_UNSTABLE
+    # status, its own `lock_request` is denied by Rule 3, and it never holds "x"
+    # to have a stale release from. The second half of this test needs a
+    # genuinely separate lock, which is what it always assumed it had.
+    tcaml2 = TCAML(runtime_path=str(tmp_path / "second_lock.json"))
     tcaml2.lock_request("x", LockClass.STRUCTURAL, "RACM")
     tcaml2.enter_repair_cycle()
     with pytest.raises(StaleLockRelease):

@@ -28,9 +28,9 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS SEVENTEEN PATHS: five resolved from class attributes, twelve
-from `__init__` defaults. If you add an eighteenth and do not add it here, you
-have reopened the hole Ruling 31 closed.
+THIS FIXTURE COVERS NINETEEN PATHS: five resolved from class attributes,
+fourteen from `__init__` defaults. If you add a twentieth and do not add it here,
+you have reopened the hole Ruling 31 closed.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
 This docstring previously read "AS OF RULING 32 THIS FIXTURE COVERS EVERY
@@ -81,6 +81,7 @@ import pytest
 
 from src.aurea_core import AureaCore
 from src.doctrine.codex import Codex
+from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
 from src.expansion.sae import SAE
 from src.identity.ril import RIL
@@ -93,6 +94,7 @@ from src.suspension.black_sphere import BlackSphere
 from src.suspension.csa import CSA
 from src.suspension.veiled_thread import VeiledThread
 from src.topology.tca_core import TopologicalSpace
+from src.topology.tcaml import TCAML
 from src.utils.echo_memory import EchoMemory
 
 
@@ -171,6 +173,17 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         (RIL, "runtime_path", "ril_threads.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (RACM, "runtime_path", "racm_queue.json"),
+        # Ruling 42 SLICE 2 (2026-07-28). TCAML's GLOBAL lock and DEE's doctrine
+        # watch queue - the last two in-memory stores from Ruling 42's register.
+        # Both call `load()` from `__init__`, so both MUST be redirected before
+        # anything constructs one (the SAE/RIL/Nova precedent).
+        #
+        # TCA's topology map is NOT in this addition: it has had a `filepath`
+        # default and been redirected here since before Ruling 42. Slice 2 gave
+        # it the CONTRACT (version gate, reported outcome, reference validation),
+        # not persistence - see `tca_core.load_from_file`.
+        (TCAML, "runtime_path", "tcaml_lock.json"),
+        (DMW, "runtime_path", "dmw_queue.json"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

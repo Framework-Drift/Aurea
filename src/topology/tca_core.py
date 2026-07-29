@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from enum import Enum
 
+from src.utils.continuity import LoadReport, RestorationOutcome
+
 
 class NodeType(Enum):
     """Types of nodes in the constellation."""
@@ -230,6 +232,8 @@ class TopologicalSpace:
     This is the substrate for all symbolic thought.
     """
     
+    STATE_VERSION = 1
+
     def __init__(self, filepath: str = "data/runtime/topology/tca_map.json"):
         self.filepath = Path(filepath)
         
@@ -252,7 +256,18 @@ class TopologicalSpace:
         # Metrics
         self.fragmentation_index = 0.0  # How disconnected the space is
         self.total_edges = 0
-        
+
+        # Ruling 42 Slice 2 taxonomy. This store was ALREADY durable before this
+        # slice - it has had `filepath`, `save_to_file` and `load_from_file`
+        # since long before Ruling 42 - so what the slice adds is not persistence
+        # but the CONTRACT: a version key, a reported outcome, refusal semantics,
+        # and reference validation.
+        self.load_report: Optional[LoadReport] = None
+        # Edges naming a node this space does not hold. HELD, VISIBLE, REPORTED
+        # (res.5) - never silently dropped, never silently re-pointed.
+        self.quarantined_edges: List[Dict[str, Any]] = []
+        self.persist_failures: List[Dict[str, Any]] = []
+
         self.load_from_file()
     
     def add_node(self, node_id: str, node_type: NodeType, 
@@ -303,8 +318,38 @@ class TopologicalSpace:
             self.nodes[node2_id].scar_bridges.append(node1_id)
             
             # Record as wormhole
-            bridge_id = f"bridge_{len(self.wormholes)}"
-            self.wormholes[bridge_id] = (node1_id, node2_id)
+            self.wormholes[self._next_bridge_id()] = (node1_id, node2_id)
+
+    def _next_bridge_id(self) -> str:
+        """RULING 42 res.4 - THE MINT COUNTS WHAT HAS BEEN ISSUED, not what is
+        currently present.
+
+        This was `f"bridge_{len(self.wormholes)}"`, and the Ruling 42 ID-generator
+        sweep classified it "no collision today; LATENT if removal is added"
+        - correct at the time: nothing anywhere removes a wormhole, and
+        `load_from_file` restores the whole dict, so `len()` resumed at the saved
+        count and the counter was effectively store-derived.
+
+        THE SWEEP'S CONDITION IS NOW MET, BY THIS PASS. Quarantine (res.5) HOLDS A
+        DANGLING WORMHOLE OUT of `self.wormholes`, which is a removal in every
+        sense the old expression cared about: `len()` drops, and the next bridge
+        remints an id a quarantined record still carries. So the latent hazard
+        became live at the moment reference validation landed, and is closed here
+        rather than re-classified and left.
+
+        Derived as MAX ORDINAL + 1 over live AND quarantined ids - Nova's
+        `_derive_seq` shape (Slice 1), for its reason: an id that already MEANS
+        something must never be issued twice, and an unparseable id contributes
+        nothing rather than raising, because this is a floor.
+        """
+        highest = -1
+        for bridge_id in list(self.wormholes) + [
+                q.get("bridge_id", "") for q in self.quarantined_edges]:
+            if isinstance(bridge_id, str) and bridge_id.startswith("bridge_"):
+                tail = bridge_id[len("bridge_"):]
+                if tail.isdigit():
+                    highest = max(highest, int(tail))
+        return f"bridge_{highest + 1}"
     
     def create_constellation(self, constellation_id: str, 
                            constellation_type: ConstellationType,
@@ -490,13 +535,27 @@ class TopologicalSpace:
             constellation.stability = constellation.calculate_cohesion()
     
     def save_to_file(self):
-        """Save the topological map to disk."""
+        """Save the topological map to disk.
+
+        RULING 42 Slice 2: this method PREDATES the ruling and already wrote a
+        whole-file snapshot, so the shape is unchanged - what is added is the
+        `version` key its `load_from_file` counterpart now enforces. Wormholes are
+        written as PAIRS; JSON has no tuple, so they read back as lists and
+        `load_from_file` re-tuples them (the old code did not, and the type
+        quietly drifted across every restart).
+        """
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            # Sticky refusal (Slice 1): a file overwritten one bridge later was
+            # not left BYTE-UNTOUCHED.
+            return
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        
+
         data = {
+            'version': self.STATE_VERSION,
             'nodes': {},
             'constellations': {},
-            'wormholes': dict(self.wormholes),
+            'wormholes': {k: list(v) for k, v in self.wormholes.items()},
             'metrics': {
                 'total_mass': self.total_mass,
                 'total_edges': self.total_edges,
@@ -537,13 +596,41 @@ class TopologicalSpace:
             json.dump(data, f, indent=2, default=str)
     
     def load_from_file(self):
-        """Load the topological map from disk."""
+        """Load the topological map from disk.
+
+        RULING 42 Slice 2 brings an ALREADY-DURABLE store under the contract:
+        a `version` gate, a reported outcome, sticky refusal, and - the ruled
+        point (res.5) - REFERENCE VALIDATION.
+
+        An edge naming a node this space does not hold is QUARANTINED: held on
+        `quarantined_edges`, visible, reported. It is never silently dropped and
+        never silently re-pointed at some other node.
+
+        THAT WAS NOT A HYPOTHETICAL GAP. Wormholes were previously restored with
+        `self.wormholes = data.get('wormholes', {})` - no validation of any kind -
+        while constellation membership was filtered by `if node_id in self.nodes`,
+        which SILENTLY DROPPED the reference. Two halves of one relational store,
+        one with no check and one with a fail-silent check; res.5 covers both.
+        """
         if not self.filepath.exists():
             return
-        
-        with open(self.filepath, 'r') as f:
-            data = json.load(f)
-        
+
+        try:
+            with open(self.filepath, 'r') as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            self._refuse(f"unreadable topology map: {exc!r}")
+            return
+
+        version = data.get('version')
+        if version != self.STATE_VERSION:
+            self._refuse(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched")
+            return
+
         # Load nodes
         for node_id, node_data in data.get('nodes', {}).items():
             # Handle infinity values in collapse_depth
@@ -582,19 +669,49 @@ class TopologicalSpace:
                 constellation_type=ConstellationType(const_data['type'])
             )
             
-            # Add nodes to constellation
+            # Add nodes to constellation. RULING 42 res.5: the `if node_id in
+            # self.nodes` filter was here already and it SILENTLY DROPPED an
+            # unresolvable member - a fail-silent check is not a check, it is the
+            # appearance of one. The filter stays; the else branch is the fix.
             for node_id in const_data.get('node_ids', []):
                 if node_id in self.nodes:
                     constellation.add_node(self.nodes[node_id])
-            
+                else:
+                    self.quarantined_edges.append({
+                        "kind": "constellation_member",
+                        "constellation_id": const_id,
+                        "node_id": node_id,
+                        "reason": "the topological space does not hold this node",
+                    })
+
             constellation.gravity_center = const_data.get('gravity_center')
             constellation.stability = const_data.get('stability', 1.0)
             constellation.bridges = const_data.get('bridges', {})
             
             self.constellations[const_id] = constellation
         
-        # Load wormholes
-        self.wormholes = data.get('wormholes', {})
+        # Load wormholes. RULING 42 res.5 - THE HALF WITH NO CHECK AT ALL.
+        # This was `self.wormholes = data.get('wormholes', {})`: a bridge naming a
+        # node that no longer exists was restored as a live shortcut, and
+        # `find_path` would route through it into a KeyError or a dead end.
+        # JSON has no tuple, so the pair is re-tupled here rather than left as a
+        # list - the old code let the declared `Dict[str, Tuple[str, str]]` drift
+        # to lists on every restart.
+        self.wormholes = {}
+        for bridge_id, pair in (data.get('wormholes') or {}).items():
+            ends = tuple(pair) if isinstance(pair, (list, tuple)) else ()
+            missing = [n for n in ends if n not in self.nodes]
+            if len(ends) != 2 or missing:
+                self.quarantined_edges.append({
+                    "kind": "wormhole",
+                    "bridge_id": bridge_id,
+                    "ends": list(ends),
+                    "missing_nodes": missing,
+                    "reason": ("the topological space does not hold both ends"
+                               if missing else "malformed bridge pair"),
+                })
+                continue
+            self.wormholes[bridge_id] = (ends[0], ends[1])
         
         # Recompute total_edges from loaded nodes (fixes drift)
         self.total_edges = 0
@@ -609,3 +726,28 @@ class TopologicalSpace:
         # Load metrics
         metrics = data.get('metrics', {})
         self.fragmentation_index = metrics.get('fragmentation_index', 0.0)
+
+        held = len(self.quarantined_edges)
+        self.load_report = LoadReport(
+            store="tca.topology",
+            outcome=(RestorationOutcome.PARTIALLY_RESTORED if held
+                     else RestorationOutcome.RESTORED),
+            path=str(self.filepath), resumed=True,
+            detail={"nodes": len(self.nodes), "wormholes": len(self.wormholes),
+                    "constellations": len(self.constellations),
+                    "quarantined": held})
+
+    def _refuse(self, reason: str) -> None:
+        """REFUSED: the file is left BYTE-UNTOUCHED and the space constructs
+        EMPTY. `save_to_file` then no-ops for the life of the process (Slice 1's
+        sticky refusal) - a map overwritten one node later was not left
+        untouched, and an unreadable topology is not a reason to replace it with
+        a blank one on disk."""
+        self.nodes = {}
+        self.constellations = {}
+        self.wormholes = {}
+        self.total_mass = 0.0
+        self.total_edges = 0
+        self.load_report = LoadReport(
+            store="tca.topology", outcome=RestorationOutcome.REFUSED,
+            path=str(self.filepath), resumed=False, detail={"reason": reason})

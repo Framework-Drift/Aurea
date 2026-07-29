@@ -168,44 +168,76 @@ def test_the_answer_is_to_this_call_never_a_cached_one():
 # TIER SELECTS A THRESHOLD - IT NEVER DENIES
 # =====================================================================
 
-def test_same_request_routine_passes_elevated_denied_at_the_same_health():
+def test_same_request_routine_passes_elevated_denied_at_the_same_health(tmp_path):
     """The tier is not a second verdict path. It is the SAME gate at a
-    stricter bar - identical request, identical state, one number moved."""
+    stricter bar - identical request, identical state, one number moved.
+
+    ISOLATION UPDATED 2026-07-28 (Ruling 42 Slice 2) - NO ASSERTION MOVED.
+    Recorded per the Ruling-14 precedent:
+
+        OLD: routine   = TCAML(health=health)
+             elevated  = TCAML(health=health)
+             healthier = TCAML(health=80)
+        NEW: the same three, each given its OWN `runtime_path`.
+
+    WHY: TCAML's lock state is now DURABLE, so three instances sharing the
+    fixture's single redirected path share a store - `routine`'s granted lock
+    persisted, and `elevated` then loaded it and was denied for "already held"
+    instead of for the health threshold this test is about.
+
+    NOT A WEAKENING - IT RESTORES THE TEST'S OWN PREMISE. Its whole subject is
+    "identical request, identical STATE, one number moved", which requires three
+    INDEPENDENT states; it previously got them for free because constructors were
+    stateless. Giving each its own file is the documented pattern for exactly
+    this (Ruling 32: an explicit path is how a test builds an isolated store, and
+    deliberately not how the pipeline constructs one).
+    """
     health = 50
     assert ROUTINE_THRESHOLD <= health < ELEVATED_THRESHOLD
 
-    routine = TCAML(health=health)
+    routine = TCAML(health=health, runtime_path=str(tmp_path / "routine.json"))
     passed = routine.lock_request("remap", LockClass.STRUCTURAL, "SAE", tier=Tier.ROUTINE)
     assert passed.granted is True
 
-    elevated = TCAML(health=health)
+    elevated = TCAML(health=health, runtime_path=str(tmp_path / "elevated.json"))
     denied = elevated.lock_request("remap", LockClass.STRUCTURAL, "SAE", tier=Tier.ELEVATED)
     assert denied.granted is False
     assert str(ELEVATED_THRESHOLD) in denied.reason
     assert str(health) in denied.reason
 
-    healthier = TCAML(health=80)
+    healthier = TCAML(health=80, runtime_path=str(tmp_path / "healthier.json"))
     assert healthier.lock_request("remap", LockClass.STRUCTURAL, "SAE",
                                   tier=Tier.ELEVATED).granted is True
 
 
-def test_a_structural_delta_raises_the_bar_without_denying_anything():
+def test_a_structural_delta_raises_the_bar_without_denying_anything(tmp_path):
     """Ruling 27: Docket F's measures select a threshold, never a verdict.
 
     The SAME bridge-severing delta is denied at health 50 and GRANTED at
     health 80. If the measures denied on their own, the second call would fail
     too - and TCAML would have grown a second, unarbitrated authority over
     GLOBAL action.
+
+    ISOLATION UPDATED 2026-07-28 (Ruling 42 Slice 2) - NO ASSERTION MOVED; each
+    of the two instances is given its own `runtime_path`. See
+    `test_same_request_routine_passes_elevated_denied_at_the_same_health` for the
+    full Ruling-14 note.
+
+    THIS ONE WAS STILL GREEN when the durability landed, and it is changed
+    ANYWAY: `low` never acquires a lock, so nothing leaked into `high` today.
+    That is a coincidence of which branch the first request happened to take, not
+    a property of the test - leaving it coupled would be leaving a pin whose
+    independence depends on it continuing to fail in the same way.
     """
     delta = _bridge_severing_delta()
 
-    low = TCAML(health=50)
+    low = TCAML(health=50, runtime_path=str(tmp_path / "low.json"))
     denied = low.lock_request("remap", LockClass.STRUCTURAL, "SAE", topology_delta=delta)
     assert denied.granted is False
     assert denied.tier is Tier.ELEVATED
     assert any("bridge" in r for r in low.lock_denials[0]["structural_reasons"])
 
-    high = TCAML(health=80)
+    high = TCAML(health=80, runtime_path=str(tmp_path / "high.json"))
     granted = high.lock_request("remap", LockClass.STRUCTURAL, "SAE", topology_delta=delta)
     assert granted.granted is True
     assert granted.tier is Tier.ELEVATED

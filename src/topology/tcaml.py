@@ -112,13 +112,17 @@ effect until ruled, exactly as Nova's `scar_requests` do.
 from __future__ import annotations
 
 import copy
+import json
 import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import networkx as nx
+
+from src.utils.continuity import LoadReport, RestorationOutcome
 
 
 # =====================================================================
@@ -630,13 +634,29 @@ class TCAML:
     the one field in this system whose staleness is itself a safety property.
     """
 
-    def __init__(self, health: int = DEFAULT_HEALTH) -> None:
+    STATE_VERSION = 1
+
+    def __init__(self, health: int = DEFAULT_HEALTH,
+                 runtime_path: str = "data/runtime/tcaml_lock.json") -> None:
+        # Ruling 42 Slice 2 / Ruling 39: an `__init__` DEFAULT under
+        # `data/runtime/`, redirected by name in `tests/conftest.py`. Slice 1's
+        # shape, unchanged.
+        self.runtime_path = Path(runtime_path)
+
         self._status: Status = Status.HEALTHY
         self._holder: Optional[str] = None
         self._holder_module: Optional[str] = None
         self._held_since: Optional[int] = None
         self._health: int = self._clamp(health)
         self._cycle: int = 0
+
+        # Ruling 42 taxonomy (Slice 1's vocabulary, reused verbatim).
+        self.load_report: Optional[LoadReport] = None
+        self.persist_failures: List[Dict[str, Any]] = []
+        # Set by `load()` when a HELD lock crosses a process boundary, cleared
+        # with the holder. Read ONLY to annotate the expiry record, so the
+        # restart gap is legible instead of smoothed.
+        self._hold_restored_from: Optional[Dict[str, Any]] = None
 
         # The anchor store. TCAML writes it; nothing else may (Ruling 1).
         self.anchor_state: Dict[str, AnchorState] = {}
@@ -657,6 +677,8 @@ class TCAML:
         # a claim about ORDER, and an order nothing can observe is an order
         # nobody can hold the module to.
         self.last_tick_trace: List[Dict[str, Any]] = []
+
+        self.load()
 
     # -----------------------------------------------------------------
     # READS - free to every module, and they are SNAPSHOTS (Ruling 22)
@@ -819,6 +841,19 @@ class TCAML:
         self._holder = action_id
         self._holder_module = module_id
         self._held_since = self._cycle
+        # A grant is a NEW hold, never a restored one - so any restart
+        # annotation from a previous hold must not follow it.
+        #
+        # DEFENCE IN DEPTH, and knowingly so: `_clear_holder` already clears this,
+        # and every route to a new grant passes through it (a request is denied
+        # while a holder exists). A mutation deleting this line survives the suite
+        # for exactly that reason - it is an EQUIVALENT mutant, recorded here
+        # rather than papered over with a pin that could not distinguish it.
+        self._hold_restored_from = None
+        # Ruling 42: DURABLE AT THE MOMENT THE LOCK IS TAKEN, not at the next
+        # boundary. A process that died between the grant and a later save would
+        # restore the lock FREE, which is the exact orphan this slice closes.
+        self._persist()
         return LockResponse(
             granted=True,
             action_id=action_id,
@@ -931,6 +966,191 @@ class TCAML:
         self._holder = None
         self._holder_module = None
         self._held_since = None
+        # The restart annotation belongs to the HOLD, not to the module. A new
+        # holder acquired after this one is not a restored hold.
+        self._hold_restored_from = None
+        self._persist()
+
+    # -----------------------------------------------------------------
+    # CONTINUITY (Ruling 42 Slice 2) - the lock survives, HONESTLY
+    # -----------------------------------------------------------------
+
+    def save(self) -> None:
+        """Whole-file snapshot. Ruling 32's minimal semantics VERBATIM.
+
+        WHAT ROUND-TRIPS, exhaustively: `_cycle`, `_status`, `_holder`,
+        `_holder_module`, `_held_since`, `_health`.
+
+        `_held_since` IS AN ABSOLUTE CYCLE ORDINAL and is meaningless without the
+        clock it was measured against, so `_cycle` rides in the SAME SNAPSHOT
+        (res.3). This is the opposite case from RACM's queue, whose ages are
+        RELATIVE - the rule is the same rule, and it binds here because the field
+        is absolute.
+
+        REPORTED-NOT-PERSISTED, one sentence each - all five describe the cycle
+        just ended or are Ruling 15 parked forensics, not state that is owed:
+          * `anchor_state`          - Ruling 37-A STABILIZATION machinery;
+            persisting it moves epoch-closure semantics and is NOT this slice's
+            to decide. It is the KNOWN NON-PERSISTED REMAINDER, flagged here so
+            the omission is a decision rather than an oversight.
+          * `realignment_requests`  - PARKED requests with no consumer (Ruling 15).
+          * `lock_denials`          - forensics of requests already answered.
+          * `lock_expiries`         - forensics of holds already ended.
+          * `lock_revocations`      - forensics of holds already taken.
+          * `last_tick_trace`       - by construction the LAST tick only; it is
+            rebuilt at the top of every `tick()`.
+        """
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": self.STATE_VERSION,
+            "saved_at": datetime.now().isoformat(),
+            "cycle": self._cycle,
+            "status": self._status.value,
+            "holder": self._holder,
+            "holder_module": self._holder_module,
+            "held_since": self._held_since,
+            "health": self._health,
+        }
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def load(self) -> bool:
+        """Runtime state if present, ELSE a fresh HEALTHY lock. Returns whether
+        state resumed.
+
+        A LOCK HELD AT SAVE TIME RESTORES *HELD* (finding 6), and that is the
+        CONSERVATIVE direction for a guard on structural change: the alternative
+        - restoring free - silently grants the next structural request a lock the
+        previous process never released, which is precisely the state Rule 3
+        exists to prevent. The bounded TTL then expires it through the EXISTING
+        path, into the EXISTING list, with the restart span recorded.
+
+        A FILE MAY NOT RECONSTRUCT A STATE THE STATE MACHINE CANNOT REACH. Two
+        such states are possible in a hand-damaged or forged file, and each is
+        handled by the RULED path rather than by repair:
+          * holder + a status the runtime forbids holding under -> the Rule 3
+            revocation runs (`_enter_instability`, model-checked), so the
+            revocation is recorded exactly as a live onset would record it.
+          * holder already past the TTL bound -> `_expire_if_due()` runs at load,
+            because `tick()` ASSERTS `boundedHoldTight` and a state that would
+            trip that assert must not be allowed to exist between load and the
+            first tick.
+        Both report `PARTIALLY_RESTORED`: the file was read, and something in it
+        did not survive contact with the rules.
+        """
+        if not self.runtime_path.exists():
+            return False
+
+        try:
+            with open(self.runtime_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            return self._refuse(f"unreadable lock state: {exc!r}")
+
+        version = data.get("version")
+        if version != self.STATE_VERSION:
+            return self._refuse(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched")
+
+        # RES.3, VERBATIM: `_held_since` is meaningful ONLY against `_cycle` from
+        # the SAME snapshot. A file carrying one without the other is REFUSED,
+        # NOT REPAIRED - deriving a missing clock would be inventing the very
+        # ordinal the rule exists to protect.
+        cycle = data.get("cycle")
+        held_since = data.get("held_since")
+        holder = data.get("holder")
+        if held_since is not None and not isinstance(cycle, int):
+            return self._refuse(
+                "`held_since` is present without an integer `cycle`; an absolute "
+                "hold ordinal is meaningless against a clock that is not there, "
+                "and a clock is never invented to rescue one")
+        if holder is not None and held_since is None:
+            return self._refuse(
+                "a holder is present with no `held_since`; a hold whose start is "
+                "unknown cannot be bounded, and an unbounded GLOBAL lock is the "
+                "one thing TTL exists to make impossible")
+
+        try:
+            status = Status(data.get("status", Status.HEALTHY.value))
+        except ValueError as exc:
+            return self._refuse(f"unknown lock status: {exc!r}")
+
+        self._cycle = int(cycle or 0)
+        self._health = self._clamp(int(data.get("health", DEFAULT_HEALTH)))
+        self._holder = holder
+        self._holder_module = data.get("holder_module")
+        self._held_since = held_since
+        self._status = Status.HEALTHY
+
+        detail: Dict[str, Any] = {"saved_at": data.get("saved_at"),
+                                  "cycle": self._cycle}
+        outcome = RestorationOutcome.RESTORED
+
+        if holder is not None:
+            self._hold_restored_from = {
+                "saved_cycle": self._cycle,
+                "saved_at": data.get("saved_at"),
+                "note": ("this hold was acquired in a process that ended without "
+                         "releasing it; the TTL bound is measured across the gap"),
+            }
+            detail["restored_holder"] = holder
+
+        # The Rule 3 edge. `_enter_instability` is the MODEL-CHECKED transition
+        # and it is reused rather than re-implemented, so a revocation at restore
+        # is recorded identically to a revocation at onset.
+        if status is not Status.HEALTHY:
+            self._enter_instability(
+                status,
+                f"restored from a snapshot taken under status '{status.value}'")
+            if holder is not None:
+                outcome = RestorationOutcome.PARTIALLY_RESTORED
+                detail["revoked_on_restore"] = holder
+
+        # The TTL edge. Only reachable from a damaged file - a legitimate save
+        # always satisfies the bound, because `tick()` asserts it every cycle.
+        if self._holder is not None and not self._hold_within_bound():
+            self._expire_if_due()
+            outcome = RestorationOutcome.PARTIALLY_RESTORED
+            detail["expired_on_restore"] = holder
+
+        self.load_report = LoadReport(
+            store="tcaml.lock", outcome=outcome, path=str(self.runtime_path),
+            resumed=True, detail=detail)
+        return True
+
+    def _refuse(self, reason: str) -> bool:
+        """REFUSED: the file is left BYTE-UNTOUCHED and the lock constructs FREE
+        and HEALTHY - which is a first-run lock, not a granted one.
+
+        The refusal is STICKY for the process (Slice 1): a file overwritten one
+        cycle later was not left untouched.
+        """
+        self._status = Status.HEALTHY
+        self._holder = None
+        self._holder_module = None
+        self._held_since = None
+        self._hold_restored_from = None
+        self.load_report = LoadReport(
+            store="tcaml.lock", outcome=RestorationOutcome.REFUSED,
+            path=str(self.runtime_path), resumed=False, detail={"reason": reason})
+        return False
+
+    def _persist(self) -> None:
+        """BEST-EFFORT save. NEVER RAISES (Ruling 11: the observer never gates
+        the observed - a disk problem must not disable the integrity lock)."""
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            return
+        try:
+            self.save()
+        except (OSError, TypeError, ValueError) as exc:
+            self.persist_failures.append({
+                "op": "save", "path": str(self.runtime_path), "error": repr(exc),
+                "at": datetime.now().isoformat(),
+            })
 
     # -----------------------------------------------------------------
     # CYCLE ADVANCE - THE ORDERING HERE IS LOAD-BEARING
@@ -989,6 +1209,10 @@ class TCAML:
             "This is `boundedHoldTight` from tcaml_lock_priority.qnt failing at "
             "runtime."
         )
+        # Ruling 42: the clock and the hold advance together, so they are written
+        # together. `_held_since` is an ABSOLUTE ordinal against `_cycle` (res.3)
+        # and a snapshot carrying a stale clock would mis-measure every hold.
+        self._persist()
         return list(self.last_tick_trace)
 
     def _hold_within_bound(self) -> bool:
@@ -1010,7 +1234,7 @@ class TCAML:
         held = self._cycle - self._held_since
         if held < TTL:
             return False
-        self.lock_expiries.append({
+        record = {
             "action_id": self._holder,
             "module_id": self._holder_module,
             "held_since": self._held_since,
@@ -1018,7 +1242,18 @@ class TCAML:
             "held_cycles": held,
             "reason": f"TTL {TTL} reached - orphaned GLOBAL lock force-expired",
             "at": datetime.now().isoformat(timespec="seconds"),
-        })
+        }
+        # RULING 42 Slice 2 (finding 6). The SAME event type and the SAME list -
+        # a lock orphaned by process death is not a new KIND of expiry, it is an
+        # expiry whose hold happened to span a restart. Minting a second event
+        # type would split one forensic story across two surfaces.
+        #
+        # The gap is RECORDED, never smoothed: `held_cycles` above is measured
+        # against the restored `_held_since`, so the count already spans the
+        # restart, and this names the boundary it spanned.
+        if self._hold_restored_from is not None:
+            record["spanned_restart"] = dict(self._hold_restored_from)
+        self.lock_expiries.append(record)
         self._clear_holder()
         return True
 

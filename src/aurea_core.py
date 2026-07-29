@@ -1497,6 +1497,11 @@ class AureaCore:
         self.ril.save()
         self.nova.save()
         self.reflex_grid.racm.save()
+        # Ruling 42 Slice 2. Same shape as Slice 1's three: each is ALREADY
+        # durable at the moment of its own mutation, so these are consistency
+        # snapshots rather than the mechanism.
+        self.tcaml.save()
+        self.dee.dmw.save()
 
     def load_state(self, filepath: Optional[str] = None):
         """Load system state from disk. Symmetrical with `save_state` (res.8)."""

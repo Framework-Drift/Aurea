@@ -36,11 +36,14 @@ A gate that fabricates the thing it is gating is not a gate.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Doctrine
 
 
@@ -226,14 +229,187 @@ class DMW:
     collapse tension qualifies." A spike is not a reason to change what AUREA believes.
     """
 
-    def __init__(self, sustain_cycles: int = SUSTAIN_CYCLES):
+    STATE_VERSION = 1
+
+    def __init__(self, sustain_cycles: int = SUSTAIN_CYCLES, codex: Any = None,
+                 runtime_path: str = "data/runtime/dmw_queue.json"):
         self.sustain_cycles = sustain_cycles
+        # READ handle only (Ruling 1: reads are free). Used at LOAD time to ask
+        # whether a queued doctrine id still names a doctrine. Nova's scar_core
+        # handle from Slice 1 is the precedent; DMW gains no write path here.
+        self.codex = codex
+        # Ruling 42 Slice 2 / Ruling 39: `__init__` DEFAULT under `data/runtime/`,
+        # redirected by name in conftest. Slice 1's shape.
+        self.runtime_path = Path(runtime_path)
         self.queue: Dict[str, _Watched] = {}     # one slot per doctrine; bounded
         # RULING 23 (2026-07-25): doctrines this pass DECLINED TO WATCH because the
         # bound was reached. Reset each observe() - it is this cycle's refusals,
         # handed to DEE.cycle, which routes them to the durable surface (_ferment ->
         # Veiled Thread + CAE), exactly as it already routes the expiry path.
         self.last_overflow: List[Dict[str, Any]] = []
+
+        # Ruling 42 taxonomy (Slice 1's vocabulary, reused verbatim).
+        self.load_report: Optional[LoadReport] = None
+        # Slots whose doctrine the Codex no longer holds. HELD, VISIBLE,
+        # REPORTED - never silently dropped, never silently re-pointed.
+        self.quarantined_slots: List[Dict[str, Any]] = []
+        self.persist_failures: List[Dict[str, Any]] = []
+
+        self.load()
+
+    # =================================================================
+    # CONTINUITY (Ruling 42 Slice 2) - sustained pressure survives
+    # =================================================================
+
+    def save(self) -> None:
+        """Whole-file snapshot. Ruling 32's minimal semantics VERBATIM.
+
+        WHAT ROUND-TRIPS: `sustain_cycles` and every queue slot
+        (`doctrine_id`, `pressure`, `sustained_cycles`, `idle_cycles`,
+        `triggers`).
+
+        NO CLOCK RIDES WITH THIS ONE, AND THAT IS NOT AN OMISSION. Res.3's
+        coherence rule binds ABSOLUTE ordinals - TCAML's `_held_since` is one, and
+        it must travel with the `_cycle` it was measured against. `sustained_cycles`
+        and `idle_cycles` are pure RELATIVE counters: DMW holds no cycle number at
+        all, and each counter means "how many observes in a row", which is exactly
+        as true after a restart as before it. So they persist BARE, and inventing a
+        clock to pair them with would be coining the ordinal the rule protects.
+
+        REPORTED-NOT-PERSISTED: `last_overflow` - Ruling 23 refusals from the
+        cycle just ended, reset at the top of every `observe()` and consumed by
+        `DEE.cycle` in the same pass. A restored copy would re-route refusals that
+        were already routed.
+        """
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": self.STATE_VERSION,
+            "saved_at": datetime.now().isoformat(),
+            "sustain_cycles": self.sustain_cycles,
+            "queue": [
+                {
+                    "doctrine_id": s.doctrine_id,
+                    "pressure": s.pressure,
+                    "sustained_cycles": s.sustained_cycles,
+                    "idle_cycles": s.idle_cycles,
+                    "triggers": [t.value for t in s.triggers],
+                }
+                for s in self.queue.values()
+            ],
+        }
+        with open(self.runtime_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    def load(self) -> bool:
+        """Runtime state if present, ELSE an empty queue.
+
+        A RESTORED QUEUE OVER `DMW_QUEUE_MAX` IS A REFUSED LOAD, NEVER A
+        TRUNCATION (Slice 1's RACM shape, verbatim). Truncating would discard
+        real sustained pressure and report a healthy queue - and the 32-cap does
+        not move, because bounded queues are how this system refuses to become an
+        overload vector (Ruling 23).
+
+        A SLOT NAMING A DOCTRINE THE CODEX NO LONGER HOLDS IS QUARANTINED - held
+        out of the queue, visible on `quarantined_slots`, reported. It is not
+        dropped (that discards pressure AUREA sustained) and not re-pointed
+        (nothing may choose a different doctrine for it).
+        """
+        if not self.runtime_path.exists():
+            return False
+
+        try:
+            with open(self.runtime_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (OSError, ValueError) as exc:
+            return self._refuse(f"unreadable watch queue: {exc!r}")
+
+        version = data.get("version")
+        if version != self.STATE_VERSION:
+            return self._refuse(
+                f"unknown state version {version!r} (this build writes "
+                f"{self.STATE_VERSION}); the file was left untouched")
+
+        slots = data.get("queue") or []
+        if len(slots) > DMW_QUEUE_MAX:
+            return self._refuse(
+                f"restored queue depth {len(slots)} exceeds the bound "
+                f"{DMW_QUEUE_MAX}; truncating would silently discard sustained "
+                f"pressure, so the whole restore is refused")
+
+        try:
+            rebuilt = [
+                _Watched(
+                    doctrine_id=s["doctrine_id"],
+                    pressure=float(s.get("pressure", 0.0)),
+                    sustained_cycles=int(s.get("sustained_cycles", 0)),
+                    idle_cycles=int(s.get("idle_cycles", 0)),
+                    triggers=[MutationTrigger(t) for t in (s.get("triggers") or [])],
+                )
+                for s in slots
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            return self._refuse(f"a watch slot did not reconstruct: {exc!r}")
+
+        held: List[Dict[str, Any]] = []
+        kept: Dict[str, _Watched] = {}
+        for slot in rebuilt:
+            if self._doctrine_missing(slot.doctrine_id):
+                held.append({
+                    "doctrine_id": slot.doctrine_id,
+                    "pressure": slot.pressure,
+                    "sustained_cycles": slot.sustained_cycles,
+                    "reason": "the Codex no longer holds this doctrine",
+                })
+            else:
+                kept[slot.doctrine_id] = slot
+
+        self.queue = kept
+        self.sustain_cycles = int(data.get("sustain_cycles", self.sustain_cycles))
+        self.quarantined_slots.extend(held)
+
+        detail: Dict[str, Any] = {"saved_at": data.get("saved_at"),
+                                  "queue_depth": len(kept)}
+        if held:
+            detail["quarantined"] = [h["doctrine_id"] for h in held]
+        self.load_report = LoadReport(
+            store="dee.dmw_queue",
+            outcome=(RestorationOutcome.PARTIALLY_RESTORED if held
+                     else RestorationOutcome.RESTORED),
+            path=str(self.runtime_path), resumed=True, detail=detail)
+        return True
+
+    def _doctrine_missing(self, doctrine_id: str) -> bool:
+        """NO CODEX MEANS NO CHECK, and that is not the same as a check that
+        passed (Docket H's NOT_COUNTABLE / NONE_FOUND cut). A DMW with no handle
+        to the doctrine store has run no instrument, so it quarantines nothing."""
+        getter = getattr(self.codex, "get", None)
+        if not callable(getter):
+            return False
+        return getter(doctrine_id) is None
+
+    def _refuse(self, reason: str) -> bool:
+        self.queue = {}
+        self.load_report = LoadReport(
+            store="dee.dmw_queue", outcome=RestorationOutcome.REFUSED,
+            path=str(self.runtime_path), resumed=False, detail={"reason": reason})
+        return False
+
+    def _persist(self) -> None:
+        """BEST-EFFORT save. NEVER RAISES (Ruling 11's shape). A REFUSED load
+        makes this a no-op for the life of the process - "the file is left
+        BYTE-UNTOUCHED" is not a statement about the instant of the refusal."""
+        if self.load_report is not None \
+                and self.load_report.outcome is RestorationOutcome.REFUSED:
+            return
+        try:
+            self.save()
+        except (OSError, TypeError, ValueError) as exc:
+            self.persist_failures.append({
+                "op": "save", "path": str(self.runtime_path), "error": repr(exc),
+                "at": datetime.now().isoformat(),
+            })
 
     def observe(self, flags: List[PressureFlag]) -> List[_Watched]:
         """Age the queue, admit new pressure, return what has held long enough."""
@@ -280,12 +456,17 @@ class DMW:
             slot.triggers = flag.triggers
             slot.sustained_cycles += 1
 
+        # Ruling 42: the queue changed, so the queue is written. Sustained
+        # pressure is what DMW exists to accumulate; a process that died between
+        # here and a later boundary would restore counters that had already moved.
+        self._persist()
         return [s for s in self.queue.values()
                 if s.sustained_cycles >= self.sustain_cycles
                 and s.pressure >= PRESSURE_CRITICAL]
 
     def release(self, doctrine_id: str) -> None:
         self.queue.pop(doctrine_id, None)
+        self._persist()
 
     def expired(self) -> List[str]:
         return [d for d, s in self.queue.items() if s.idle_cycles >= PRESSURE_HALF_LIFE]
@@ -345,7 +526,10 @@ class DEE:
         self.reflex_grid = reflex_grid    # GSR escalation path (§IX.3)
 
         self.drpas = DRPAS()
-        self.dmw = DMW()
+        # Ruling 42 Slice 2: DMW takes the same READ handle DEE holds, so a LOAD
+        # can ask whether a queued doctrine id still names a doctrine. Reads are
+        # free (Ruling 1); DMW gains no write path to the Codex.
+        self.dmw = DMW(codex=codex)
         self.cmte = CMTE()
 
         self.nth: Dict[str, str] = {}                 # structurally inert doctrines
