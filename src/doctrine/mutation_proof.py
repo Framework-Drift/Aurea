@@ -64,6 +64,50 @@ class CriterionResult(str, Enum):
     ABSENT = "absent"    # NO INSTRUMENT RAN - the key was never supplied
 
 
+# The five CMTE criteria, canonically named ONCE.
+#
+# RULING 47 (2026-07-29) MOVED THIS HERE FROM `CMTE.FAILURE_LABELS`, and the move
+# is the point rather than a tidy-up. SAE now constructs a proof of its own for a
+# reversion (a counter-mutation that no CMTE gate evaluated), so it needs the
+# criterion NAMES in order to report them as ABSENT. The two ways to get them
+# were both wrong: importing `dee` into `sae.py` inverts the layering, making the
+# executor depend on the gate that calls it; and spelling the five names a second
+# time in `sae.py` creates a definition free to drift from CMTE's - the defect
+# Ruling 35 named ("a second definition drifts") and `tests/proof_support.py`
+# already committed once in the harness.
+#
+# This module is where it belongs on its own stated terms: "constructed by DEE,
+# consumed by SAE, and recorded by CAE - three modules in two packages - so it
+# belongs to none of them." `CMTE.FAILURE_LABELS` is now an ALIAS of this, so
+# there is exactly one definition and every existing reader is byte-identical.
+#
+# Criterion name -> the FAILURE LABEL `DEE._reject` routes on. Those labels are
+# load-bearing: `_reject` branches on `distortion_flagged` and
+# `identity_discontinuity` to send a doctrine to Null Threads rather than to
+# fermentation.
+CMTE_FAILURE_LABELS: Dict[str, str] = {
+    "collapse_threshold_reached": "collapse_threshold_not_reached",
+    "scar_lineage_present": "no_scar_lineage",
+    "echo_resonance_aligned": "echo_resonance_misaligned",
+    "identity_continuity_maintained": "identity_discontinuity",
+    "no_distortion_flags": "distortion_flagged",
+}
+
+
+def all_criteria_absent() -> Dict[str, "CriterionResult"]:
+    """The five criteria reported as UN-EVALUATED. The honest record for any
+    mutation path that no CMTE gate stood in front of.
+
+    THIS HELPER CANNOT FABRICATE ANYTHING, and that is why it is allowed to
+    exist where a `preserved_invariants` default is not. Its only possible output
+    is ABSENT for every criterion - the claim "no instrument ran", which is the
+    weakest statement the vocabulary can make. A convenience that produced PASS
+    would put "all five criteria satisfied" into the audit ledger of a mutation
+    that consulted none of them; this one is incapable of it.
+    """
+    return {name: CriterionResult.ABSENT for name in CMTE_FAILURE_LABELS}
+
+
 @dataclass(frozen=True)
 class ContentDelta:
     """What actually changed, at the level the store can express.

@@ -134,6 +134,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Scar, Doctrine
 from src.doctrine.dee import EligibilityRuling
@@ -424,8 +425,10 @@ class RIL:
             "saved_at": datetime.now().isoformat(),
             "threads": {t.value: list(self.threads[t]) for t in IdentityThread},
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. ORIGIN is written ONCE and is her birth
+        # identity; a torn write is the one loss this file exists to prevent
+        # (Ruling 42: "the first scar after a restart became her birth identity").
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE empty threads. Returns whether state resumed.

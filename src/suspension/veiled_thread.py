@@ -11,6 +11,8 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+from src.utils.atomic_write import atomic_write_json
+
 
 class VeiledThread(SuspensionSystem):
     """
@@ -292,8 +294,10 @@ class VeiledThread(SuspensionSystem):
             }
             data.append(entry_dict)
             
-        with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. A whole-file rebuild per save (see
+        # `black_sphere.save_to_file`). The Veiled Thread is "where a
+        # contradiction goes to keep being real"; a torn write ends that.
+        atomic_write_json(self.filepath, data, indent=2)
             
     def load_from_file(self):
         """Load Veiled Thread entries from disk."""

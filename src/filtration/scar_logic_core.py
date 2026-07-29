@@ -10,6 +10,7 @@ import json
 # closed vocabulary is a second definition free to drift from the first.
 # `scar_management` imports only `src.utils.models`, so there is no cycle.
 from src.filtration.scar_management import LIVE_STATES, DecayState, normalize
+from src.utils.atomic_write import atomic_write_json
 from src.utils.models import Scar
 from typing import Any, List, Optional
 from datetime import datetime
@@ -234,8 +235,13 @@ class ScarLogicCore:
         Ruling 32: the RUNTIME path, never the seed.
         """
         self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump([self._scar_to_dict(s) for s in self.scars], f, default=str, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. Scars are the most permanent records in
+        # the system (Ruling 22), and SML calls this on every decay transition -
+        # the most frequent snapshot write in the tree, against the store least
+        # able to afford a truncation.
+        atomic_write_json(self.runtime_path,
+                          [self._scar_to_dict(s) for s in self.scars],
+                          default=str, indent=2)
 
     def load_from_file(self) -> None:
         """

@@ -28,6 +28,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Protocol
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 
 from src.reflex.rb_system import BehaviorType, RBSystem
@@ -527,8 +528,10 @@ class RACM:
                 for slot in self._queue.values()
             ],
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. The deferral queue is pressure AUREA
+        # judged and chose to CARRY; losing it to a truncation discharges it
+        # silently, which is the defect Ruling 42 closed at the process boundary.
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE an empty queue. Returns whether it resumed.

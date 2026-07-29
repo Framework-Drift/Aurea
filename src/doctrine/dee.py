@@ -45,8 +45,15 @@ from typing import Any, Dict, List, Optional
 
 from src.doctrine.cae import CAE
 from src.doctrine.mutation_proof import (
-    ContentDelta, CriterionResult, DoctrineMutationProof,
+    CMTE_FAILURE_LABELS, ContentDelta, CriterionResult, DoctrineMutationProof,
 )
+# RULING 48 (2026-07-29): the CLOSED PAIR of refusals `_approve` expects from the
+# executor. Imported as concrete types so the `except` clause names them instead
+# of catching everything. `sae.py` imports neither `dee` nor anything that reaches
+# it (codex / cae / mutation_proof / models / atomic_write), so this is a
+# one-directional edge and not a cycle.
+from src.expansion.sae import CeilingExceeded, ExclusionViolation
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Doctrine
 
@@ -127,6 +134,13 @@ class EligibilityRuling:
     failed_criteria: List[str] = field(default_factory=list)
     reason: str = ""
     executed_by: Optional[str] = None                # "SAE" when mutation actually happened
+    # RULING 48 (2026-07-29): the CLASS NAME of the refusal the executor raised,
+    # where one was raised. `reason` carried the exception's MESSAGE and nothing
+    # else, so the only way to tell a spent ceiling from a §10.G exclusion was to
+    # substring-match prose written for a human. `None` on every path where the
+    # executor did not refuse - which includes an APPROVED ruling and every
+    # CMTE-side rejection, because those are not executor refusals at all.
+    refusal_type: Optional[str] = None
     cae_id: Optional[str] = None
     ruled_at: datetime = field(default_factory=datetime.now)
 
@@ -301,8 +315,10 @@ class DMW:
                 for s in self.queue.values()
             ],
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. A torn queue snapshot loses the
+        # SUSTAINED-ness of every watched doctrine, and sustain is the whole
+        # point of DMW - "a spike is not a reason to change what AUREA believes."
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE an empty queue.
@@ -486,15 +502,16 @@ class CMTE:
 
     # Canonical criterion name -> the FAILURE LABEL `_reject` routes on. Those
     # labels are load-bearing (`_reject` branches on `distortion_flagged` and
-    # `identity_discontinuity`), so they are named here once rather than spelled
-    # in two places that could drift.
-    FAILURE_LABELS = {
-        "collapse_threshold_reached": "collapse_threshold_not_reached",
-        "scar_lineage_present": "no_scar_lineage",
-        "echo_resonance_aligned": "echo_resonance_misaligned",
-        "identity_continuity_maintained": "identity_discontinuity",
-        "no_distortion_flags": "distortion_flagged",
-    }
+    # `identity_discontinuity`), so they are named ONCE rather than spelled in two
+    # places that could drift.
+    #
+    # RULING 47 (2026-07-29): the definition MOVED to `mutation_proof.py` and this
+    # is now an alias of it - same object, so every `FAILURE_LABELS[...]` read in
+    # this file and every `self.cmte.FAILURE_LABELS` read outside it is unchanged.
+    # SAE needs these names to report a reversion's criteria as ABSENT, and the
+    # alternatives were importing the gate into the executor or spelling the five
+    # names a second time. See that module for the full reasoning.
+    FAILURE_LABELS = CMTE_FAILURE_LABELS
 
     def evaluate(self, doctrine: Doctrine, watched: _Watched,
                  context: Dict[str, Any]) -> Dict[str, CriterionResult]:
@@ -762,6 +779,43 @@ class DEE:
         # THE HANDOFF. DEE calls; SAE executes; Codex records. If SAE refuses (ceiling
         # exhausted, 10.G exclusion, no collapse lineage), the refusal STANDS - the gate
         # does not get to route around the executor it just deferred to.
+        # RULING 48 (2026-07-29) - THE EXPECTED-REFUSAL PARTITION.
+        #
+        # This clause caught `Exception`. Two of the things it caught are the
+        # executor answering the gate's question - "no, not now" - and everything
+        # else it caught was a STRUCTURAL VIOLATION being converted into a
+        # fermentation reason string.
+        #
+        #   EXPECTED, and the whole reason a try exists here:
+        #     CeilingExceeded      the epoch's budget is spent (§10.F). Canonical.
+        #     ExclusionViolation   a §10.G target, or AVT.017's empty lineage.
+        #   Both are SAE saying no through its own gate, and fermenting is exactly
+        #   right - the doctrine's pressure is real and unresolved.
+        #
+        #   NOT EXPECTED, and swallowed until now:
+        #     MutationPreflightViolation   a successor id that cannot be written
+        #     CodexWriteViolation          a doctrine write outside the collapse path
+        #     InvalidMutationProof         a mutation arriving with no argument
+        #     ProvenanceOverwriteViolation a forensic record being rewritten
+        #   Every one of those means a path the architecture makes unexecutable was
+        #   executed anyway. `process_input` has a whole taxonomy for that since
+        #   Ruling 25 - a loud field, suppressed output, a durable record - and NONE
+        #   of it could ever fire for a mutation, because this clause consumed the
+        #   exception three frames below it. Ruling 25 built the surface; this is
+        #   what was standing in front of it.
+        #
+        # The distinction is not severity, it is AUTHORSHIP. A ceiling refusal is
+        # SAE exercising authority the architecture gave it. A preflight violation
+        # is SAE reporting that the architecture has been breached. Fermenting the
+        # second reads a breach as a decision, and records the doctrine as merely
+        # unresolved when the truth is that something wrote a mutation it could not
+        # write. **A guard whose firing looks like ordinary back-pressure is not
+        # enforcement** - Ruling 25's finding, one layer up the call stack.
+        #
+        # THE TUPLE IS CLOSED AND ENUMERATED, on `STRUCTURAL_VIOLATIONS`'s own
+        # terms: concrete types, never a base class, and adding a third member is a
+        # MANIFEST DECISION rather than a convenience. If a new expected refusal
+        # appears, it is ruled in here on purpose.
         try:
             self.sae.mutate_doctrine(
                 doctrine_id=doctrine.id,
@@ -771,10 +825,15 @@ class DEE:
                 reason=f"DEE/CMTE approval under {[t.value for t in watched.triggers]}",
             )
             ruling.executed_by = "SAE"
-        except Exception as exc:
+        except (CeilingExceeded, ExclusionViolation) as exc:
             # A refused mutation is not a failed system. It is the ceiling doing its job.
             ruling.verdict = Verdict.FERMENT
             ruling.reason = f"SAE refused execution: {exc}"
+            # RULING 48: the TYPE, not only the sentence. `reason` was the sole
+            # record of a refusal, and a prose string is read by humans and matched
+            # by nothing - a caller distinguishing "budget spent" from "§10.G
+            # target" had to substring-match the executor's message.
+            ruling.refusal_type = type(exc).__name__
             self._suspend(doctrine.id, ruling.reason)
 
         ruling.cae_id = self._audit("dee_eligibility", doctrine.id, ruling.reason)

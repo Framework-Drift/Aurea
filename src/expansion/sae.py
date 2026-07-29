@@ -34,16 +34,35 @@ fresh budget when something it changed has settled.
 
 Retirement is CEILING-EXEMPT: it removes capacity, it does not run away.
 
+RULINGS 46 + 47 - THE DUAL-ENTRY CLAIM ABOVE, FINISHED (2026-07-29)
+--------------------------------------------------------------------
+"Both doctrine entry paths converge on this single executor" was true of the
+CEILING and false of the PRE-FLIGHT. Ruling 24 gave `mutate_doctrine` three
+checks before its first write; `birth_doctrine` had NONE, so a birth carrying a
+living doctrine's id replaced that belief outright - no collapse, no fossil, no
+lineage, no error. Worse than the mutation case it was ruled beside, because a
+mutation at least archives what it displaces. `_birth_preflight` closes it, and
+`Codex.commit`'s Ruling-18 guard stays where it is as the backstop.
+
+`revert` was the third entry into the doctrine store and the only one that was
+not a mutation at all: it hand-rolled its own write token, so the ceiling, the
+CAE entry and the settle obligation never applied - and it marked the record
+reverted BEFORE attempting a write that could not succeed. **A reversion is a
+COUNTER-MUTATION and now takes the ordinary path**, under a NEW id (Rulings
+18/19 - restoring content is legitimate, restoring a dead name is revival), with
+a real proof, spending a real slot. See `revert` for the full record.
+
 RULING 34 - RESTART IS NOT ABSOLUTION (2026-07-27)
 --------------------------------------------------
 Until this ruling the ceiling reset on process death. `__init__` built
 `epoch=0, epoch_count=0, touched_lineages=set()` and SAE had no save and no
 load, so three mutations per epoch became 3N across N restarts. **The only
 implemented way to restore mutation budget was to kill the process** - because
-`stabilization_event`, the sole legitimate closer, has no caller anywhere in
-`src/`. A safety mechanism whose legitimate reset is unwired and whose
-illegitimate reset works is not a partially-built guard; it is a guard pointed
-the wrong way.
+`stabilization_event`, the sole legitimate closer, ~~has no caller anywhere in
+`src/`~~ *(true when written; SUPERSEDED 2026-07-27 by Ruling 37 - see the
+supersession block below)* had no caller anywhere in `src/`. A safety mechanism
+whose legitimate reset is unwired and whose illegitimate reset works is not a
+partially-built guard; it is a guard pointed the wrong way.
 
     A process death does not SETTLE a lineage; it INTERRUPTS one.
     An interrupted epoch is not a finished epoch and does not earn a fresh ceiling.
@@ -80,13 +99,51 @@ epoch. A saturation count that closed the epoch would be a cutoff on a tally
 (§9 standing bar #5, sixth application), and it would be the restart bypass
 returning under the counter's own name.
 
-`stabilization_event`'s two senders remain UNBUILT - not unwired. Scar
-fermentation and anchor consolidation are mechanisms wanting corpus grounding
-(`scar_logic_core.py` contains zero occurrences of ferment/settle/stabilize/
-consolidate; `compass.py` zero of consolidate; Nova's fermentation is ECHO
-fermentation and DEE's is DOCTRINE fermentation - neither is scar fermentation).
-Until that contract lands, **epochs close never - which canon explicitly
-tolerates and the surfacing rule makes legible.** Do not invent a sender.
+SUPERSEDED IN PLACE 2026-07-29 (rider R1) - THE SENDERS ARE BUILT AND WIRED
+----------------------------------------------------------------------------
+The paragraph below was accurate on 2026-07-27 when Ruling 34-A was written, and
+it was made obsolete THE SAME DAY by Ruling 37. It is kept rather than deleted
+because it is the record of what was known when the surfacing rule was designed,
+and Ruling 34-A's whole argument rests on it: the horizon exists BECAUSE nothing
+could close an epoch. Read it as history, not as status.
+
+    ~~`stabilization_event`'s two senders remain UNBUILT - not unwired. Scar
+    fermentation and anchor consolidation are mechanisms wanting corpus grounding
+    (`scar_logic_core.py` contains zero occurrences of ferment/settle/stabilize/
+    consolidate; `compass.py` zero of consolidate; Nova's fermentation is ECHO
+    fermentation and DEE's is DOCTRINE fermentation - neither is scar
+    fermentation). Until that contract lands, **epochs close never - which canon
+    explicitly tolerates and the surfacing rule makes legible.** Do not invent a
+    sender.~~
+
+WHAT IS TRUE NOW (Rulings 37 + 37-A, landed `168ec0b`; epochs have closed since):
+
+    SCAR FERMENTATION  `SML._emit_fermentation` (`src/filtration/scar_management.py`)
+                       calls `stabilization_event("scar_fermentation", lineage)`
+                       when a scar cools ACTIVE -> WANING by SCHEDULE. It is
+                       reached only from `SML.transition`, and only on that one
+                       edge, which is what makes "cooled" distinguishable from
+                       "ignited". It emits per matching lineage key, reading BOTH
+                       `scar.id` and `scar.linked_doctrines` (Ruling 26's shape),
+                       so the guard below is satisfied by construction.
+    ANCHOR CONSOLID.   `CompassStabilityEngine` calls
+                       `stabilization_event("anchor_consolidation", lineage)` after
+                       a full `CONSOLIDATION_WINDOW` of undisturbed orientation,
+                       once per episode, for each touched lineage that anchors a
+                       recovered direction. OBSERVED, never induced.
+    THE DRIVER         `AureaCore.process_input` calls `sml.advance_cycle()` from
+                       the same site as `tcaml.tick()` and `sae.advance_cycle()`,
+                       so all three clocks advance together.
+
+    "Do not invent a sender" is DISCHARGED, not relaxed: neither sender was
+    invented. Both were grounded in corpus before they were built, and SML EMITS
+    while SAE never polls - the budget-holder is not the judge of its own debts.
+
+Ruling 34-A's machinery is UNAFFECTED and is not dead code. The horizon still
+surfaces a saturated epoch, because an epoch closing is not the same as an epoch
+closing IN TIME: a system under sustained pressure can still spend its budget
+faster than anything it changed settles. What changed is that the saturated state
+is now escapable by metabolism instead of only by restart.
 """
 
 from __future__ import annotations
@@ -99,13 +156,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.doctrine.cae import CAE
-from src.doctrine.mutation_proof import DoctrineMutationProof, validate_proof
+from src.doctrine.mutation_proof import (
+    ContentDelta, DoctrineMutationProof, all_criteria_absent, validate_proof,
+)
 from src.doctrine.codex import (
     Codex,
     CodexWriteViolation,
     MutationAuthorization,
     new_authorization_id,
 )
+from src.utils.atomic_write import atomic_write_json
 from src.utils.models import Doctrine
 
 
@@ -194,6 +254,60 @@ class MutationRecord:
     reverted: bool = False
 
 
+class RevertRefusal(str, Enum):
+    """WHY a reversion did not happen. RULING 47 (2026-07-29).
+
+    A `str` Enum by the shape rule (`CriterionResult`'s reasoning): ONE
+    vocabulary, serialized into the refusal record, with no collision partner
+    anywhere in the tree.
+
+    FIVE CAUSES, FIVE MEMBERS, on Ruling 29's discipline - a single signal
+    covering causally different events is the defect, and the old code returned
+    the SAME bare `None` for "no such authorization" (a caller error) and "that
+    record is a birth" (a structurally open question). Reading the first as the
+    second is how an unruled semantics stays invisible.
+    """
+
+    NO_SUCH_RECORD = "no_such_record"                    # caller error, or already reverted
+    NOT_A_DOCTRINE_MUTATION = "not_a_doctrine_mutation"  # another owner's store
+    BIRTH_NOT_REVERTIBLE = "birth_not_revertible"        # UNRULED - see `revert`
+    SUCCESSOR_NOT_LIVE = "successor_not_live"            # the belief already moved on
+    SUCCESSOR_NOT_FOUND = "successor_not_found"          # a discontinuity, not a state
+    SUCCESSOR_AMBIGUOUS = "successor_ambiguous"          # nothing is picked
+
+
+@dataclass(frozen=True)
+class RevertOutcome:
+    """What `SAE.revert` did, or refused to do, and why.
+
+    FROZEN for `DoctrineMutationProof`'s reason: it is a statement about a
+    decision already made, and a caller that could rewrite `performed` after the
+    fact could make a refused reversion read as a completed one.
+
+    `performed` and `refusal` are mutually exclusive by construction of every
+    return site: a performed reversion carries the committed doctrine, a refused
+    one carries a member and a sentence.
+    """
+
+    performed: bool
+    authorization_id: str
+    doctrine: Optional[Doctrine] = None
+    refusal: Optional[RevertRefusal] = None
+    reason: str = ""
+    reverted_from: str = ""      # the successor this counter-mutation ⊗-fossilized
+    restored_from: str = ""      # the ancestor whose content came back
+
+    def __bool__(self) -> bool:
+        """Truthiness IS `performed`.
+
+        Stated explicitly because the old signature returned `Optional[Doctrine]`,
+        so a caller migrating from it writes `if sae.revert(...)`. Without this,
+        a dataclass instance is always truthy and every refusal would read as a
+        success - the `Codex.__bool__` hazard, in the opposite direction.
+        """
+        return self.performed
+
+
 class SAE:
     """Self-Authorship Engine. The only thing in AUREA that may change AUREA."""
 
@@ -261,6 +375,12 @@ class SAE:
         # mutation - but it must not vanish either, so it lands here.
         self.persist_failures: List[Dict[str, Any]] = []
         self.restart_records: List[Dict[str, Any]] = []
+        # Ruling 47: refused reversions, append-only and legible. NOT PERSISTED -
+        # these are this process's refusals to act, and nothing changed, so there
+        # is no obligation for a restart to resume (contrast `touched_lineages`,
+        # which is a debt). A performed reversion IS durable, because it goes
+        # through `mutate_doctrine` like every other mutation.
+        self.revert_refusals: List[Dict[str, Any]] = []
 
         # Authorized reflex changes awaiting execution by their owner (the Reflex Grid).
         # SAE authorizes; the owner writes. Ruling 1, same shape as the Codex path.
@@ -434,6 +554,28 @@ class SAE:
         committed = self.codex.commit(new_form, auth)
 
         self.history.append(record)
+        # RULING 47 (2026-07-29) - THE RECORD IS DURABLE AT THE MOMENT OF THE
+        # MUTATION, exactly as the SLOT is.
+        #
+        # Found while pinning this ruling, not by design: `authorize()` persists
+        # (twice - `_touch` and the explicit call), and both happen BEFORE this
+        # record exists. So `history` reached disk only on the NEXT `_persist`
+        # from anywhere, and a process that died in between resumed with the
+        # ceiling slot correctly spent and NO RECORD OF WHAT SPENT IT.
+        #
+        # `save`'s own docstring already claimed the opposite in terms - "history
+        # (including each record's `pre_state` doctrine, SO A ROLLBACK SURVIVES A
+        # RESTART)" - which was true of the format and false of the timing. The
+        # Docket E shape: a docstring describing a protection the code did not
+        # have.
+        #
+        # It matters more now than it did an hour ago. Ruling 47 makes `revert`
+        # resolve through `self.history`, so a lost record is a lost
+        # revertibility - and `record.reverted` lives here too, which means an
+        # unpersisted flag would let the SAME authorization be reverted twice
+        # across a restart: two counter-mutations, two spent slots, one
+        # authorization. Ruling 13's one-proposal-ever hazard, on this store.
+        self._persist()
         return committed
 
     def _preflight(self, doctrine_id: str, new_form: Doctrine) -> None:
@@ -486,11 +628,77 @@ class SAE:
                 f"id someone else is still using."
             )
 
+    def _birth_preflight(self, doctrine: Doctrine) -> None:
+        """RULING 46 (2026-07-29): the two id-occupancy checks a BIRTH must pass,
+        BEFORE `authorize()` - so a refused birth spends no ceiling slot and
+        writes no CAE entry for a mutation that never happened (Ruling 24's
+        spend/refuse boundary, applied to the second entry path).
+
+        WHY THIS IS NOT `_preflight`, and why reusing it would have been wrong:
+        `_preflight`'s FIRST check is `new_form.id == doctrine_id` - a successor
+        may not wear its ancestor's id. A birth HAS NO ANCESTOR. Calling
+        `_preflight(doctrine.id, doctrine)` would compare the doctrine's id to
+        itself and refuse EVERY birth. So the shared checks are stated here with
+        birth's own reasoning, and Ruling 24's method is untouched.
+
+        (i)  A LIVE id is occupied. This is the check birth never had, and the
+             one that closes the silent clobber: `Codex.commit` assigns into
+             `self.doctrines` with no occupancy test, so this was the only place
+             it could be caught at all.
+        (ii) A FALLEN id is permanently dead (Rulings 18/19). `Codex.commit`
+             ALREADY refuses this one, and that guard is DELIBERATELY LEFT IN
+             PLACE - it is the backstop, and defence in depth is the point. What
+             changes is WHEN the refusal happens: before the ceiling slot is
+             spent rather than after. A birth over a fossil id used to cost a
+             mutation from the epoch's budget and a permanent CAE entry to
+             discover a refusal that was structurally certain.
+        """
+        # LIVE FIRST - it is the defect being closed here. The two sets are
+        # disjoint by construction (`fossilize` deletes from `doctrines`, and the
+        # loader routes by status per Ruling 35), so the order changes no verdict;
+        # it states which check is load-bearing and which is a hoisted backstop.
+        if doctrine.id in self.codex.doctrines:
+            raise MutationPreflightViolation(
+                f"'{doctrine.id}' is already a LIVE doctrine, so this birth would "
+                f"REPLACE it - no collapse behind the replacement, no fossil of "
+                f"what stood there, no lineage recording that anything was "
+                f"displaced. A mutation at least archives what it supersedes; a "
+                f"birth over a living id does not. If this belief is meant to "
+                f"evolve, mutate IT; a new doctrine is born under a new name."
+            )
+        if doctrine.id in self.codex.fossils:
+            raise MutationPreflightViolation(
+                f"'{doctrine.id}' is ⊗-fossilized. A fallen doctrine does not "
+                f"return to active status by being born again - the fallen id is "
+                f"permanently dead (Rulings 18/19, Option B). A doctrine that "
+                f"resembles a fossil is born under a NEW id carrying the fallen "
+                f"one in its mutation_lineage. Refused HERE so it costs no "
+                f"ceiling slot; Codex.commit still refuses it as the backstop."
+            )
+
     def birth_doctrine(self, doctrine: Doctrine, collapse_lineage: str) -> Doctrine:
         """A scar cluster that survived enough pressure to become structure.
 
         Counted as a doctrine mutation: new doctrine is a change to what AUREA is.
+
+        RULING 46 (2026-07-29): THE BIRTH PATH GETS A PRE-FLIGHT TOO.
+
+        Ruling 24 gave `mutate_doctrine` three checks before its first write, and
+        the third of them - "an id collision with a LIVE doctrine would have
+        SILENTLY CLOBBERED it" - was found while ruling that one. **Birth never
+        got it.** `birth_doctrine` went straight to `authorize()` and then
+        `codex.commit()`, and `commit` writes `self.doctrines[doctrine.id] = ...`
+        unconditionally, so a birth carrying the id of a living belief REPLACED
+        that belief: no collapse behind the replacement, no fossil of what was
+        there, no lineage recording that anything was displaced, and no error.
+
+        The same defect Ruling 24 called "identity change through an id
+        collision" lived on the OTHER doctrine-entry path for the four days
+        between the two rulings, and it lived there in its worse form - a
+        mutation at least fossilizes what it displaces, and a birth does not
+        even do that. The ancestor is not archived; it is GONE.
         """
+        self._birth_preflight(doctrine)
         auth = self.authorize(MutationClass.MUTATE_DOCTRINE, collapse_lineage, doctrine.id)
         if collapse_lineage not in doctrine.scar_links:
             doctrine.scar_links.append(collapse_lineage)
@@ -505,7 +713,8 @@ class SAE:
             epoch=self.epoch,
             cae_id=auth.cae_id,
         ))
-        return committed
+        self._persist()          # Ruling 47: see `mutate_doctrine` - the record is
+        return committed         # durable at the moment of the mutation.
 
     # =================================================================
     # COUNTED CLASS 2 - REFLEX MUTATION
@@ -526,6 +735,7 @@ class SAE:
             cae_id=auth.cae_id,
         )
         self.history.append(record)
+        self._persist()          # Ruling 47: see `mutate_doctrine`.
         # NOTE: the reflex-side write executes in the Reflex Grid registry, which owns
         # the reflex objects. SAE authorizes; it does not reach into another store.
         # The `change` payload rides with the authorization to that owner.
@@ -553,6 +763,7 @@ class SAE:
             epoch=self.epoch,
             cae_id=auth.cae_id,
         ))
+        self._persist()          # Ruling 47: see `mutate_doctrine`.
         return auth
 
     def authorize_module_retirement(self, module_id: str,
@@ -603,9 +814,33 @@ class SAE:
         settle there. The principle that makes restart non-absolving makes closure
         non-absolving - one rule, two boundaries.
 
-        BOTH SENDERS ARE UNBUILT (Ruling 34-A). This method has no caller in
+        ~~BOTH SENDERS ARE UNBUILT (Ruling 34-A). This method has no caller in
         `src/`, and that is a DEFERRED CONTRACT, not an oversight. Do not invent
-        a sender to exercise it.
+        a sender to exercise it.~~
+
+        SUPERSEDED IN PLACE 2026-07-29 (rider R1). The sentence above was true
+        when written and stopped being true on 2026-07-27, when Rulings 37 +
+        37-A built both senders (`168ec0b`). It is kept because a reader
+        arriving at this method needs to know that the caller-less era was real
+        and why: until it ended, THE ONLY WAY TO RESTORE MUTATION BUDGET WAS TO
+        KILL THE PROCESS, which is Ruling 34's guard-pointed-the-wrong-way in
+        one sentence.
+
+        BOTH SENDERS ARE NOW BUILT AND WIRED:
+          `scar_fermentation`    <- `SML._emit_fermentation`, on the scheduled
+                                    ACTIVE -> WANING edge only. A MANUAL retire
+                                    cannot reach it (Ruling 40) - an operator
+                                    action must not close an epoch.
+          `anchor_consolidation` <- `CompassStabilityEngine`, after an unbroken
+                                    consolidation window, once per episode.
+        Both are driven from `AureaCore.process_input`. See the module docstring
+        for the full supersession record.
+
+        THE GUARD BELOW IS UNCHANGED BY ANY OF THIS, and that matters more now
+        that there are real callers than it did when there were none: a sender
+        exists, so the closed VALID set and the `touched_lineages` membership
+        test are the only things standing between an unrelated settling event
+        and a re-armed ceiling.
         """
         VALID = {"scar_fermentation", "anchor_consolidation"}
         if event_type not in VALID:
@@ -738,26 +973,275 @@ class SAE:
         self.touched_lineages.add(lineage)
         self._persist()
 
-    def revert(self, authorization_id: str) -> Optional[Doctrine]:
+    def revert(self, authorization_id: str) -> RevertOutcome:
         """GSR-triggered reversion is a CANDIDATE, never automatic (5a Rollback Tracker).
 
-        Restores the pre-state. Does NOT erase the scar trace or the CAE entry - the
-        mutation still happened, and the record that it happened is not revertible.
+        Restores the pre-state's CONTENT. Does NOT erase the scar trace or the CAE
+        entry - the mutation still happened, and the record that it happened is not
+        revertible.
+
+        RULING 47 (2026-07-29) - A REVERSION IS A COUNTER-MUTATION, AND IT TAKES
+        THE SAME PATH AS EVERY OTHER MUTATION.
+
+        WHAT THIS REPLACED, because it is the reason the ruling exists. The old
+        body did three things wrong and they compounded:
+
+          1. It set `record.reverted = True` FIRST, before attempting any work.
+          2. It hand-rolled a `MutationAuthorization` with `mutation_class=
+             "rollback"` - bypassing `authorize()` entirely, and with it the
+             Self-Mutation Ceiling, the CAE entry, `_touch`'s settle obligation
+             and the Ruling-24 pre-flight. A doctrine write with a token SAE
+             minted outside its own gate is Ruling 5's executor privilege used to
+             route around Ruling 34's budget.
+          3. It committed `record.pre_state` UNDER THE ANCESTOR'S OWN ID - the id
+             the very mutation being reverted had ⊗-fossilized. `Codex.commit`
+             refuses that outright (Ruling 18), so the call RAISED.
+
+        Put together: **reversion was not merely unaudited, it was
+        non-functional, and it falsified its own record on the way to failing.**
+        `reverted = True` was already written when `CodexWriteViolation` came
+        back out, so a caller that swallowed the exception would read a history in
+        which the mutation had been undone while the Codex still held the
+        successor. A rollback tracker whose flag means nothing is worse than no
+        tracker, because a forensic record is consulted precisely when memory is
+        gone.
+
+        WHAT IT DOES NOW. It builds a successor whose CONTENT is the pre-state's
+        and whose ID IS NEW, and puts it through `self.mutate_doctrine`. Every
+        guarantee of the ordinary path therefore applies with no special case:
+        pre-flight, `authorize()` (ceiling + CAE + `_touch` + durable persist),
+        ⊗-fossilization of what is being reverted, and a single-use commit token.
+
+        THE NEW ID IS NOT A CONVENIENCE, it is Rulings 18/19 holding. Restoring
+        the ancestor's NAME is the revival those rulings forbid; what a reversion
+        legitimately restores is the ancestor's CONTENT, born again through the
+        ordinary path under a new id carrying the whole chain in
+        `mutation_lineage`. Option B, applied to rollback. Reading the lineage of
+        a reverted doctrine shows ancestor -> successor -> reversion: she can see
+        that she went there and came back, which is exactly what she must not be
+        able to hide.
+
+        AND IT SPENDS A CEILING SLOT, which is the half most likely to look like
+        an over-correction and is not. A reversion CHANGES WHAT AUREA BELIEVES.
+        That the new content was once her content does not make the change free -
+        if it did, an unbounded oscillation between two forms would cost nothing,
+        and "three mutation events per epoch" would bound only motion in one
+        direction. Reverting is metabolism too.
+
+        `record.reverted` is written ONLY after `mutate_doctrine` returns. On any
+        raise the flag is untouched and the exception PROPAGATES - a refused
+        reversion is not a completed one, and `CeilingExceeded` reaching the
+        caller is the ceiling doing its job.
+        """
+        record = self._revertible(authorization_id)
+        if record is None:
+            return self._refuse_revert(
+                authorization_id, RevertRefusal.NO_SUCH_RECORD,
+                f"no unreverted mutation record carries authorization "
+                f"'{authorization_id}'.")
+
+        if record.mutation_class is not MutationClass.MUTATE_DOCTRINE:
+            # A reflex change or a module-generation authorization. SAE authorized
+            # those; it did not execute them, and their stores have other owners
+            # (Ruling 1). Reverting one is a REQUEST to that owner, not a doctrine
+            # write, and there is no such request path.
+            return self._refuse_revert(
+                authorization_id, RevertRefusal.NOT_A_DOCTRINE_MUTATION,
+                f"'{record.mutation_class.value}' is not executed by SAE - the "
+                f"Reflex Grid owns reflex state and MSP owns module generation. "
+                f"Reverting one is a request to that owner, and SAE does not "
+                f"write another store to undo an authorization it only issued.")
+
+        if record.pre_state is None:
+            # A BIRTH. Undoing one means removing a doctrine that has no prior
+            # form to return to, and the only mechanism that removes a live
+            # doctrine is ⊗-fossilization - which would mark as FALLEN something
+            # that never collapsed. Whether a birth can be un-born, and what the
+            # Fossil Layer would then be recording, is UNRULED. The refusal is the
+            # whole of v1: the ruling declined to invent the semantics, and a
+            # silent `None` here (which is what this returned before) is what let
+            # the question stay invisible.
+            return self._refuse_revert(
+                authorization_id, RevertRefusal.BIRTH_NOT_REVERTIBLE,
+                f"'{record.target_id}' was BORN by this authorization; there is "
+                f"no pre-state to restore. Un-birthing would ⊗-mark a doctrine "
+                f"that never collapsed, and what the Fossil Layer would then be "
+                f"recording is an OPEN RULING. Refused, recorded, not invented.")
+
+        live = self.codex.direct_successors(record.target_id)
+        if len(live) > 1:
+            # Should be unreachable: a doctrine is fossilized by the mutation that
+            # succeeds it, so it can be mutated once. If two live doctrines claim
+            # the same immediate ancestor, something already went wrong upstream -
+            # and choosing between them is the one thing not to do (Ruling 42:
+            # when the answer is ambiguous, nothing is picked).
+            return self._refuse_revert(
+                authorization_id, RevertRefusal.SUCCESSOR_AMBIGUOUS,
+                f"'{record.target_id}' has {len(live)} live direct successors "
+                f"({', '.join(live)}). A doctrine can only be mutated once, so "
+                f"this state should not exist; SAE does not choose which of them "
+                f"to counter-mutate.")
+
+        if not live:
+            fossilized = self.codex.fossil_direct_successors(record.target_id)
+            if fossilized:
+                # THE BELIEF HAS ALREADY MOVED ON. What this mutation produced was
+                # itself superseded, so there is no present state for the
+                # reversion to change - only a claim about history, and history is
+                # not revertible. Counter-mutating the CURRENT descendant instead
+                # would silently discard every mutation since.
+                return self._refuse_revert(
+                    authorization_id, RevertRefusal.SUCCESSOR_NOT_LIVE,
+                    f"what this mutation produced ({', '.join(fossilized)}) has "
+                    f"itself been ⊗-fossilized by a later mutation. Reverting now "
+                    f"would be a claim about history rather than a change to the "
+                    f"present, and undoing it through the current descendant would "
+                    f"silently discard everything that happened since.")
+            # NEITHER LIVE NOR FOSSILIZED. A THIRD case and not the same absence
+            # (Docket H's NONE_FOUND / NOT_COUNTABLE cut): the record describes a
+            # mutation whose product no store holds, which is a discontinuity to
+            # report rather than a state to reconcile.
+            return self._refuse_revert(
+                authorization_id, RevertRefusal.SUCCESSOR_NOT_FOUND,
+                f"no doctrine in either store records '{record.target_id}' as its "
+                f"immediate ancestor, so what this mutation produced cannot be "
+                f"identified. Nothing is guessed from names or content.")
+
+        successor_id = live[0]
+        successor = self.codex.get(successor_id)
+        pre = record.pre_state
+
+        # THE NEW ID. Derived from the ancestor being restored and the exact
+        # authorization being undone, in Nova's `::`-segmented convention
+        # (`{doctrine_id}::nova::{echo.id}`), which `_preflight`'s docstring calls
+        # the structural one. NO COUNTER IS MINTED - Ruling 42 res.4 makes an id
+        # counter continuity state that must persist, and there is nothing to
+        # persist here: the id is a function of two recorded facts. One
+        # authorization can be reverted once (`reverted` guards it), so it is
+        # unique by construction - and if it somehow is not, `_preflight` refuses
+        # the collision loudly rather than committing over anything.
+        new_id = f"{record.target_id}::revert::{record.authorization_id}"
+
+        new_form = Doctrine(
+            id=new_id,
+            name=pre.name,
+            description=pre.description,
+            # From the PRE-STATE. `mutate_doctrine` then unions the successor's
+            # scars and the collapse lineage over the top, so the reversion
+            # carries the scars of everything it passed through - nothing is
+            # dropped, because a reversion does not un-happen the scarring.
+            scar_links=list(pre.scar_links),
+            tca_tags=list(pre.tca_tags),
+            created_at=datetime.now(),
+        )
+
+        proof = DoctrineMutationProof(
+            contradiction_core={
+                "triggers": ["rollback"],
+                "strain_source": "SAE.revert - rollback of a recorded mutation "
+                                 "(5a Rollback Tracker)",
+                "reverted_authorization": record.authorization_id,
+                "reverted_cae_id": record.cae_id,
+                "reverted_epoch": record.epoch,
+                "restored_from": record.target_id,
+                "counter_mutating": successor_id,
+            },
+            # FROM THE RECORD. The collapse lineage the original mutation was
+            # authorized on, then the pre-state's own scars: every id here was
+            # already written down by a real survived collapse. Ordered dedup, the
+            # `_approve` shape.
+            scar_lineage=tuple(dict.fromkeys(
+                [s for s in [record.collapse_lineage, *pre.scar_links] if s]
+            )),
+            # No echo authored a reversion. `None` is the ordinary case for this
+            # field and is not a gap (see `DEE._echo_provenance`).
+            echo_provenance=None,
+            content_delta=ContentDelta(
+                # The doctrine ACTUALLY being mutated is the successor, not the
+                # ancestor whose content is coming back. The delta describes THIS
+                # mutation.
+                ancestor_id=successor_id,
+                name_before=successor.name if successor else "",
+                name_after=new_form.name,
+                description_before=successor.description if successor else "",
+                description_after=new_form.description,
+            ),
+            # NO CMTE GATE STOOD IN FRONT OF THIS. All five ABSENT is the honest
+            # record of that, and `all_criteria_absent()` cannot express anything
+            # stronger - see `mutation_proof.py`.
+            preserved_invariants=all_criteria_absent(),
+            # WHAT THE REVERSION DOES NOT RESOLVE, stated rather than left empty.
+            # Undoing the change does not undo the pressure that forced it: the
+            # contradiction the original mutation was answering is live again.
+            unresolved_residue=(
+                f"the contradiction that forced {record.authorization_id} is "
+                f"unresolved again - reverting the change does not revert the "
+                f"pressure",
+                f"⊗{successor_id} is fossilized by this reversion and its id "
+                f"is permanently dead (Rulings 18/19)",
+            ),
+        )
+
+        committed = self.mutate_doctrine(
+            doctrine_id=successor_id,
+            new_form=new_form,
+            collapse_lineage=record.collapse_lineage,
+            proof=proof,
+            reason=f"reversion of {record.authorization_id}",
+        )
+
+        # ONLY NOW. Every raise above and inside `mutate_doctrine` leaves this
+        # False, which is the defect this ruling closes.
+        record.reverted = True
+        self._persist()
+        return RevertOutcome(
+            performed=True,
+            authorization_id=authorization_id,
+            doctrine=committed,
+            reverted_from=successor_id,
+            restored_from=record.target_id,
+        )
+
+    def _revertible(self, authorization_id: str) -> Optional[MutationRecord]:
+        """The one unreverted record carrying this authorization, or None.
+
+        Separated from `revert` so the history is scanned to completion BEFORE
+        `mutate_doctrine` appends the reversion's own record to it - iterating a
+        list while something inside the loop appends to it is a trap this method
+        exists to keep shut.
         """
         for record in self.history:
             if record.authorization_id == authorization_id and not record.reverted:
-                record.reverted = True
-                if record.pre_state is not None:
-                    auth = MutationAuthorization(
-                        authorization_id=new_authorization_id(),
-                        executor=self.EXECUTOR,
-                        mutation_class="rollback",
-                        collapse_lineage=record.collapse_lineage,
-                        epoch=self.epoch,
-                    )
-                    return self.codex.commit(record.pre_state, auth)
-                return None
+                return record
         return None
+
+    def _refuse_revert(self, authorization_id: str, kind: "RevertRefusal",
+                       detail: str) -> RevertOutcome:
+        """Record a refused reversion and return it TYPED.
+
+        RULING 47: the old body returned a bare `None` for two entirely different
+        situations - "this record was a birth" and "no such record" - which is
+        Ruling 29's defect (one signal covering causally opposite events) inside a
+        return value. Each cause now has its own `RevertRefusal` member and its own
+        sentence, and the refusal ACCUMULATES rather than evaporating (Ruling 23:
+        unresolved pressure never leaves silently).
+
+        NO CAE ENTRY, and the omission is deliberate. Canon 3a:111 requires an
+        entry for a doctrine MUTATED, COLLAPSED OR DISCARDED; a refused reversion
+        does none of the three - nothing changed. Writing one would pad the audit
+        lineage with non-events, and the ledger's value is that every line in it
+        is a change. The refusal is recorded where it happened.
+        """
+        outcome = RevertOutcome(performed=False, authorization_id=authorization_id,
+                                refusal=kind, reason=detail)
+        self.revert_refusals.append({
+            "authorization_id": authorization_id,
+            "refusal": kind.value,
+            "reason": detail,
+            "epoch": self.epoch,
+            "at": datetime.now().isoformat(),
+        })
+        return outcome
 
     # =================================================================
     # RULING 34 res.1 - CONTINUITY. There is NO seed epoch.
@@ -788,8 +1272,14 @@ class SAE:
             "divergence_trigger_eligible": self.divergence_trigger_eligible,
             "history": [self._record_to_dict(r) for r in self.history],
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. Mode "w" truncated this file before
+        # writing a byte, and a torn epoch snapshot reads back as a corrupt file
+        # that `load` records and steps past - CONSTRUCTING AT DEFAULTS, which
+        # means `epoch_count=0`. A truncating write on this particular file was
+        # therefore a route to a fresh mutation ceiling, which is the restart
+        # absolution Ruling 34 exists to forbid, arriving through the persistence
+        # layer instead of the process boundary.
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE today's defaults. Returns whether state

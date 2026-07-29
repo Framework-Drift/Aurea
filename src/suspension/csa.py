@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 
+from src.utils.atomic_write import atomic_write_json
+
 
 class CSA(SuspensionSystem):
     """
@@ -239,8 +241,10 @@ class CSA(SuspensionSystem):
             }
             data.append(entry_dict)
             
-        with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. A whole-file rebuild per save (see
+        # `black_sphere.save_to_file`): carried-but-rerouted contradiction is
+        # suspended state, and losing it resolves it by accident.
+        atomic_write_json(self.filepath, data, indent=2)
             
     def load_from_file(self):
         """Load CSA entries from disk."""

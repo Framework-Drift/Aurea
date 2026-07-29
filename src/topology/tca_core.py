@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from enum import Enum
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 
 
@@ -592,8 +593,10 @@ class TopologicalSpace:
                 'bridges': constellation.bridges
             }
         
-        with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=2, default=str)
+        # Rider R3 (2026-07-29): ATOMIC. `json.dumps` output is ASCII
+        # (`ensure_ascii` defaults True), so naming utf-8 here where the old call
+        # took the platform default is byte-for-byte the same file.
+        atomic_write_json(self.filepath, data, indent=2, default=str)
     
     def load_from_file(self):
         """Load the topological map from disk.

@@ -122,6 +122,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import networkx as nx
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 
 
@@ -1011,8 +1012,15 @@ class TCAML:
             "held_since": self._held_since,
             "health": self._health,
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC, and this file has the sharpest reason of
+        # the thirteen. Ruling 42 Slice 2 made an orphaned lock restore HELD
+        # because restoring FREE is the fail-OPEN direction on the guard against
+        # structural change. A torn snapshot is a REFUSED load, which constructs a
+        # FREE lock - the fail-open outcome reached by damaging the file instead
+        # of by misreading it. `_held_since` and `_cycle` must also arrive
+        # together (res.3), and a truncation is exactly how one arrives without
+        # the other.
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE a fresh HEALTHY lock. Returns whether

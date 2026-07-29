@@ -28,17 +28,18 @@ from __future__ import annotations
 from typing import Dict, Optional, Sequence
 
 from src.doctrine.mutation_proof import (
-    ContentDelta, CriterionResult, DoctrineMutationProof,
+    ContentDelta, CriterionResult, DoctrineMutationProof, all_criteria_absent,
 )
 
 # The five CMTE criteria, none of which a direct SAE call evaluates.
-_ALL_ABSENT: Dict[str, CriterionResult] = {
-    "collapse_threshold_reached": CriterionResult.ABSENT,
-    "scar_lineage_present": CriterionResult.ABSENT,
-    "echo_resonance_aligned": CriterionResult.ABSENT,
-    "identity_continuity_maintained": CriterionResult.ABSENT,
-    "no_distortion_flags": CriterionResult.ABSENT,
-}
+#
+# RULING 47 (2026-07-29): this was a hand-spelled dict of the same five names -
+# the SECOND definition of CMTE's vocabulary, in the harness, exactly the drift
+# hazard `CMTE.FAILURE_LABELS` was consolidated to avoid. It now derives from the
+# one canonical definition, so a criterion renamed in `mutation_proof.py` cannot
+# leave these proofs asserting the old names. The VALUE is unchanged: all five
+# ABSENT, because a test driving SAE directly evaluated none of them.
+_ALL_ABSENT: Dict[str, CriterionResult] = all_criteria_absent()
 
 
 def minimal_proof(forced_by: str,

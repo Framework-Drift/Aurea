@@ -29,6 +29,7 @@ from src.suspension.veiled_thread import VeiledThread
 from src.suspension.black_sphere import BlackSphere
 from src.topology.tca_integration import TCAIntegration
 from src.topology.tcaml import TCAML, LockReleaseViolation, StaleLockRelease
+from src.utils.atomic_write import atomic_write_json
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -66,6 +67,32 @@ import json
 # An ORDINARY exception (malformed input, an unexpected None) may still
 # degrade gracefully into `errors`. That is correct and it stays. The taxonomy
 # CUTS the two apart; it does not replace one with the other.
+#
+# FLAGGED FOR THE ARCHITECT - `InvalidMutationProof` IS ABSENT FROM THIS TUPLE
+# (Ruling 48, 2026-07-29). It is NOT added here, and the omission is a
+# deliberate escalation rather than an oversight, because membership in this
+# tuple is a DECISION by this tuple's own rule and CLAUDE.md section 7 reserves
+# it. The facts, so it can be ruled in one read:
+#
+#   - `mutation_proof.InvalidMutationProof` DECLARES ITSELF structural in its own
+#     docstring ("A STRUCTURAL VIOLATION, not a validation nicety (Ruling 25's
+#     discipline)"), and it is the guard that makes a proof-less mutation
+#     unwritable. On the taxonomy's stated criterion it belongs here.
+#   - Until Ruling 48 it could not reach this clause AT ALL: `DEE._approve`
+#     caught `Exception` three frames down. Narrowing that catch is what makes
+#     the question live, which is why it is raised in this pass and not earlier.
+#   - It is STILL UNREACHABLE from `process_input` today, and that is why nothing
+#     was changed on speculation. The only `mutate_doctrine` caller in `src/` is
+#     `_approve`, which CONSTRUCTS the proof it passes, with a non-empty
+#     `contradiction_core` and non-empty `preserved_invariants` - so
+#     `validate_proof` cannot fail on the wired path. Every other caller is a
+#     test driving SAE directly, where the raise is the assertion.
+#
+# So the consequence of leaving it out is currently nil, and the consequence of
+# a future second `mutate_doctrine` call site is that a self-declared structural
+# guard degrades into an `errors` string - Ruling 25's exact defect, for exactly
+# one type. Adding it costs nothing and asserts a membership decision; the
+# architect owns that call.
 STRUCTURAL_VIOLATIONS = (
     CodexWriteViolation,
     CeilingExceeded,
@@ -402,7 +429,50 @@ class AureaCore:
             'reroute_hint': None,
         }
 
-        # Check if processing is suspended
+        # =============================================================
+        # RIDER R2 (2026-07-29) - A SUSPENDED CALL IS NOT A SYMBOLIC CYCLE
+        # =============================================================
+        # A mind that is not running does not age its wounds.
+        #
+        # This gate returns BEFORE the three clock advances below it, so a
+        # suspended pass advances nothing. That was already the behaviour; what
+        # was missing was anyone having said it was the INTENDED behaviour, which
+        # is the difference between a declared invariant and an accident nobody
+        # has audited yet. Three things freeze here, all three DELIBERATELY:
+        #
+        #   THE GLOBAL LOCK TTL (`tcaml.tick`). A lock held when suspension began
+        #     does not expire while suspended. Correct: the TTL bounds how long an
+        #     operation may HOLD the lock, and the holder is not making progress
+        #     either. Expiring it against a clock that ran while nothing else did
+        #     would hand the lock to the next structural request over an operation
+        #     the system never got to finish - Ruling 42 Slice 2's fail-open
+        #     direction, reached through the clock instead of through the loader.
+        #
+        #   SCAR COOLING (`sml.advance_cycle`). Quiet cycles do not accumulate, so
+        #     a scar cannot cool ACTIVE -> WANING -> DORMANT during suspension. This
+        #     is the freeze that matters most, and it is the one that would look
+        #     most like a bug: cooling emits `scar_fermentation`, which CLOSES AN
+        #     EPOCH and restores mutation budget (Ruling 37). A suspended AUREA
+        #     accruing quiet cycles would metabolise her way to a fresh ceiling
+        #     while suspended - budget earned by not running, which is Ruling 34's
+        #     restart absolution wearing suspension's clothes. Quiet is not the
+        #     same as ABSENT: a scar cools because pressure passed it by while she
+        #     was exposed to pressure, not because time elapsed.
+        #
+        #   SATURATION ACCOUNTING (`sae.advance_cycle`). The stasis clock neither
+        #     increments nor resets. Correct in both directions: canon's condition
+        #     is "mutation attempts are blocked", and a suspended pass makes no
+        #     attempt - so it is neither evidence the stasis continues nor evidence
+        #     it ended. This is `advance_cycle`'s own documented third case ("SAE
+        #     was not exercised -> NO CHANGE") applied one level up.
+        #
+        # MARKED PER RULING 4: this is a DECLARED freeze, not an unbounded one.
+        # Suspension is lifted by `resume_processing()`, and every clock resumes
+        # from the ordinal it held - nothing is skipped, nothing is caught up. The
+        # cycle that did not happen is not later counted as one.
+        #
+        # Pinned in tests/test_ruling46_47_48.py by WITNESS - the three counters
+        # are read before and after a suspended pass, not asserted about.
         if self.processing_suspended:
             return self._emit(
                 result, OutputPath.PROCESSING_SUSPENDED,
@@ -1505,8 +1575,10 @@ class AureaCore:
             }
         }
 
-        with open(state_path, 'w') as f:
-            json.dump(state, f, indent=2, default=str)
+        # Rider R3 (2026-07-29): ATOMIC, like the twelve store snapshots this
+        # method then calls. ASCII output, so naming utf-8 where the old call took
+        # the platform default writes the identical bytes.
+        atomic_write_json(state_path, state, indent=2, default=str)
 
         # Also save modules. SAE joins them (Ruling 34): its epoch state is
         # ALREADY durable at every mutation, so this is a consistency snapshot

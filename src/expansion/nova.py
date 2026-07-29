@@ -137,6 +137,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.continuity import LoadReport, RestorationOutcome
 from src.utils.models import Doctrine
 
@@ -795,8 +796,12 @@ class NovaEngine:
             "scar_requests": list(self.scar_requests),
             "csa_requests": list(self.csa_requests),
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, default=str)
+        # Rider R3 (2026-07-29): ATOMIC. The MINT (`_seq`) rides in this file with
+        # the record it numbers - Ruling 42's whole reason for persisting it. A
+        # torn write loses both together, which is the remint-over-an-authored-id
+        # condition that would fire `ProvenanceOverwriteViolation` on a collision
+        # that was never a double authorship.
+        atomic_write_json(self.runtime_path, payload, indent=2, default=str)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE an empty index. Returns whether it resumed.

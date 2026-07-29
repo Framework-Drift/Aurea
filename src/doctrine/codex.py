@@ -43,6 +43,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from src.utils.atomic_write import atomic_write_json
 from src.utils.models import Doctrine
 
 
@@ -327,6 +328,63 @@ class Codex:
             if doctrine_id in doctrine.mutation_lineage
         )
 
+    def direct_successors(self, doctrine_id: str) -> List[str]:
+        """The LIVE doctrines whose IMMEDIATE ancestor is this id.
+
+        RULING 47 (2026-07-29). `live_successors` answers "did anything grow in
+        this fossil's place", which is a question about DESCENDANTS and is the
+        right question for the compass. Reversion asks a different one: "which
+        doctrine did THIS mutation produce", and the two answers diverge exactly
+        where it matters.
+
+        With A -> B -> C, `live_successors("A")` returns `["C"]`, because lineage
+        ACCUMULATES and C carries the whole chain (that accumulation is what makes
+        Ruling 36 chain-robust, and it is not changing). So a reversion of the
+        A -> B mutation that asked `live_successors` would find a live doctrine,
+        conclude the mutation was still the current state of the belief, and
+        counter-mutate C - undoing a two-generation-old change as though it were
+        the last one, and silently discarding whatever B -> C established.
+
+        `mutation_lineage[-1]` is the IMMEDIATE ancestor, because `sae.py` builds a
+        successor as `list(ancestor.mutation_lineage) + [ancestor.id]` - the
+        ancestor's id is appended last, every time. So the last element answers
+        "whose direct child is this" exactly, with no transitive walk.
+
+        A RECORDED FACT AND NOTHING ELSE, on Ruling 36's discipline: this reads
+        `mutation_lineage` and never a name, a similarity, or a coined threshold.
+
+        Returns a LIST, not an Optional, and the caller decides what more than one
+        means. A doctrine is fossilized by the mutation that succeeds it, so it can
+        only be mutated once and this should never exceed one entry - but a store
+        does not get to assume its own invariants when the alternative is picking
+        one and calling it the answer.
+        """
+        return sorted(
+            live_id for live_id, doctrine in self.doctrines.items()
+            if doctrine.mutation_lineage
+            and doctrine.mutation_lineage[-1] == doctrine_id
+        )
+
+    def fossil_direct_successors(self, doctrine_id: str) -> List[str]:
+        """`direct_successors` over the Fossil Layer instead of the live store.
+
+        Reversion needs the two answers SEPARATE, not unioned: a successor that
+        is FOSSILIZED means the belief has already moved on past the mutation
+        being reverted, while NO successor anywhere means the record describes a
+        mutation whose product no longer exists in either store. Those are
+        different facts about history and they get different refusals (Ruling 29:
+        one event type covering two causes is a defect).
+
+        The naming follows the store's existing convention - `get`/`get_fossil`,
+        `active`/`fossils` - where the plain name is the live surface and the
+        fossil surface is asked for explicitly.
+        """
+        return sorted(
+            fossil_id for fossil_id, doctrine in self.fossils.items()
+            if doctrine.mutation_lineage
+            and doctrine.mutation_lineage[-1] == doctrine_id
+        )
+
     def __len__(self) -> int:
         return len(self.doctrines)
 
@@ -354,8 +412,12 @@ class Codex:
             "active": [self._to_dict(d) for d in self.doctrines.values()],
             "fossils": [self._to_dict(d) for d in self.fossils.values()],
         }
-        with open(self.runtime_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, default=str, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. Ruling 32 stopped this write reaching the
+        # SEED; a truncating write still destroyed the RUNTIME doctrine store on
+        # its way to replacing it. Both halves of the snapshot - active doctrines
+        # AND the Fossil Layer - live in this one file, so a torn write is the
+        # loss of her beliefs and the record of what they used to be together.
+        atomic_write_json(self.runtime_path, payload, default=str, indent=2)
 
     def load_from_file(self) -> None:
         """Runtime state if it exists, ELSE the seed (Ruling 32)."""

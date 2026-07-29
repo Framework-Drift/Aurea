@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import math
 
+from src.utils.atomic_write import atomic_write_json
+
 
 class BlackSphere(SuspensionSystem):
     """
@@ -284,8 +286,12 @@ class BlackSphere(SuspensionSystem):
             }
             data['entries'].append(entry_dict)
             
-        with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=2)
+        # Rider R3 (2026-07-29): ATOMIC. This method REBUILDS the whole file from
+        # `self.entries` on every save, so mode "w" put every contradiction she
+        # has ever set down at risk to record one more. The Black Sphere is where
+        # she puts what she cannot hold - §10.G names it as outside her own
+        # revision - and it was the least atomic write in the tree.
+        atomic_write_json(self.filepath, data, indent=2)
             
     def load_from_file(self):
         """Load Black Sphere entries from disk."""
