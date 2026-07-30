@@ -752,10 +752,27 @@ def test_the_approve_except_clause_names_exactly_the_closed_pair():
 def test_the_structural_taxonomy_still_carries_the_mutation_guards():
     """The types Ruling 48 lets through must be the ones `process_input` is ready
     to receive. Without this, narrowing the catch would route a guard into
-    `errors` instead - Ruling 25's defect reached by a different road."""
+    `errors` instead - Ruling 25's defect reached by a different road.
+
+    CHANGED BY A RULING, 2026-07-29 - the one legitimate reason a pinned test
+    moves (the Ruling-14 precedent). Recorded verbatim:
+
+        OLD (Ruling 48, 2026-07-29):
+            for required in ("MutationPreflightViolation", "CodexWriteViolation",
+                             "CeilingExceeded", "ExclusionViolation"):
+        NEW (Ruling 49's rider, same day):
+            ... the same four PLUS "InvalidMutationProof"
+
+    WHY: Ruling 48 raised `InvalidMutationProof`'s membership as a live question
+    and deliberately declined to answer it, because membership in that tuple is a
+    DECISION this tuple's own comment reserves. The manifest's forty-fourth entry
+    made the decision. NOTHING WAS WEAKENED - a name was added to a required set,
+    and the rider's own pins live in `tests/test_echonet.py`.
+    """
     names = {t.__name__ for t in STRUCTURAL_VIOLATIONS}
     for required in ("MutationPreflightViolation", "CodexWriteViolation",
-                     "CeilingExceeded", "ExclusionViolation"):
+                     "CeilingExceeded", "ExclusionViolation",
+                     "InvalidMutationProof"):
         assert required in names
     for t in STRUCTURAL_VIOLATIONS:
         others = [o for o in STRUCTURAL_VIOLATIONS if o is not t]

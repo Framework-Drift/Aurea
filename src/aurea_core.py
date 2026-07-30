@@ -9,6 +9,7 @@ from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex, CodexWriteViolation
+from src.doctrine.mutation_proof import InvalidMutationProof
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
 from src.expansion.sae import (SAE, CeilingExceeded, ExclusionViolation,
@@ -56,6 +57,7 @@ import json
 #   CeilingExceeded              self-mutation budget spent (§10.F)
 #   ExclusionViolation           §10.G target, or AVT.017 empty lineage
 #   MutationPreflightViolation   successor id unwritable (Ruling 24)
+#   InvalidMutationProof         a mutation arriving with no argument (R45)
 #   UngatedReflexViolation       an open non-GSR reflex registered (Ruling 10)
 #   UngroundedEchoViolation      echo with no traceable origin (Nova G1)
 #   UngroundedFragmentViolation  proposal material tracing to nothing (G3)
@@ -68,11 +70,17 @@ import json
 # degrade gracefully into `errors`. That is correct and it stays. The taxonomy
 # CUTS the two apart; it does not replace one with the other.
 #
-# FLAGGED FOR THE ARCHITECT - `InvalidMutationProof` IS ABSENT FROM THIS TUPLE
-# (Ruling 48, 2026-07-29). It is NOT added here, and the omission is a
+# ~~FLAGGED FOR THE ARCHITECT - `InvalidMutationProof` IS ABSENT FROM THIS
+# TUPLE (Ruling 48, 2026-07-29). It is NOT added here, and the omission is a
 # deliberate escalation rather than an oversight, because membership in this
 # tuple is a DECISION by this tuple's own rule and CLAUDE.md section 7 reserves
-# it. The facts, so it can be ruled in one read:
+# it.~~
+#
+# RESOLVED 2026-07-29 (Ruling 49's rider; manifest forty-fourth entry). The
+# escalation was answered and `InvalidMutationProof` IS A MEMBER - see the
+# comment at its line below. The flag is kept rather than deleted because the
+# facts it assembled are what the adjudication ruled on, and because a one-pass
+# escalation that worked is worth leaving legible. They read as history now:
 #
 #   - `mutation_proof.InvalidMutationProof` DECLARES ITSELF structural in its own
 #     docstring ("A STRUCTURAL VIOLATION, not a validation nicety (Ruling 25's
@@ -98,6 +106,22 @@ STRUCTURAL_VIOLATIONS = (
     CeilingExceeded,
     ExclusionViolation,
     MutationPreflightViolation,
+    # RULING 49's rider (2026-07-29), ADJUDICATED - the manifest's forty-fourth
+    # entry, closing the question Ruling 48 raised and deliberately left open at
+    # this tuple. Ruled from Ruling 25's OWN definition: `InvalidMutationProof`
+    # is a deliberate raise of this codebase guarding a gate meant to be
+    # impossible to pass - a malformed proof reaching the executor means the
+    # constructor-gate failed, which is a structural fact and not a hiccup.
+    #
+    # UNREACHABILITY FROM `process_input` DOES NOT DISQUALIFY IT, and that was
+    # the whole of the hesitation recorded here for one pass: other members
+    # guard rarely-reached paths, and Ruling 17 legitimizes scaffolding for the
+    # not-yet-reachable. It becomes reachable the moment a second
+    # `mutate_doctrine` call site appears - and on that day this membership is
+    # already correct rather than discovered by a guard degrading into a string.
+    #
+    # Membership here is a DECISION. This line records that it was made.
+    InvalidMutationProof,
     UngatedReflexViolation,
     UngroundedEchoViolation,
     UngroundedFragmentViolation,
