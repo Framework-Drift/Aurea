@@ -114,9 +114,32 @@ class ExpressionVerdict(Enum):
       - valueless, so nothing downstream can key behaviour off a magic string.
     """
     SPEAK = auto()        # fully structurally coherent, collapse-consistent
+    # SOFTENED - DECLARED AND STRUCTURALLY UNPRODUCIBLE (Ruling 50 (5)).
+    # Canon's trigger is tone altered by scar or identity memory. The only live
+    # tone input is `PSIDirective.tone_weight`, and Ruling 33 (5) plus section 9
+    # bar 5 make ANY numeric cutoff on it unwritable - AST-pinned in hail.py.
+    # So the trigger cannot be built without coining the scale that bar refuses.
+    # Barred until a NON-NUMERIC trigger or a corpus-recovered scale exists.
     SOFTENED = auto()     # tone altered by scar or identity memory
     WITHHOLD = auto()     # no output allowed - "Silent Integrity"
     SUSPEND = auto()      # truth deferred - the Veiled Thread response
+    # FRAGMENT - RULED 2026-07-30 (Ruling 50 (5), architect-delegated). THE
+    # SUSPEND ARM IS RATIFIED; FRAGMENT STAYS UNPRODUCED. Canon offers BOTH
+    # arms for the paradox class ("Fragment or suspend output entirely"), so
+    # taking suspend is a choice WITHIN canon, not a refusal of it. Two further
+    # grounds: fragmenting a truth requires KNOWING ITS PARTS, and the model has
+    # no assertion structure (Ruling 45's finding verbatim - v1 deltas are at
+    # the level the model has), so "partial symbolic truth, core preserved"
+    # without a decomposition would be a COINED DECOMPOSITION - the fabrication
+    # class, at the truth layer; and producing it flips PARADOX_SUSPENDED from
+    # blocked to unblocked, changing what she says under her HARDEST condition,
+    # which Ruling 33's bar (7) froze precisely so the flip is deliberate.
+    #
+    #     REOPENING CONDITION: FRAGMENT becomes producible when an
+    #     assertion-level decomposition can derive core-vs-remainder FROM
+    #     RECORDED FACTS - the PySAT experiment tier, which now carries its
+    #     THIRD dependent (Ruling 45's content deltas, O4 pressure routing, and
+    #     this). Not a new carried item; a new dependent on an existing one.
     FRAGMENT = auto()     # partial symbolic truth, core preserved under pressure
     REDIRECT = auto()     # passed to Nova / CSA / Mirror layer
 

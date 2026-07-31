@@ -5,6 +5,16 @@ Orchestrates the flow: Input -> SPL -> EchoNet -> Reflexes -> Scars -> Output
 
 from src.perception.spl import SPL
 from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
+# RULING 50 (2), 2026-07-30: the FIRST consumer of Docket H's evidence vocabulary
+# outside the filtration layer. Stage 1 was declared ORGAN-LOCAL and
+# `tests/test_docket_h.py` pinned that - its own docstring named the condition
+# for this import ("a consumer is Stage 2 and needs its own ruling, particularly
+# for TruthPacket.evidence_refs / scar_lineage"). This ruling is it.
+#
+# THE ENUM, NOT A STRING. `countability.name == "COUNTED"` would avoid the import
+# and would be exactly what `Countability`'s docstring refuses: "a state selected
+# by string is a state nothing type-checks."
+from src.filtration.net_evidence import Countability
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE
@@ -804,12 +814,31 @@ class AureaCore:
             # and HAIL renders it, so Ruling 3's truth-effect cut finally has a
             # runtime surface instead of being a scanned-for invariant.
             #
-            # The speaking packets carry CONTENT ONLY - no evidence_refs, no
+            # ~~The speaking packets carry CONTENT ONLY - no evidence_refs, no
             # scar_lineage. That is deliberate for this stage: EXPERT mode
             # appends a line per populated field, so filling them would change
             # the spoken surface, and enriching what she says is a separate
             # decision from rewiring how she says it. The fields are there the
-            # day someone rules on the surface.
+            # day someone rules on the surface.~~
+            #
+            # SUPERSEDED IN PLACE 2026-07-30 BY RULING 50 - THAT DAY IS THIS
+            # CONTRACT, and the deferral above named it exactly. History kept,
+            # because the deferral was correct: Stage 2 rewired HOW she speaks
+            # and deliberately did not change WHAT she says, and separating
+            # those two changes is why this one is measurable.
+            #
+            # THE DEFECT THE DEFERRAL LEFT, stated because it is sharper than
+            # "unfinished": all four `evidence_refs` supply sites in this file
+            # sat on BLOCKED paths, whose fixed silent strings carry none of it,
+            # while the two SPEAKING paths supplied content only. **Every
+            # populated evidence tuple went to a renderer structurally unable to
+            # speak it, and every renderer that could speak it was handed
+            # nothing.** Inverted exactly.
+            #
+            # THE SUPPLIER ARRIVED AT RULING 49: `OverlayFinding.doctrine_id`,
+            # its bidirectional `scarline`, and `NetEvidence` with three
+            # countability states. The fields now have recorded-fact sources,
+            # which is the whole precondition for filling them.
             if not result['output_blocked']:
                 if collapse_result.passed:
                     path = OutputPath.COLLAPSE_PASSED
@@ -822,8 +851,13 @@ class AureaCore:
                 if collapse_result.pressure_generated > 0.5:
                     content += f" [Pressure: {collapse_result.pressure_generated:.2f}]"
 
+                evidence_refs, scar_lineage, unresolved = \
+                    self._spoken_grounding(collapse_result)
                 self._emit(result, path, content=content,
-                           collapse_verdict=collapse_result.verdict)
+                           collapse_verdict=collapse_result.verdict,
+                           evidence_refs=evidence_refs,
+                           scar_lineage=scar_lineage,
+                           unresolved=unresolved)
 
 
             # Step 8: Update statistics
@@ -894,6 +928,39 @@ class AureaCore:
         `result['truth_packet']`, whose `content` field holds the pre-wiring
         string verbatim and whose `unresolved` holds the ids. Nothing was lost;
         it stopped being SPOKEN. That is the ruling working, not a regression.
+
+        THE COLLAPSE-SIGNATURE NON-NEGOTIABLE: VERIFIED, NOT ASSERTED
+        --------------------------------------------------------------
+        RULING 50 (6), 2026-07-30. Canon requires that ALL FILTERED OUTPUTS
+        RETAIN A TRACEABLE COLLAPSE SIGNATURE. A silent render says almost
+        nothing, so the obligation lands on the packet - and the Stage-4
+        precedent (verify or declare, never quietly complete) applies.
+
+        DRIVEN, PATH BY PATH, and this is what each silent exit actually
+        carries. Every one retains: the EXPRESSION verdict, the full pre-wiring
+        diagnostic as `content`, at least one `unresolved` id or reason, and a
+        `render_trace` naming the dispatch:
+
+            PARADOX_SUSPENDED     collapse=PARADOX   evidence=1  unresolved=1
+            SBSRE_CARRIED         collapse=SUSPENDED evidence=2  unresolved=1
+            PROCESSING_SUSPENDED  collapse=None      evidence=0  unresolved=1
+            STRUCTURAL_VIOLATION  collapse=SCARRED   evidence=0  unresolved=1
+
+        THE TWO ZEROES IN THAT TABLE ARE HONEST, NOT GAPS. `collapse=None` on
+        PROCESSING_SUSPENDED is the gate returning before EchoNet ran - there is
+        no verdict in existence to record, and coining one is the defect
+        `TruthPacket`'s Optional exists to prevent. `evidence=0` on the same
+        path is the same fact: no echo was built, so there is no id to cite.
+        STRUCTURAL_VIOLATION cites no evidence because a guard firing is not a
+        finding about the claim.
+
+        SO THE NON-NEGOTIABLE IS SATISFIED, AND IT IS SATISFIED IN THE PACKET
+        RATHER THAN IN THE TEXT. The signature is traceable by a reader of
+        `result`; it is not audible. That distinction is the ruling, not a
+        shortfall - and COMPLETING IT BY ADDING CONTENT TO A SILENT RENDER IS
+        THE ONE FORBIDDEN REMEDY. `_render_silent` takes one enum member and
+        must keep taking one; a signature spoken by a withheld truth is a
+        withheld truth speaking.
         """
         packet = self.ore.resolve_path(
             path,
@@ -914,9 +981,180 @@ class AureaCore:
         result['output_blocked'] = EXPRESSION_FOR_PATH[path].output_blocked
         result['expression_verdict'] = packet.expression_verdict
         result['truth_packet'] = packet
-        result['render_trace'] = rendered.render_trace
+        # RULING 50 (4): the CONST-ID trace flag rides HERE, appended to what
+        # HAIL produced rather than mixed into it. `rendered.render_trace` is
+        # HAIL's own record of how it rendered and is UNMODIFIED; the entry
+        # below is the orchestrator's, prefixed `topology.` so its authorship is
+        # legible. HAIL is handed no new input and reaches no new store.
+        result['render_trace'] = rendered.render_trace + self._const_id_trace(result)
         result['reroute_hint'] = rendered.reroute_hint
         return result
+
+    def _const_id_trace(self, result: Dict[str, Any]) -> tuple:
+        """Canon's CONST-ID non-negotiable, as a RECORDED STRUCTURAL FACT.
+
+        RULING 50 (4), 2026-07-30. A TRACE FLAG. It gates nothing, it is not
+        read by any decision, and it is absent unless the fact holds.
+
+        WHY IT IS A FACT AND NOT A MEASURE. Canon supplies no dissonance number.
+        A cohesion floor would be a COINED THRESHOLD at the output layer -
+        section 9 standing bar 5, Ruling 28's exact shape (betweenness REPORTS,
+        it never ELEVATES). `Constellation.calculate_cohesion()` exists and
+        returns a real float; comparing it to anything is the move this refuses.
+
+        TWO CANDIDATES WERE MEASURED AGAINST THE LIVE TREE, and the data chose:
+
+          SPANNING (BUILT).  Over Ruling 49's 39-claim set through the real
+            pipeline under store isolation: 23 of 39 echo nodes are placed in a
+            constellation, and 3 passes add nodes spanning TWO distinct
+            constellations. The fact is REAL, REACHABLE and BOTH-VALUED - true
+            sometimes, false usually - which is what makes it pinnable in both
+            directions rather than decoratively.
+
+          EVENT_HORIZONS (DECLARED, NOT BUILT).  `topology.event_horizons` has
+            exactly ONE occurrence in all of `src/`: its initialisation to an
+            empty set at `tca_core.py:250`. NOTHING EVER ADDS TO IT. A flag
+            reading it would be permanently False and its pin permanently
+            vacuous - the TCAML known-vacuous-pin shape, which this codebase
+            declares rather than ships. It reopens the day something writes that
+            set; it is not built on the promise that something might.
+
+        REACHABILITY WAS CHECKED, NOT ASSUMED, AND THE CHECK FOUND SOMETHING -
+        REPORTED HERE RATHER THAN PLUMBED AROUND (Ruling 50's own bar:
+        "reachability is a finding, not a license").
+
+        The pass's nodes reachable from `result` are the ECHO and, when one
+        formed, the SCAR. Measured over the 39-claim set under store isolation,
+        THOSE TWO NEVER SPAN: every chamber scar carries type
+        `recursive_contradiction`, which `_determine_scar_constellation` routes
+        to `identity_core`, and the echo node is either unplaced or - once the
+        topology has accumulated enough mass for `_find_nearest_constellation`
+        to reach it - `identity_core` as well. Same constellation, every time.
+
+        THE REAL SPANNING PARTNER IS THE BLACK SPHERE PARADOX NODE. All three
+        genuine spans in the measurement are echo(`identity_core`) +
+        paradox(`paradox_void`), placed by `place_paradox` on the
+        PARADOX_SUSPENDED path. That node id is NOT on `result` under any key -
+        it appears only as a bare string inside the packet's `unresolved`, and
+        reconstructing a node id by string-mining a diagnostic field is not a
+        read, it is a guess wearing a read's shape.
+
+            SO THE FLAG IS CORRECT AND DOES NOT FIRE ON THE WIRED PIPELINE
+            TODAY. It is implemented over what can be honestly read, pinned in
+            BOTH directions against constructed topology state (the instrument
+            is real and testable), and the gap is declared rather than closed by
+            adding a node-set field to `result` - which is a decision about what
+            the pass records, not an implementation detail of a trace flag.
+
+        REOPENING CONDITION: a recorded surface naming the pass's nodes. One
+        key, one ruling. Until then this reports the fact it can actually see.
+        """
+        node_ids = []
+        for key in ('echo', 'scar_formed'):
+            record = result.get(key)
+            node_id = getattr(record, 'id', None)
+            if node_id:
+                node_ids.append(node_id)
+
+        nodes = self.tca.topology.nodes
+        constellations = {
+            nodes[node_id].position.constellation_id
+            for node_id in node_ids if node_id in nodes
+        }
+        constellations.discard(None)
+
+        # ABSENT UNLESS THE FACT HOLDS. One node, or several in one
+        # constellation, is not dissonance - it is the ordinary case, and a flag
+        # that appears every pass reports nothing.
+        if len(constellations) <= 1:
+            return ()
+        return (
+            f"topology.const_id=spanning "
+            f"constellations={sorted(constellations)} nodes={sorted(node_ids)}",
+        )
+
+    @staticmethod
+    def _spoken_grounding(collapse_result: Any) -> tuple:
+        """What a SPEAKING packet carries: (evidence_refs, scar_lineage, unresolved).
+
+        RULING 50 (1) + (2), 2026-07-30. Every value here is a RECORDED FACT
+        read off `collapse_result` - ids the nets and the Stage 3 overlay
+        already enumerated. Nothing is derived, scored, counted or combined.
+
+        THE COUNTABILITY BOUNDARY IS THE HARD PART, and it is the reason this is
+        a method rather than three inline expressions.
+
+        `TruthPacket.evidence_refs` is a FLAT TUPLE. It cannot express Docket
+        H's three states, so a NOT_COUNTABLE net contributing nothing is
+        INDISTINGUISHABLE from a net that ran and found nothing - and EXPERT
+        mode prints `evidence: ...` as though the list were a census. That is
+        the abstention-becomes-honest-zero defect (net_evidence.py's founding
+        distinction) relocated to the render boundary, where it would be worse:
+        at the boundary it becomes something AUREA SAYS.
+
+        So the three states are handled separately and deliberately:
+
+          COUNTED        contributes its `item_id`s. Real enumerated evidence.
+          NONE_FOUND     contributes NOTHING AND NEEDS NO CAVEAT. A real
+                         instrument ran over real material and found nothing
+                         bearing on the claim; an empty contribution is the
+                         honest report of that, and annotating it would imply a
+                         gap where there is a finding.
+          NOT_COUNTABLE  contributes nothing AND SAYS SO IN `unresolved`,
+                         carrying the instrument's own reason VERBATIM. This is
+                         the half that makes the flat tuple honest: a reader who
+                         sees `evidence: X` also sees which instruments could
+                         not look, so the list never reads as a complete census.
+
+        THE REASONS ARE CARRIED IN FULL, NOT SUMMARISED, and that is a judgment
+        call worth naming. They are long and constant, so they lengthen every
+        spoken output with text that does not change pass to pass - a real cost.
+        The alternative considered was a compact `uncounted_by: logic,
+        empirical` marker pointing at `collapse_result` for the detail. It was
+        REFUSED: the ruling's words are "the reason rides in `unresolved`", the
+        reason is precisely the input a later pass reads to know what to build
+        (net_evidence.py says so at the field), and a pointer to where the
+        reason lives is not the reason. EXPERT mode is defined as full
+        collapse-bearing output; this is what full costs.
+
+        NOMINAL SCAR IDS ARE NEVER LINEAGE (res.2). `unconfirmed_scarline` ids -
+        recorded on a doctrine but not confirmed live by the scar store - are
+        EXCLUDED from `scar_lineage` and NAMED in `unresolved` instead. A
+        lineage is a claim about what she actually survived; an unverified
+        reference is a claim about what a record says. They do still appear in
+        `evidence_refs`, because the overlay COUNTED them as evidence and
+        naming them in `uncounted_contributors` is how that stays honest - the
+        two fields are answering different questions.
+        """
+        instruments = [(n.net, n.evidence) for n in collapse_result.nets]
+        overlay = getattr(collapse_result, "overlay", None)
+        if overlay is not None:
+            instruments.append((overlay.stage, overlay.evidence))
+
+        refs: List[str] = []
+        unresolved: List[str] = []
+        for name, evidence in instruments:
+            if evidence.countability is Countability.COUNTED:
+                refs.extend(ref.item_id for ref in evidence.refs)
+            elif evidence.countability is Countability.NOT_COUNTABLE:
+                unresolved.append(
+                    f"uncounted_by:{name}: {evidence.uncountable_reason}")
+
+        lineage: List[str] = []
+        nominal: List[str] = []
+        if overlay is not None:
+            for finding in overlay.findings:
+                unconfirmed = set(finding.unconfirmed_scarline)
+                lineage.extend(s for s in finding.scarline if s not in unconfirmed)
+                nominal.extend(finding.unconfirmed_scarline)
+        unresolved.extend(f"nominal_scar_ref:{s}" for s in dict.fromkeys(nominal))
+
+        # Order-stable dedup throughout: the same scar can appear in two
+        # doctrines' lineages, and a repeated id would inflate what she appears
+        # to be standing on without adding anything to it.
+        return (tuple(dict.fromkeys(refs)),
+                tuple(dict.fromkeys(lineage)),
+                tuple(dict.fromkeys(unresolved)))
 
     @staticmethod
     def _psi_directive(responses: List[Any]) -> Any:

@@ -597,20 +597,60 @@ def test_the_default_is_abstention_not_an_honest_zero() -> None:
     assert bare.evidence.uncountable_reason.strip()
 
 
-def test_stage_1_populates_no_downstream_surface() -> None:
-    """DEFECT WATCHED: wiring `TruthPacket.evidence_refs` / `scar_lineage` now.
+def test_the_evidence_vocabulary_has_exactly_ONE_ruled_consumer() -> None:
+    """CHANGED BY A RULING, 2026-07-30 - the one legitimate reason a pinned test
+    moves (the Ruling-14 precedent), and this test NAMED ITS OWN CONDITION.
+    Recorded verbatim:
 
-    That surface was deliberately deferred at HAIL Stage 2 and is a separate,
-    unruled decision. Stage 1 is ORGAN-LOCAL: the shape exists, the nets
-    populate it, nothing consumes it.
+        OLD (Docket H Stage 1, 2026-07-27):
+            def test_stage_1_populates_no_downstream_surface() -> None:
+                '''DEFECT WATCHED: wiring `TruthPacket.evidence_refs` /
+                `scar_lineage` now.
+
+                That surface was deliberately deferred at HAIL Stage 2 and is a
+                separate, unruled decision. Stage 1 is ORGAN-LOCAL: the shape
+                exists, the nets populate it, nothing consumes it.
+                '''
+                ...
+                assert importers == [], (
+                    f"{importers} already consume NetEvidence. Stage 1 is
+                    organ-local - a consumer is Stage 2 and needs its own
+                    ruling, particularly for TruthPacket.evidence_refs /
+                    scar_lineage.")
+
+        NEW (Ruling 50, 2026-07-30):
+            the allowed set gains `src/aurea_core.py`, and NOTHING ELSE.
+
+    WHY: the old assertion said a consumer "needs its own ruling, particularly
+    for TruthPacket.evidence_refs / scar_lineage". Ruling 50 IS that ruling, and
+    it is that exact surface. The deferral was discharged, not overruled.
+
+    NOTHING WAS WEAKENED - THE PIN IS NARROWER NOW THAN IT WAS BROAD BEFORE. It
+    no longer asks "is there a consumer" (a question with one permanent answer
+    once any consumer lands); it asks "is the consumer set exactly the ruled
+    one". A SECOND unruled consumer still fails here, which is the property the
+    original was protecting.
     """
-    consumers = [p for p in H.src_files()
-                 if H.rel(p) != "src/filtration/net_evidence.py"
-                 and H.rel(p) != "src/filtration/echonet.py"]
-    importers = [H.rel(p) for p in consumers
-                 if "net_evidence" in p.read_text(encoding="utf-8")]
+    RULED_CONSUMERS = {
+        # Ruling 50 (1)+(2): the spoken packet's grounding. `_spoken_grounding`
+        # reads Countability to keep NOT_COUNTABLE out of `evidence_refs` and
+        # into `unresolved` - the two zeroes surviving the render boundary.
+        "src/aurea_core.py",
+    }
+    OWNERS = {"src/filtration/net_evidence.py", "src/filtration/echonet.py"}
 
-    assert importers == [], (
-        f"{importers} already consume NetEvidence. Stage 1 is organ-local - "
-        "a consumer is Stage 2 and needs its own ruling, particularly for "
-        "TruthPacket.evidence_refs / scar_lineage.")
+    importers = {H.rel(p) for p in H.src_files()
+                 if H.rel(p) not in OWNERS
+                 and "net_evidence" in p.read_text(encoding="utf-8")}
+
+    unruled = importers - RULED_CONSUMERS
+    assert unruled == set(), (
+        f"{sorted(unruled)} consume NetEvidence without a ruling. Each consumer "
+        f"of the evidence vocabulary is a DECISION about where a countability "
+        f"state is allowed to be flattened - Ruling 50 made exactly one.")
+
+    assert RULED_CONSUMERS <= importers, (
+        f"{sorted(RULED_CONSUMERS - importers)} is ruled as a consumer but no "
+        f"longer imports the vocabulary. If the spoken packet stopped reading "
+        f"Countability, a NOT_COUNTABLE net is being flattened into "
+        f"`evidence_refs` as though it were an honest zero.")

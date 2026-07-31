@@ -90,12 +90,40 @@ from src.output.truth_packet import (
 
 
 class Mode(Enum):
-    """The five canon output modes. Three implemented, two legibly refused."""
+    """The five canon output modes. Three implemented, two legibly refused.
+
+    RULING 50 (3), 2026-07-30 - THE WHOLE SURFACE IS DECLARED DORMANT.
+
+    Not "partly built": NO CALLER CAN REQUEST ANY MEMBER. `Mode` appears ZERO
+    times in `aurea_core.py`; `_emit` calls `HAIL.render(packet)` with no mode
+    argument, so every one of the ten pipeline exits renders EXPERT by default.
+    Three renderers and two legible refusals sit behind a door nothing opens -
+    BRIDGE and MIRROR refuse a request that cannot be made.
+
+    THE CAUSE IS NAMED AND IS ONE THING: mode selection needs a CPA user
+    profile, and `cpa.py` is 0 bytes. Choosing a mode on any other basis would
+    be inventing the calibration input (`_emit`'s own docstring says so). Three
+    of the four flagged HAIL items sit behind that single unbuilt organ.
+
+    PINNED STRUCTURALLY, in `tests/test_ruling50.py`: `Mode` stays absent from
+    `src/` outside this file. That is not a style rule - it is what makes a
+    future wire a DELIBERATE ACT rather than a drift nobody notices.
+    """
     EXPERT = auto()        # collapse-bearing direct output
     REFLECTIVE = auto()    # user-mirrored symbolic expression
     SIMPLIFIED = auto()    # scar-thinned (Lexicon section 8; module calls it 'Lite')
     BRIDGE = auto()        # REFUSED v1: needs a structural collapse trace (CTL)
-    MIRROR = auto()        # REFUSED v1: needs stable PSI thread integrity
+    # MIRROR - REFUSED v1, and RULING 50 (3) NAMES THE TEMPTING MOVE SO IT IS
+    # NOT MADE LATER. RIL's threads are durable since Ruling 42 and
+    # `RIL.identity_conflict()` exists, so a "thread integrity" surface LOOKS
+    # buildable from what is already on disk. IT IS THE WRONG BUILD. Canon's
+    # precondition is "Mirror Mode available only when PSI THREAD INTEGRITY is
+    # stable" - PSI's, not RIL's - and substituting a different module's
+    # readable surface for the one canon names is coining the precondition
+    # rather than meeting it. Worse, it would be a gate on a door no caller can
+    # open: scaffolding for a mode that cannot be requested. Refused until PSI
+    # exposes thread integrity AND a caller can select a mode.
+    MIRROR = auto()
 
 
 @dataclass(frozen=True)
