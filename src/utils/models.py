@@ -55,7 +55,27 @@ class Echo:
 
     id: str
     content: str
-    source: str  # e.g., user/system
+    # ~~e.g., user/system~~
+    #
+    # DEMOTED 2026-08-01 BY RULING 58, superseded in place with history kept.
+    # THIS IS A LEGACY DISPLAY STRING. It is NOT the origin of the claim, and it
+    # never honestly was: `process_input(raw_input, source="user")` handed a
+    # free-text DEFAULT down to SPL, which wrote it here - into a durable store
+    # field - so every claim the suite, the soak or any bare caller has ever
+    # processed is on record as having originated from a human user, including
+    # the ones that did not. A fact stored because a field existed to hold it.
+    #
+    # THE SINGLE AUTHORITATIVE ORIGIN SURFACE IS THE CLAIM-ANCESTRY LEDGER
+    # (`src/external/claim_ancestry.py`), which records origin ONCE, at ingress,
+    # with a closed source vocabulary and an honest UNDECLARED for a channel
+    # that said nothing. Read origin from there.
+    #
+    # THE `"user"` DEFAULT IS UNTOUCHED THIS PASS, deliberately: those bytes are
+    # already in persisted stores and rewriting them is not Ruling 58's remit.
+    # A sweep of `src/` at that ruling found ZERO readers of this field - the
+    # only consumer anywhere is a display line in `scripts/aurea_diagnostic.py`
+    # - so the demotion changes no behaviour. Do not add a reader.
+    source: str
     resonance_score: float
     created_at: datetime
     doctrine_link: Optional[str] = None

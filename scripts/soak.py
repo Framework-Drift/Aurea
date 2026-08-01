@@ -108,6 +108,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.nova import NovaEngine
     from src.expansion.sae import SAE
     from src.expansion.tether.session_governor import TetherProtocol
+    from src.external.claim_ancestry import ClaimAncestryLedger
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -132,6 +133,9 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     ]
     init_defaults = [
         (CAE, "ledger_path", "logs/cae_audit.jsonl"),
+        # Ruling 58. Added AFTER the coverage self-audit refused a run without
+        # it - the guard firing in development is exactly what it is for.
+        (ClaimAncestryLedger, "ledger_path", "logs/claim_ancestry.jsonl"),
         (DMW, "runtime_path", "dmw_queue.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (SAE, "runtime_path", "sae_epoch.json"),

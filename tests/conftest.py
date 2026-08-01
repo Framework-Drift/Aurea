@@ -28,9 +28,9 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY PATHS: five resolved from class attributes, fifteen
-from `__init__` defaults. If you add a twenty-first and do not add it here, you
-have reopened the hole Ruling 31 closed.
+THIS FIXTURE COVERS TWENTY-ONE PATHS: five resolved from class attributes,
+sixteen from `__init__` defaults. If you add a twenty-second and do not add it
+here, you have reopened the hole Ruling 31 closed.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
 This docstring previously read "AS OF RULING 32 THIS FIXTURE COVERS EVERY
@@ -84,6 +84,7 @@ from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex
 from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
+from src.external.claim_ancestry import ClaimAncestryLedger
 from src.expansion.sae import SAE
 from src.identity.ril import RIL
 from src.reflex.racm import RACM
@@ -191,6 +192,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # DEE both construct one by DEFAULT when none is injected, so this MUST
         # be redirected before anything constructs either.
         (CAE, "ledger_path", "cae_audit.jsonl"),
+        # Ruling 58: the claim-ancestry ledger. Append-only forensics recording
+        # where every claim came from, and `AureaCore` constructs one BY DEFAULT
+        # when none is injected - so this MUST be redirected before anything
+        # constructs a core, or a test run appends to the real record of what
+        # AUREA has been asked.
+        (ClaimAncestryLedger, "ledger_path", "claim_ancestry.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

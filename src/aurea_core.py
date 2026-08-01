@@ -18,6 +18,8 @@ from src.filtration.net_evidence import Countability
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
+from src.external.claim_ancestry import (AncestryLedgerUnreadable,
+                                         ClaimAncestryLedger, OriginDeclaration)
 from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.mutation_proof import InvalidMutationProof
 from src.doctrine.doctrine_spine import DoctrineSpine
@@ -133,6 +135,13 @@ STRUCTURAL_VIOLATIONS = (
     # PRECONDITION for a doctrine change, so reaching a mutation with no
     # establishable audit id means a gate meant to be unpassable was passed.
     LedgerUnreadable,
+    # RULING 58 (2026-08-01). The claim-ancestry ledger exists and its mint
+    # could not be derived, so the next `CLM-` ordinal is unknown. Structural on
+    # this tuple's own criterion, and here it additionally GATES PERCEPTION: a
+    # claim whose origin cannot be recorded is not perceived, so reaching a
+    # verdict with no establishable ancestry id means a gate meant to be
+    # unpassable was passed.
+    AncestryLedgerUnreadable,
     # RULING 49's rider (2026-07-29), ADJUDICATED - the manifest's forty-fourth
     # entry, closing the question Ruling 48 raised and deliberately left open at
     # this tuple. Ruled from Ruling 25's OWN definition: `InvalidMutationProof`
@@ -223,7 +232,8 @@ class AureaCore:
     # runtime state rather than a stray untracked file at the repo root.
     STATE_PATH = "data/runtime/aurea_state.json"
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] = None,
+                 ancestry: Optional[ClaimAncestryLedger] = None):
         """
         Initialize AUREA core systems.
         
@@ -278,6 +288,14 @@ class AureaCore:
         # entries. Constructed BEFORE SAE because SAE takes it.
         self.cae = CAE()
         self.sae = SAE(codex=self.codex, cae=self.cae, racm=self.reflex_grid.racm)
+
+        # RULING 58 (2026-08-01): the claim-ancestry ledger. Default-by-
+        # construction (Ruling 27's `tcaml or TCAML()` idiom), so there is no
+        # "ancestry absent" state for any path to special-case - which is what
+        # lets `process_input` call it unconditionally rather than behind a
+        # `is None` check that would become the soft return CAE's own history
+        # warns about. ONE shared instance; `record()` is the only write path.
+        self.ancestry = ancestry or ClaimAncestryLedger()
 
         # SML (Ruling 37): the DECAY OWNER, and the sender that finally makes an
         # epoch closeable. Constructed after SAE because it EMITS to it - SML
@@ -478,19 +496,46 @@ class AureaCore:
             # Map to topological space
             self.tca.place_doctrine(doctrine)
     
-    def process_input(self, raw_input: str, source: str = "user") -> Dict[str, Any]:
+    def process_input(self, raw_input: str, source: str = "user", *,
+                      origin: Optional[OriginDeclaration] = None) -> Dict[str, Any]:
         """
         Process input through the complete AUREA pipeline.
-        
+
         Args:
             raw_input: Raw text input
-            source: Source identifier
-            
+            source: LEGACY display string (Ruling 58 - see below). Retained
+                unchanged; it is not the origin record.
+            origin: What the ingress channel DECLARES about this claim's origin
+                (Ruling 58). `None` means the channel declared nothing, which is
+                recorded as UNDECLARED with five ABSENT fields - never as a
+                human user.
+
         Returns:
             Dictionary containing processing results
+
+        RULING 58 (2026-08-01) - PERCEPTION BEGINS WITH THE RECORD.
+
+        The claim-ancestry record is minted and WRITTEN at the very top of this
+        method, BEFORE the SPL wrap, and a write failure raises typed and
+        propagates - no echo, no node, no verdict. `record()` gates perception
+        because ORIGIN FACTS CANNOT BE RECONSTRUCTED LATER: a claim perceived
+        without its origin recorded has lost that origin permanently, so the
+        record is the legitimacy and not a receipt.
+
+        `source` IS DEMOTED, NOT MIGRATED. It kept a `"user"` DEFAULT that SPL
+        wrote into `Echo.source` - a durable store field - so every claim this
+        system has ever processed was on record as originating from a human,
+        including the ones that did not. That default is UNTOUCHED this pass
+        (its bytes are already in stores, and moving them is not this ruling's
+        remit); what changes is that it is no longer the origin fact. The ledger
+        is the single authoritative origin surface.
         """
         result = {
             'input': raw_input,
+            # RULING 58: the ancestry id, AS RETURNED by the ledger (Ruling 55's
+            # shape - one key, a recorded fact, ids as returned). Populated
+            # immediately below, before anything else happens.
+            'claim_id': None,
             'echo': None,
             'collapse_result': None,
             'scar_formed': None,
@@ -575,6 +620,37 @@ class AureaCore:
                 content=f"[SUSPENDED: {self.suspension_reason}]",
                 unresolved=(f"processing_suspended: {self.suspension_reason}",),
             )
+
+        # =============================================================
+        # RULING 58 (2026-08-01) - PERCEPTION BEGINS WITH THE RECORD
+        # =============================================================
+        # The claim's origin is recorded ONCE, as fact, before anything else
+        # happens to it. `record()` RAISES on a write failure and the raise
+        # PROPAGATES from here - so a claim whose origin cannot be written
+        # produces NO echo, NO topology node, NO verdict and NO output.
+        #
+        # THE WRITE GATES PERCEPTION, on L3's own reason rather than by analogy:
+        # origin facts CANNOT BE RECONSTRUCTED LATER. A claim perceived without
+        # its origin recorded has lost that origin permanently, so the record is
+        # the legitimacy of the perception and not a receipt for it. CAE set the
+        # precedent (the auditor gates the change) and `dee.py` states it in
+        # terms: "if logging is impossible, the override does not happen."
+        #
+        # DELIBERATELY OUTSIDE THE `try:` BELOW. Inside it, an OSError would be
+        # flattened into `result['errors']` by the broad clause and the caller
+        # would read a degraded success. The gate has to be visible to the
+        # CALLER, which means the exception leaves this method.
+        #
+        # POSITION RELATIVE TO THE SUSPENSION GATE IS A JUDGMENT CALL, and it is
+        # made HERE - after it - for a stated reason. A suspended AUREA refuses
+        # at the door: it builds no echo and perceives nothing, so minting an
+        # ancestry record there would file the origin of a claim that never
+        # entered. Placing it after the gate keeps ledger lines in ONE-TO-ONE
+        # correspondence with claims actually perceived, which is the property
+        # O2's echo <-> claim_id linkage will need and the property the soak
+        # asserts (one line per claim cycle). Rider R2's principle extends
+        # cleanly: a mind that is not running does not perceive claims either.
+        result['claim_id'] = self.ancestry.record(origin).claim_id
 
         # TCAML cycle advance (Ruling 27, Stage 2). One pipeline pass = one
         # TCAML cycle. Run FIRST, before anything can request a lock, for the
