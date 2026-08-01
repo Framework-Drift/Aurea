@@ -682,7 +682,12 @@ class AureaCore:
 
         try:
             # Step 1: Perception layer
-            echo = self.spl.process_input(raw_input, source)
+            # RULING 60: the echo carries the ancestry id AS RETURNED by the
+            # mint above (Ruling 55's shape - a recorded fact, never derived).
+            # It cannot be None here: the mint gates perception, so reaching
+            # this line at all means the record exists.
+            echo = self.spl.process_input(raw_input, source,
+                                          claim_id=result['claim_id'])
             result['echo'] = echo
             self.stats['echoes_processed'] += 1
             

@@ -12,15 +12,29 @@ class SPL:
     Symbolic Perception Layer for Aurea input.
     """
 
-    def process_input(self, raw_input: str, source: str = "user", doctrine_link: Optional[str] = None) -> Echo:
+    def process_input(self, raw_input: str, source: str = "user",
+                      doctrine_link: Optional[str] = None, *,
+                      claim_id: Optional[str] = None) -> Echo:
         """
         Normalize raw input and wrap as an Echo object.
         Args:
             raw_input (str): The unprocessed input.
-            source (str): Who/what generated the input.
+            source (str): LEGACY display string (Ruling 58). It is NOT the
+                origin of the claim - the claim-ancestry ledger is.
             doctrine_link (Optional[str]): ID of linked doctrine (if known).
+            claim_id (Optional[str]): RULING 60 - the minted claim-ancestry id
+                for this claim, KEYWORD-ONLY (mirroring 58's `origin`). The
+                caller passes what the ledger RETURNED; `None` is the honest
+                default for a standalone call, which mints no record and
+                therefore has no id to carry.
         Returns:
             Echo: The normalized input as an Echo object.
+
+        RULING 60: `claim_id` IS SET AT CONSTRUCTION, never by post-hoc
+        mutation. An echo that acquired its linkage after the fact would have
+        existed, however briefly, in a state where it was unattributable - and
+        the field would then be a thing done TO the echo rather than a fact
+        about how it was built.
         """
         # (Placeholder normalization - can add more logic later)
         cleaned = raw_input.strip()
@@ -30,7 +44,8 @@ class SPL:
             source=source,
             resonance_score=1.0,  # Placeholder score
             created_at=datetime.now(),
-            doctrine_link=doctrine_link
+            doctrine_link=doctrine_link,
+            claim_id=claim_id,
         )
         return echo
 

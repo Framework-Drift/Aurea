@@ -612,11 +612,29 @@ def test_an_ordinary_exception_still_degrades_gracefully():
     """The taxonomy CUTS - it does not replace. A malformed-input hiccup is
     not a structural violation and must keep degrading into `errors`, exactly
     as before. If this goes red, the broad clause was widened into the
-    structural one."""
+    structural one.
+
+    MIGRATED 2026-08-01 BY RULING 60, under the Ruling-14 precedent. NO
+    ASSERTION MOVED - all four are byte-identical. What changed is the TEST
+    DOUBLE'S SIGNATURE, which had drifted from the collaborator it stands in
+    for: SPL's `process_input` gained a keyword-only `claim_id` (the echo <->
+    claim linkage), and the double did not accept it.
+
+        OLD:  def process_input(self, raw_input, source):
+        NEW:  def process_input(self, raw_input, source, *, claim_id=None):
+
+    THE FAILURE WAS THE DOUBLE, NOT AUREA, and the distinction is worth
+    recording: the pass still degraded gracefully and still recorded NO
+    structural violation - the taxonomy cut exactly as this test demands. Only
+    the MESSAGE differed, because the stale signature raised a `TypeError`
+    about `claim_id` before the intended `ValueError` could be reached. A
+    double that cannot be called the way the real object is called tests the
+    harness, not the system.
+    """
     aurea = AureaCore()
 
     class _Boom:
-        def process_input(self, raw_input, source):
+        def process_input(self, raw_input, source, *, claim_id=None):
             raise ValueError("ordinary malformed-input hiccup")
 
     aurea.spl = _Boom()

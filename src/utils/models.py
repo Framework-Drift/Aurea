@@ -79,3 +79,25 @@ class Echo:
     resonance_score: float
     created_at: datetime
     doctrine_link: Optional[str] = None
+    # RULING 60 (2026-08-01) / DOCKET O item O2 - THE ECHO <-> CLAIM LINKAGE.
+    #
+    # A JOIN KEY, NOT AN ORIGIN FACT. It points at the claim-ancestry ledger
+    # line minted for this claim at ingress; the LEDGER still stores origin
+    # ONCE (L3 clean). This is identity linkage - the same reference class as
+    # scar lineage - and it points BACKWARD IN TIME, as references should.
+    #
+    # THE DIRECTION IS FORCED BY RULING 58'S OWN STRUCTURE, not chosen for
+    # convenience: the ancestry record is deep-frozen and minted BEFORE the echo
+    # exists (after the suspension gate, before the SPL wrap), so the RECORD
+    # cannot carry an echo id without mutating a frozen record or deferring the
+    # gate - both barred by 58 itself. The LATER artifact references the
+    # EARLIER one. A third linkage store was REFUSED: it would duplicate one
+    # Optional field with a new owner, a new sentinel and a new path.
+    #
+    # NEVER SYNTHESIZED. It is the actual minted id or None. `None` honestly
+    # means "no ancestry record backs this echo" - a legacy persisted echo that
+    # predates the ledger, or an echo built outside `process_input` (SPL called
+    # standalone, or an internal probe, which is not a perceived claim). Every
+    # echo through `process_input` carries it, because the mint GATES
+    # PERCEPTION: the id exists before any echo can.
+    claim_id: Optional[str] = None
