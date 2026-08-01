@@ -867,37 +867,36 @@ def test_a_paradox_pass_records_the_paradox_node(tmp_path):
 
 
 def test_the_paradox_node_is_now_reachable_by_const_id(tmp_path):
-    """THE RULING 50 REOPENING PIN'S ARM, CLOSED - with a measured correction to
-    the premise, reported rather than papered over.
+    """THE RULING 50 REOPENING PIN, FIRING FOR REAL. RULING 57 (2026-07-31).
 
-    WHAT RULING 55 DELIVERS, and this pins it: the Black Sphere paradox node is
-    a node `_const_id_trace` can now SEE. Ruling 50's blocker was that the id
-    "is NOT on `result` under any key... reconstructing a node id by
-    string-mining a diagnostic field is not a read, it is a guess wearing a
-    read's shape." It is on `result` now, as a returned id, and the flag spans
-    echo x paradox the moment both are placed.
+    MIGRATED UNDER THE RULING-14 PRECEDENT, and this migration IS the ruling
+    landing rather than a test being adjusted around it. Old/new verbatim:
 
-    WHAT DOES NOT HAPPEN, MEASURED UNDER ISOLATION AND ESCALATED: the flag does
-    NOT fire on the wired pipeline unaided, and the key is not why.
+        WAS (Ruling 55, Batch 51):
+            assert nodes[echo_id].position.constellation_id is None, (
+                "PRECONDITION AND FINDING: a fresh topology places no echo node")
+            # Construct the half the pipeline does not supply.
+            core.tca.topology.constellations["identity_core"].add_node(...)
 
-        Over the 39-claim set on a fresh topology: 0 of 39 echo nodes are
-        placed in ANY constellation, and 0 passes span. `_find_nearest_
-        constellation` skips a constellation whose `gravity_center` is None
-        (`tca_core.py:465`), and seed-doctrine placement leaves FIVE OF SIX
-        centers None - only `paradox_void` ever acquires one, from the first
-        Black Sphere node. So the echo has nothing to be near.
+        IS  (Ruling 57):
+            the echo PLACES on the wired pipeline, nothing is constructed, and
+            CONST-ID spans echo x paradox unaided.
 
-        Ruling 50 recorded "23 of 39 echo nodes are placed in a constellation,
-        and 3 passes add nodes spanning TWO distinct constellations". THAT IS
-        NOT REPRODUCIBLE UNDER THE ISOLATION PREAMBLE, and the most likely
-        reading is that the measurement ran against an accumulated
-        `data/runtime/tca_map.json` whose constellations had inherited gravity
-        centers from earlier runs - which is the very incident that made the
-        isolation preamble a batch bar.
+    WHY: that precondition was a FINDING about a defect, not a property of the
+    architecture - Batch 51 measured it (0 of 39 echoes placed) and escalated
+    it, and Ruling 57 resolved it. Seed scars are now placed at construction
+    BEFORE doctrines, so `place_doctrine`'s edge loop finds its targets; edges
+    exist, so `_recalculate_center` selects; centers exist, so
+    `_find_nearest_constellation` stops skipping - and the echo has something
+    to be near.
 
-    So this drives the SAME constructed-state shape Ruling 50 used, and the
-    thing being constructed is the half the pipeline does not supply. The
-    PARADOX node's placement and id are entirely real.
+    NARROWER, NEVER WEAKER. The old test asserted the flag works against
+    CONSTRUCTED state; this asserts it works against the REAL pipeline, which
+    is strictly the harder claim - and it no longer contains a hand-placement
+    that could mask the mechanism it is testing.
+
+    THE FIRST HONEST SPANNING WITNESS, under isolation, replacing Ruling 50's
+    contaminated 23-of-39.
     """
     from src.aurea_core import AureaCore
 
@@ -906,24 +905,24 @@ def test_the_paradox_node_is_now_reachable_by_const_id(tmp_path):
 
     nodes = core.tca.topology.nodes
     paradox_id = next(n for n in result["pass_nodes"] if n.startswith("BS-"))
-    assert nodes[paradox_id].position.constellation_id == "paradox_void", (
-        "the paradox node is placed by the real pipeline, not constructed")
-
     echo_id = result["echo"].id
-    assert nodes[echo_id].position.constellation_id is None, (
-        "PRECONDITION AND FINDING: a fresh topology places no echo node")
 
-    # Construct the half the pipeline does not supply.
-    core.tca.topology.constellations["identity_core"].add_node(nodes[echo_id])
+    assert nodes[paradox_id].position.constellation_id == "paradox_void"
+    assert nodes[echo_id].position.constellation_id is not None, (
+        "RULING 57: the echo PLACES on the wired pipeline - nothing is "
+        "constructed here, and the absence of a hand-placement is the point")
 
     trace = core._const_id_trace(result)
     assert len(trace) == 1
     assert trace[0].startswith("topology.const_id=spanning")
     assert "paradox_void" in trace[0], (
-        "the paradox node reaches the flag - THIS is what Ruling 55 changed; "
-        "before the key existed it could not be named here at all")
-    assert "identity_core" in trace[0]
+        "the paradox node reaches the flag - Ruling 55 put its id on `result`, "
+        "and Ruling 57 gave the echo a constellation to differ from")
     assert paradox_id in trace[0]
+    assert echo_id in trace[0]
+
+    # And it rides on the real result, not only on a direct call.
+    assert any("const_id=spanning" in t for t in result["render_trace"])
 
 
 def test_const_id_stays_absent_when_nothing_spans(tmp_path):
@@ -942,20 +941,28 @@ def test_one_placed_node_in_one_constellation_is_not_dissonance(tmp_path):
     """ADDED AFTER A SURVIVING MUTANT (M22), and it closed a real gap.
 
     Loosening the guard from `len(constellations) <= 1` to `<= 0` survived every
-    other pin, because the absent-direction tests happen to place NO node in any
-    constellation at all (a fresh topology leaves echo nodes unplaced - see
-    `test_the_paradox_node_is_now_reachable_by_const_id`), so `constellations` is
-    EMPTY and both comparisons agree.
+    other pin, because the absent-direction tests happened to place NO node in
+    any constellation at all, so `constellations` was EMPTY and both comparisons
+    agreed. This pin needs a pass with EXACTLY ONE placed constellation.
 
-    A paradox pass is the configuration that distinguishes them: it places
-    exactly ONE node in a constellation (the Black Sphere node, in
-    `paradox_void`). One node in one constellation is the ORDINARY case, not
-    dissonance, and a flag that appeared there would report nothing.
+    MIGRATED UNDER THE RULING-14 PRECEDENT (Ruling 57, 2026-07-31). Old/new:
+
+        WAS: a PARADOX pass ("this statement is false"), which placed exactly
+             one node (the Black Sphere node) because the echo was unplaced.
+        IS:  an ORDINARY pass ("Water is wet."), which places exactly one node
+             (the echo) because no paradox and no scar arises.
+
+    WHY: Ruling 57 made the echo place, so a paradox pass now spans TWO
+    constellations and is the WRONG configuration for this claim - it is now
+    the subject of the spanning pin above. The ASSERTION IS UNCHANGED and the
+    property is unchanged; only the claim that produces the configuration
+    moved. Narrower in one respect: a single-node pass cannot reach `len() == 1`
+    by accident through two nodes that happen to share a constellation.
     """
     from src.aurea_core import AureaCore
 
     core = AureaCore()
-    result = core.process_input("this statement is false", source="test")
+    result = core.process_input("Water is wet.", source="test")
 
     nodes = core.tca.topology.nodes
     placed = {nodes[n].position.constellation_id for n in result["pass_nodes"]

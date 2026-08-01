@@ -304,13 +304,62 @@ class TopologicalSpace:
         return node
     
     def create_edge(self, node1_id: str, node2_id: str, weight: float = 1.0):
-        """Create an edge between two nodes."""
+        """Create an edge between two nodes.
+
+        RULING 57 res.2 (2026-07-31) - CENTERS FOLLOW EDGES.
+
+        A constellation's gravity center is selected by `mass * len(edges)`, and
+        until this ruling that selection ran ONLY from `add_node` / `remove_node`
+        - i.e. at MEMBERSHIP time, which for every node is BEFORE its edges
+        exist. So a center was computed from a graph in which nothing was
+        connected yet and then never revisited.
+
+        That is the structural half of Ruling 57, and without it res.1's
+        scars-first ordering is not enough: the scar nodes' own recalculation
+        would still have run at add time, pre-edge, leaving their constellations
+        centerless. It is also `paradox_void`'s 75-cycle lag in the Docket P
+        soak, exactly - the Black Sphere node acquired its edge one statement
+        after being added, and nothing recomputed until the NEXT node arrived.
+
+        CANON ENDORSES CENTERS THAT MOVE, BY NAME: constellations "anchor
+        identity to NEW gravity centers" (0_Core:92). A center that is computed
+        once and frozen is not the thing canon describes.
+
+        THE SELECTION RULE ITSELF IS UNTOUCHED - the strict `>` against an
+        initial `max_weight = 0` in `_recalculate_center` is the tree's own
+        declared rule and this ruling coins nothing. What changes is WHEN it is
+        asked, never HOW it answers.
+
+        A node outside any constellation triggers nothing for its side: there is
+        no membership to recalculate, and inventing one here would be a
+        placement rule wearing a refresh's clothes.
+        """
         if node1_id in self.nodes and node2_id in self.nodes:
             # Guard against duplicate edges
             if node2_id not in self.nodes[node1_id].edges:
                 self.nodes[node1_id].edges[node2_id] = weight
                 self.nodes[node2_id].edges[node1_id] = weight
                 self.total_edges += 1
+                self._refresh_centers(node1_id, node2_id)
+
+    def _refresh_centers(self, *node_ids: str) -> None:
+        """Re-select the gravity center of each given node's constellation.
+
+        RULING 57 res.2. Deduplicated, because both endpoints of an edge are
+        very often in the SAME constellation and recalculating it twice is
+        wasted work with no different answer.
+        """
+        seen = set()
+        for node_id in node_ids:
+            node = self.nodes.get(node_id)
+            constellation_id = getattr(node.position, "constellation_id", None) \
+                if node is not None else None
+            if constellation_id is None or constellation_id in seen:
+                continue
+            seen.add(constellation_id)
+            constellation = self.constellations.get(constellation_id)
+            if constellation is not None:
+                constellation._recalculate_center()
     
     def create_scar_bridge(self, node1_id: str, node2_id: str):
         """Create a scar-carved shortcut between distant nodes."""
@@ -456,10 +505,31 @@ class TopologicalSpace:
         return SymbolicPosition(semantic_vector=semantic_vector)
     
     def _find_nearest_constellation(self, position: SymbolicPosition) -> Optional[str]:
-        """Find the nearest constellation to a position."""
+        """Find the nearest constellation to a position.
+
+        RULING 57 res.3 (2026-07-31) - THE CENTERLESS SKIP IS DECLARED, NOT
+        PATCHED, and it stays exactly as it is.
+
+        The `if constellation.gravity_center` test below reads like a defect
+        once you know it was the last link in the chain that left every echo
+        node unplaced (Docket P: 40 of 40). It is not one. A constellation whose
+        members all carry zero edges HONESTLY HAS NO ANCHOR YET - there is no
+        node in it that anything else is attached to, so there is nothing for a
+        position to be "near". Skipping it reports that; substituting a fallback
+        (the first member, the heaviest member, the centroid) would COIN an
+        anchor the data does not support, at the exact point where placement
+        decisions are made.
+
+        What Ruling 57 changed is the INPUT to this test, never the test:
+        res.1 gives the seed's scars nodes to be linked to, and res.2 makes the
+        center follow the edge. A constellation that has real connected members
+        now has a real center, and this skip stops firing for it - because the
+        condition it reports is no longer true, which is the correct way for a
+        guard to fall silent.
+        """
         min_distance = float('inf')
         nearest_id = None
-        
+
         for const_id, constellation in self.constellations.items():
             # Distance to constellation center
             if constellation.gravity_center and constellation.gravity_center in self.nodes:

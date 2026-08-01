@@ -418,6 +418,38 @@ class AureaCore:
             self._create_seed_doctrines()
         self.codex.seal()   # genesis closed: from here, only collapse writes doctrine
         
+        # RULING 57 res.1 (2026-07-31) - THE SEED IS PLACED WHOLE, SCARS FIRST.
+        #
+        # `place_scar` had exactly ONE caller in all of `src/` - the runtime
+        # chamber path below - so seed scars were not placed LATE, THEY WERE
+        # NEVER PLACED AT ALL. The topology held her doctrines and none of the
+        # wounds they descend from.
+        #
+        # ORDER IS THE WHOLE MECHANISM, and it is why this loop runs BEFORE the
+        # doctrine loop rather than after it. Both `place_scar` and
+        # `place_doctrine` end by creating edges to their recorded links, and
+        # both guard with `if <id> in self.topology.nodes` - so an edge can only
+        # form between nodes that ALREADY EXIST. Placing doctrines first (the
+        # old order, with scars never placed at all) meant that guard was never
+        # satisfied: every doctrine node carried ZERO edges, `_recalculate_center`
+        # scored `mass * len(edges)` = 0 for every candidate and selected none,
+        # `_find_nearest_constellation` skips a centerless constellation, and so
+        # NO ECHO NODE WAS EVER PLACED - 40 of 40 unplaced across the 200-cycle
+        # soak, and the CONST-ID spanning arm could never fire.
+        #
+        # ANY DECAY STATE, and that is Ruling 54's cut applied to the map: the
+        # topology is a record of what she HOLDS, not of what is still hot.
+        # `Δ91` is FOSSILIZED and belongs on it - canon calls a fossilized scar
+        # "part of symbolic lineage" (2b:921). `all_scars()` is the owner's
+        # presence reader (Ruling 22 snapshot semantics); `get_active_scars()`
+        # would answer the bearing question, which is not the one a map asks.
+        #
+        # NO NEW PLACEMENT RULE AND NO NEW WEIGHTS. Every position, mass,
+        # constellation assignment and edge weight below is `tca_integration`'s
+        # own, unmoved. The fix is ORDER plus EXISTENCE.
+        for scar in self.scar_core.all_scars():
+            self.tca.place_scar(scar)
+
         # Map existing doctrines to topological space
         for doctrine in self.codex.doctrines.values():
             self.tca.place_doctrine(doctrine)
