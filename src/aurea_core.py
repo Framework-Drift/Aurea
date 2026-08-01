@@ -20,6 +20,10 @@ from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
 from src.external.claim_ancestry import (AncestryLedgerUnreadable,
                                          ClaimAncestryLedger, OriginDeclaration)
+# RULING 61 (2026-08-01). Imported for the taxonomy ONLY - `AureaCore`
+# constructs no PredictionLedger and no pipeline path touches one. See the
+# member's note in STRUCTURAL_VIOLATIONS below.
+from src.external.prediction_ledger import PredictionLedgerUnreadable
 from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.mutation_proof import InvalidMutationProof
 from src.doctrine.doctrine_spine import DoctrineSpine
@@ -142,6 +146,21 @@ STRUCTURAL_VIOLATIONS = (
     # verdict with no establishable ancestry id means a gate meant to be
     # unpassable was passed.
     AncestryLedgerUnreadable,
+    # RULING 61 (2026-08-01). The prediction ledger exists and its mint could
+    # not be derived, so the next `PRD-` ordinal is unknown. Structural on this
+    # tuple's own criterion: two commitments wearing one id are two sets of
+    # criteria nobody can tell apart afterwards, which defeats the entire point
+    # of fixing criteria at commit time.
+    #
+    # UNREACHABLE FROM `process_input` TODAY, and deliberately so - Ruling 61
+    # wires no consumer anywhere in the pipeline. That does NOT disqualify it,
+    # on the reasoning `InvalidMutationProof` records twelve lines below: this
+    # membership is already correct on the day a consumer arrives, rather than
+    # being discovered by a structural guard degrading into an `errors` string.
+    #
+    # Membership here is a DECISION, made by the ruling (res.4). This line
+    # records that it was made.
+    PredictionLedgerUnreadable,
     # RULING 49's rider (2026-07-29), ADJUDICATED - the manifest's forty-fourth
     # entry, closing the question Ruling 48 raised and deliberately left open at
     # this tuple. Ruled from Ruling 25's OWN definition: `InvalidMutationProof`

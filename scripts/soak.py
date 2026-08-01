@@ -109,6 +109,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.sae import SAE
     from src.expansion.tether.session_governor import TetherProtocol
     from src.external.claim_ancestry import ClaimAncestryLedger
+    from src.external.prediction_ledger import PredictionLedger
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -136,6 +137,11 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # Ruling 58. Added AFTER the coverage self-audit refused a run without
         # it - the guard firing in development is exactly what it is for.
         (ClaimAncestryLedger, "ledger_path", "logs/claim_ancestry.jsonl"),
+        # Ruling 61. Nothing in the pipeline commits predictions yet, so the
+        # soak must show ZERO prediction lines - but the path is redirected
+        # anyway, because the coverage self-audit re-derives the injectable set
+        # from `src/` and REFUSES a run whose table has fallen behind.
+        (PredictionLedger, "ledger_path", "logs/prediction_ledger.jsonl"),
         (DMW, "runtime_path", "dmw_queue.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (SAE, "runtime_path", "sae_epoch.json"),

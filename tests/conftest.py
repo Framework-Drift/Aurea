@@ -28,8 +28,8 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-ONE PATHS: five resolved from class attributes,
-sixteen from `__init__` defaults. If you add a twenty-second and do not add it
+THIS FIXTURE COVERS TWENTY-TWO PATHS: five resolved from class attributes,
+seventeen from `__init__` defaults. If you add a twenty-third and do not add it
 here, you have reopened the hole Ruling 31 closed.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
@@ -85,6 +85,7 @@ from src.doctrine.codex import Codex
 from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
 from src.external.claim_ancestry import ClaimAncestryLedger
+from src.external.prediction_ledger import PredictionLedger
 from src.expansion.sae import SAE
 from src.identity.ril import RIL
 from src.reflex.racm import RACM
@@ -198,6 +199,14 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # constructs a core, or a test run appends to the real record of what
         # AUREA has been asked.
         (ClaimAncestryLedger, "ledger_path", "claim_ancestry.jsonl"),
+        # Ruling 61: the prediction ledger. Append-only forensics recording what
+        # AUREA committed to BEFORE an outcome, which is the one record whose
+        # value depends entirely on not having been written afterwards. NOTHING
+        # in the pipeline constructs one today, so unlike the ancestry ledger
+        # this redirect protects tests that build a ledger DIRECTLY - and it is
+        # here in the SAME COMMIT as the store, per Ruling 31's rule, rather
+        # than waiting for a consumer that would make it urgent.
+        (PredictionLedger, "ledger_path", "prediction_ledger.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 
