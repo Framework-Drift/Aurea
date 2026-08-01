@@ -17,13 +17,13 @@ from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 from src.filtration.net_evidence import Countability
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
-from src.doctrine.cae import CAE
+from src.doctrine.cae import CAE, LedgerUnreadable
 from src.doctrine.codex import Codex, CodexWriteViolation
 from src.doctrine.mutation_proof import InvalidMutationProof
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
-from src.expansion.sae import (SAE, CeilingExceeded, ExclusionViolation,
-                               MutationPreflightViolation)
+from src.expansion.sae import (SAE, CeilingExceeded, EpochStateQuarantined,
+                               ExclusionViolation, MutationPreflightViolation)
 from src.expansion.nova import (NovaEngine, FermentationStatus, StoreFragment,
                                 ProvenanceOverwriteViolation,
                                 UngroundedEchoViolation,
@@ -116,6 +116,23 @@ STRUCTURAL_VIOLATIONS = (
     CeilingExceeded,
     ExclusionViolation,
     MutationPreflightViolation,
+    # RULING 51 (2026-07-31). An unadjudicated constitution: the epoch state file
+    # EXISTS and could not be read, so the Self-Mutation Ceiling cannot be
+    # established. Structural on this tuple's own stated criterion - a gate that
+    # was supposed to be impossible to pass was passed, in the sense that mutation
+    # was reached with no establishable budget behind it.
+    #
+    # NOT in DEE's expected pair, and the asymmetry IS the ruling (Ruling 48's
+    # partition): a spent ceiling is SAE exercising authority, and fermenting a
+    # doctrine on it is right; this is SAE reporting that its own state is
+    # unknown. It propagates here so a breach is not read as a decision.
+    EpochStateQuarantined,
+    # RULING 53 (2026-07-31). The audit ledger exists and its mint could not be
+    # derived, so the next `CAE-` ordinal is unknown. Structural for the same
+    # reason `InvalidMutationProof` is: canon 3a:111 makes the entry a
+    # PRECONDITION for a doctrine change, so reaching a mutation with no
+    # establishable audit id means a gate meant to be unpassable was passed.
+    LedgerUnreadable,
     # RULING 49's rider (2026-07-29), ADJUDICATED - the manifest's forty-fourth
     # entry, closing the question Ruling 48 raised and deliberately left open at
     # this tuple. Ruled from Ruling 25's OWN definition: `InvalidMutationProof`
@@ -445,6 +462,19 @@ class AureaCore:
             'echo': None,
             'collapse_result': None,
             'scar_formed': None,
+            # RULING 55 (2026-07-31) - THE PASS RECORDS ITS OWN NODES.
+            #
+            # Node ids AS RETURNED by this pass's placement calls, in append
+            # order. RECORDED FACTS: never derived, never reconstructed from a
+            # diagnostic string. Ruling 50 declared this gap rather than closing
+            # it, because what a pass RECORDS is a decision and not an
+            # implementation detail of the flag that wanted it.
+            #
+            # Three placement sites run per pass - the echo node (Step 1.5), the
+            # paradox node (PARADOX_SUSPENDED), and the scar node (on formation).
+            # A sweep of `src/` found no fourth: the two `place_doctrine` calls
+            # are CONSTRUCTION-time (seed mapping in `__init__`), not per-pass.
+            'pass_nodes': (),
             'reflex_responses': [],
             'output': None,
             'output_blocked': False,
@@ -558,6 +588,7 @@ class AureaCore:
                 mass=1.0
             )
             echo_node.tags.add(f"source:{source}")
+            result['pass_nodes'] += (echo_node.id,)      # Ruling 55
             
             # Step 2: Collapse testing with pressure generation
             collapse_result = self.echonet.filter_claim(echo)
@@ -636,6 +667,7 @@ class AureaCore:
                     )
                     # Map paradox to topological space
                     paradox_node = self.tca.place_paradox(bs_entry)
+                    result['pass_nodes'] += (paradox_node.id,)   # Ruling 55
                     # Create edge from echo to paradox
                     self.tca.topology.create_edge(echo.id, bs_entry.id, weight=1.0)
                     return self._emit(
@@ -693,7 +725,8 @@ class AureaCore:
                         # and every affected count restarts. Fermentation
                         # interrupted is fermentation restarted.
                         self.sml.note_scar_formed(scar)
-                        self.tca.place_scar(scar)
+                        scar_node = self.tca.place_scar(scar)
+                        result['pass_nodes'] += (scar_node.id,)  # Ruling 55
                         self.tca.topology.create_edge(
                             echo.id, scar.id, weight=collapse_result.pressure_generated)
                         # RIL: identity terminus. Every scar that survives to formation
@@ -851,13 +884,14 @@ class AureaCore:
                 if collapse_result.pressure_generated > 0.5:
                     content += f" [Pressure: {collapse_result.pressure_generated:.2f}]"
 
-                evidence_refs, scar_lineage, unresolved = \
+                evidence_refs, scar_lineage, unresolved, abstentions = \
                     self._spoken_grounding(collapse_result)
                 self._emit(result, path, content=content,
                            collapse_verdict=collapse_result.verdict,
                            evidence_refs=evidence_refs,
                            scar_lineage=scar_lineage,
-                           unresolved=unresolved)
+                           unresolved=unresolved,
+                           abstentions=abstentions)
 
 
             # Step 8: Update statistics
@@ -901,7 +935,8 @@ class AureaCore:
               collapse_verdict: Any = None,
               evidence_refs: tuple = (),
               scar_lineage: tuple = (),
-              unresolved: tuple = ()) -> Dict[str, Any]:
+              unresolved: tuple = (),
+              abstentions: tuple = ()) -> Dict[str, Any]:
         """Resolve this exit through ORE, render it through HAIL, record both.
 
         EVERY output path in `process_input` goes through here. That is the
@@ -969,6 +1004,9 @@ class AureaCore:
             evidence_refs=evidence_refs,
             scar_lineage=scar_lineage,
             unresolved=unresolved,
+            # RULING 56: instrument abstentions, on their own surface. A standing
+            # build limitation is not an unclosed thread of this claim.
+            abstentions=abstentions,
             # Ruling 8's promise landing: PSI's directive stops being
             # caller-less. It is read from the ACCUMULATED, RACM-AUTHORIZED
             # responses of this pass - never from a reflex object, never from
@@ -1020,41 +1058,51 @@ class AureaCore:
             set; it is not built on the promise that something might.
 
         REACHABILITY WAS CHECKED, NOT ASSUMED, AND THE CHECK FOUND SOMETHING -
-        REPORTED HERE RATHER THAN PLUMBED AROUND (Ruling 50's own bar:
-        "reachability is a finding, not a license").
+        REPORTED RATHER THAN PLUMBED AROUND (Ruling 50's own bar: "reachability
+        is a finding, not a license"). THE FINDING HAS SINCE BEEN ACTED ON -
+        RULING 55, 2026-07-31 - and the paragraphs below are SUPERSEDED IN
+        PLACE, history kept, because they are what the reopening condition was
+        written against:
 
-        The pass's nodes reachable from `result` are the ECHO and, when one
-        formed, the SCAR. Measured over the 39-claim set under store isolation,
-        THOSE TWO NEVER SPAN: every chamber scar carries type
-        `recursive_contradiction`, which `_determine_scar_constellation` routes
-        to `identity_core`, and the echo node is either unplaced or - once the
-        topology has accumulated enough mass for `_find_nearest_constellation`
-        to reach it - `identity_core` as well. Same constellation, every time.
+            ~~The pass's nodes reachable from `result` are the ECHO and, when
+            one formed, the SCAR. Measured over the 39-claim set under store
+            isolation, THOSE TWO NEVER SPAN: every chamber scar carries type
+            `recursive_contradiction`, which `_determine_scar_constellation`
+            routes to `identity_core`, and the echo node is either unplaced or -
+            once the topology has accumulated enough mass for
+            `_find_nearest_constellation` to reach it - `identity_core` as well.
+            Same constellation, every time.
 
-        THE REAL SPANNING PARTNER IS THE BLACK SPHERE PARADOX NODE. All three
-        genuine spans in the measurement are echo(`identity_core`) +
-        paradox(`paradox_void`), placed by `place_paradox` on the
-        PARADOX_SUSPENDED path. That node id is NOT on `result` under any key -
-        it appears only as a bare string inside the packet's `unresolved`, and
-        reconstructing a node id by string-mining a diagnostic field is not a
-        read, it is a guess wearing a read's shape.
+            THE REAL SPANNING PARTNER IS THE BLACK SPHERE PARADOX NODE. All
+            three genuine spans in the measurement are echo(`identity_core`) +
+            paradox(`paradox_void`), placed by `place_paradox` on the
+            PARADOX_SUSPENDED path. That node id is NOT on `result` under any
+            key - it appears only as a bare string inside the packet's
+            `unresolved`, and reconstructing a node id by string-mining a
+            diagnostic field is not a read, it is a guess wearing a read's shape.
 
             SO THE FLAG IS CORRECT AND DOES NOT FIRE ON THE WIRED PIPELINE
-            TODAY. It is implemented over what can be honestly read, pinned in
-            BOTH directions against constructed topology state (the instrument
-            is real and testable), and the gap is declared rather than closed by
-            adding a node-set field to `result` - which is a decision about what
-            the pass records, not an implementation detail of a trace flag.
+            TODAY... the gap is declared rather than closed by adding a node-set
+            field to `result` - which is a decision about what the pass records,
+            not an implementation detail of a trace flag.
 
-        REOPENING CONDITION: a recorded surface naming the pass's nodes. One
-        key, one ruling. Until then this reports the fact it can actually see.
+            REOPENING CONDITION: a recorded surface naming the pass's nodes. One
+            key, one ruling.~~
+
+        THAT KEY IS `result['pass_nodes']`, and the measurement above is exactly
+        what it was built from: the paradox node was never unreachable in
+        principle, it was simply never RECORDED. It is now, by the placement call
+        that creates it, as a returned id rather than a mined string - so the
+        spanning arm reports the same three passes the 39-claim measurement
+        found, and it reports them from facts the pass wrote down.
+
+        WHAT DID NOT CHANGE: the flag still GATES NOTHING, still carries no
+        magnitude, and is still ABSENT unless the fact holds. Ruling 55 gave it
+        a truthful input; it did not give it authority.
         """
-        node_ids = []
-        for key in ('echo', 'scar_formed'):
-            record = result.get(key)
-            node_id = getattr(record, 'id', None)
-            if node_id:
-                node_ids.append(node_id)
+        # RULING 55: the pass's OWN record of what it placed, superseding the
+        # `('echo', 'scar_formed')` read - two keys measurement showed never span.
+        node_ids = [n for n in (result.get('pass_nodes') or ()) if n]
 
         nodes = self.tca.topology.nodes
         constellations = {
@@ -1075,7 +1123,10 @@ class AureaCore:
 
     @staticmethod
     def _spoken_grounding(collapse_result: Any) -> tuple:
-        """What a SPEAKING packet carries: (evidence_refs, scar_lineage, unresolved).
+        """What a SPEAKING packet carries.
+
+        RULING 56 (2026-07-31) made this a FOUR-WAY split:
+        `(evidence_refs, scar_lineage, unresolved, abstentions)`.
 
         RULING 50 (1) + (2), 2026-07-30. Every value here is a RECORDED FACT
         read off `collapse_result` - ids the nets and the Stage 3 overlay
@@ -1100,11 +1151,19 @@ class AureaCore:
                          bearing on the claim; an empty contribution is the
                          honest report of that, and annotating it would imply a
                          gap where there is a finding.
-          NOT_COUNTABLE  contributes nothing AND SAYS SO IN `unresolved`,
-                         carrying the instrument's own reason VERBATIM. This is
-                         the half that makes the flat tuple honest: a reader who
-                         sees `evidence: X` also sees which instruments could
-                         not look, so the list never reads as a complete census.
+          NOT_COUNTABLE  contributes nothing AND SAYS SO, carrying the
+                         instrument's own reason VERBATIM. This is the half that
+                         makes the flat tuple honest: a reader who sees
+                         `evidence: X` also sees which instruments could not
+                         look, so the list never reads as a complete census.
+
+                         RULING 56 MOVED WHERE IT SAYS SO - into `abstentions`,
+                         ~~in `unresolved`~~. The content and the verbatim rule
+                         are unchanged; the FIELD changed, because `unresolved`
+                         is documented as "what is carried, unclosed" and a
+                         standing build limitation is not an open thread of THIS
+                         claim. "No evidence base exists in the tree" is true of
+                         every claim she will ever process.
 
         THE REASONS ARE CARRIED IN FULL, NOT SUMMARISED, and that is a judgment
         call worth naming. They are long and constant, so they lengthen every
@@ -1118,13 +1177,19 @@ class AureaCore:
         collapse-bearing output; this is what full costs.
 
         NOMINAL SCAR IDS ARE NEVER LINEAGE (res.2). `unconfirmed_scarline` ids -
-        recorded on a doctrine but not confirmed live by the scar store - are
-        EXCLUDED from `scar_lineage` and NAMED in `unresolved` instead. A
-        lineage is a claim about what she actually survived; an unverified
-        reference is a claim about what a record says. They do still appear in
-        `evidence_refs`, because the overlay COUNTED them as evidence and
-        naming them in `uncounted_contributors` is how that stays honest - the
-        two fields are answering different questions.
+        recorded on a doctrine but NOT HELD BY THE SCAR STORE AT ALL (Ruling 54
+        narrowed this from "not live") - are EXCLUDED from `scar_lineage` and
+        NAMED in `unresolved` instead. A lineage is a claim about what she
+        actually survived; an unverified reference is a claim about what a record
+        says. They do still appear in `evidence_refs`, because the overlay
+        COUNTED them as evidence and naming them in `uncounted_contributors` is
+        how that stays honest - the two fields are answering different questions.
+
+        AND THEY STAY IN `unresolved` UNDER RULING 56, which is the asymmetry
+        that ruling turns on. A nominal reference IS an unclosed thread of this
+        claim: the record says a scar bears on this doctrine and the store does
+        not hold it, so the question is about THIS claim's grounding. An
+        abstention is about a missing organ. Two different facts, two fields.
         """
         instruments = [(n.net, n.evidence) for n in collapse_result.nets]
         overlay = getattr(collapse_result, "overlay", None)
@@ -1133,11 +1198,12 @@ class AureaCore:
 
         refs: List[str] = []
         unresolved: List[str] = []
+        abstentions: List[str] = []          # Ruling 56
         for name, evidence in instruments:
             if evidence.countability is Countability.COUNTED:
                 refs.extend(ref.item_id for ref in evidence.refs)
             elif evidence.countability is Countability.NOT_COUNTABLE:
-                unresolved.append(
+                abstentions.append(
                     f"uncounted_by:{name}: {evidence.uncountable_reason}")
 
         lineage: List[str] = []
@@ -1154,7 +1220,8 @@ class AureaCore:
         # to be standing on without adding anything to it.
         return (tuple(dict.fromkeys(refs)),
                 tuple(dict.fromkeys(lineage)),
-                tuple(dict.fromkeys(unresolved)))
+                tuple(dict.fromkeys(unresolved)),
+                tuple(dict.fromkeys(abstentions)))
 
     @staticmethod
     def _psi_directive(responses: List[Any]) -> Any:

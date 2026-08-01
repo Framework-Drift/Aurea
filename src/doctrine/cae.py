@@ -47,6 +47,25 @@ semantics: an unparseable line contributes nothing rather than raising, because
 this is a floor and a forensic log must stay readable by a build that does not
 understand every line in it.
 
+AND THE DERIVATION CAN FAIL, WHICH IS NOT THE SAME AS DERIVING ZERO (Ruling 53,
+2026-07-31). Until that ruling `_derive_seq` answered an unreadable ledger with
+`return 0` and a comment asserting that "the read failure surfaces on the next
+append instead - `record()` raises". THAT DEFENCE WAS CONTINGENT ON THE FAULT
+PERSISTING. A transient read failure at construction plus a recovered disk at
+write time appended `CAE-001` over a real id, with no error raised anywhere -
+witnessed, not argued: a seeded ledger holding `CAE-001..CAE-007` ended the probe
+holding `CAE-001` TWICE.
+
+    An unreadable FILE and an unparseable LINE are different failures and now
+    get different answers. The line is floored past; the file is a SENTINEL.
+
+`_derive_seq` returns `Optional[int]`, `None` meaning UNDERIVED - and `None` is
+returned ONLY when the ledger EXISTS and could not be read. A missing ledger is
+still a legitimate `0`, because absence is a first run and not a fault.
+`_next_id` re-derives once against an UNDERIVED mint and, if it still cannot read
+the file, raises `LedgerUnreadable`. So "a mutation that cannot be audited does
+not happen" stops depending on a disk staying broken.
+
 `{n:03d}` matches canon's three-digit examples and GROWS NATURALLY past 999 -
 `CAE-1000` is what the format produces, not an overflow. Do not add a wrap.
 
@@ -81,6 +100,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+class LedgerUnreadable(Exception):
+    """RULING 53 (2026-07-31): the ledger EXISTS and its mint cannot be derived.
+
+    Raised at the moment an id would be minted, after one re-derivation attempt.
+    It is not a disk-error passthrough: it is the statement that the next
+    ordinal is UNKNOWN, and that minting one anyway would write an id that may
+    already name a different recorded mutation.
+
+    A STRUCTURAL VIOLATION (Ruling 25's taxonomy), and it propagates rather than
+    fermenting (Ruling 48's partition): canon 3a:111 makes the entry a
+    PRECONDITION for the change, so an unauditable mutation is not a mutation
+    that was refused on its merits - it is one whose record could not be
+    established. `dee.py`'s override docstring already put it in terms: "if
+    logging is impossible, the override does not happen."
+    """
+
+
 class CAE:
     """The Collapse Audit Engine. Append-only, disk-persistent, never rewritten.
 
@@ -106,13 +142,23 @@ class CAE:
     # THE MINT - continuity state (Ruling 42 res.4)
     # -----------------------------------------------------------------
 
-    def _derive_seq(self) -> int:
-        """The highest `CAE-` ordinal already in the ledger.
+    def _derive_seq(self) -> Optional[int]:
+        """The highest `CAE-` ordinal already in the ledger, or `None` if the
+        ledger EXISTS and could not be read (RULING 53).
 
-        FLOOR SEMANTICS, the Nova `_derive_seq` shape: a line that will not parse
-        contributes NOTHING rather than raising. A forensic log outlives the code
-        that wrote it, and a build that refuses to start because it met a line it
-        does not understand has turned an append-only record into a liability.
+        FLOOR SEMANTICS FOR A LINE, A SENTINEL FOR THE FILE - and the two must
+        not be confused. A line that will not parse contributes NOTHING rather
+        than raising: a forensic log outlives the code that wrote it, and a build
+        that refuses to start because it met a line it does not understand has
+        turned an append-only record into a liability. That half is UNCHANGED.
+
+        A FILE that cannot be read is a different fact. It does not mean "there
+        is nothing here"; it means "what is here is unknown", and answering it
+        with `0` is a claim about content the code never saw.
+
+        A MISSING ledger still returns `0`, and the asymmetry is the ruling's:
+        absence is a first run, which is a real and legitimate state, while an
+        existing-and-unreadable file is an unestablished one.
         """
         if not self.ledger_path.exists():
             return 0
@@ -133,14 +179,48 @@ class CAE:
                             highest = max(highest, int(tail))
         except OSError:
             # Unreadable ledger: the mint cannot be derived, so it does not
-            # pretend to have been. Starting at 0 here would remint over real
+            # pretend to have been. ~~Starting at 0 here would remint over real
             # ids, so the read failure surfaces on the next append instead -
             # `record()` raises, and a mutation that cannot be audited does not
-            # happen.
-            return 0
+            # happen.~~
+            #
+            # SUPERSEDED IN PLACE 2026-07-31 (RULING 53), history kept because
+            # the struck sentence diagnosed the hazard CORRECTLY and then relied
+            # on the fault to still be there when the fix was needed. `record()`
+            # raises only while the disk is still failing; a read failure that
+            # has cleared by write time let the append succeed - carrying an id
+            # minted from a `0` that meant "could not look", not "nothing here".
+            #
+            # The sentinel replaces the contingency. `None` is UNDERIVED.
+            return None
         return highest
 
     def _next_id(self) -> str:
+        """Mint the next id, or REFUSE. RULING 53.
+
+        RE-DERIVES ONCE against an underived mint before refusing, because the
+        condition this guards is characteristically TRANSIENT - the whole defect
+        was a read failure at construction that had cleared by write time. A
+        recovered ledger therefore resumes from its REAL maximum rather than
+        refusing a mutation it is now perfectly able to audit.
+
+        Still underived after that attempt, it raises. It does NOT fall back to a
+        number: an id minted from an unknown floor is exactly the collision this
+        ruling closes, and a duplicate id in an append-only ledger is
+        unrecoverable by construction (entries are never overwritten, 3a:112, so
+        nothing can ever go back and disambiguate the two).
+        """
+        if self._seq is None:
+            self._seq = self._derive_seq()
+        if self._seq is None:
+            raise LedgerUnreadable(
+                f"the audit ledger at '{self.ledger_path}' exists and cannot be "
+                f"read, so the next CAE ordinal is UNKNOWN. Minting one anyway "
+                f"could write an id that already names a different recorded "
+                f"mutation, and an append-only ledger cannot later tell the two "
+                f"apart. Canon 3a:111 makes the entry a precondition for the "
+                f"change: a mutation that cannot be audited does not happen."
+            )
         self._seq += 1
         return f"{self.ID_PREFIX}{self._seq:03d}"
 

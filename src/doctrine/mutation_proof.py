@@ -46,9 +46,65 @@ not have.
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import Any, Dict, Optional, Tuple
+
+
+def _deep_freeze(value: Any) -> Any:
+    """Rebuild a container graph as read-only, all the way down. RULING 52.
+
+    dict -> `MappingProxyType`, list -> tuple, set -> frozenset, recursively.
+    Anything else is returned as-is: this converts CONTAINERS, and inventing a
+    freeze for arbitrary leaf objects would be inventing structure the proof does
+    not have (`mutation_proof`'s standing refusal, one field down).
+
+    EVERY CONTAINER IT RETURNS IS NEW. That is not incidental - it is the half
+    that makes the freeze airtight, and the reason the ruling says "a fresh deep
+    copy" rather than "a proxy". `MappingProxyType(caller_dict)` is a VIEW: it
+    would refuse `proof.contradiction_core["x"] = 1` while leaving
+    `caller_dict["x"] = 1` writing straight through to the recorded argument. A
+    freeze that stops the honest caller and not the one holding the reference is
+    the appearance of immutability, which is what stops anyone looking.
+    """
+    if isinstance(value, MappingProxyType):
+        # Already frozen by a previous construction (a proof rebuilt from
+        # another proof's `as_dict`, or a nested value passed twice). Rebuilding
+        # is still correct but pointless; returning it avoids a proxy of a proxy.
+        return value
+    if isinstance(value, dict):
+        return MappingProxyType({k: _deep_freeze(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_freeze(v) for v in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_deep_freeze(v) for v in value)
+    return value
+
+
+def _thaw(value: Any) -> Any:
+    """The inverse of `_deep_freeze`, for `as_dict`. RULING 52.
+
+    FOUND BY A PIN, NOT BY DESIGN, and worth recording as the reason this
+    function exists. `as_dict` did `dict(self.contradiction_core)` - a SHALLOW
+    copy, which was correct while the interiors were plain dicts and became a
+    `TypeError: Object of type mappingproxy is not JSON serializable` the moment
+    they were frozen one level down. The ruling requires the serialized shape to
+    be UNCHANGED, so the freeze has to be invisible at the boundary where the
+    proof leaves memory for the CAE ledger and the SAE state file.
+
+    Converts back exactly what `_deep_freeze` converted and no more:
+    `MappingProxyType` -> dict, tuple -> list. A `frozenset` is deliberately left
+    alone - a set was never JSON-serializable here either, so thawing one would
+    change behaviour for an input that already failed, and choosing an order for
+    it would be inventing one.
+    """
+    if isinstance(value, (MappingProxyType, dict)):
+        return {k: _thaw(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_thaw(v) for v in value]
+    return value
 
 
 class CriterionResult(str, Enum):
@@ -154,12 +210,56 @@ class DoctrineMutationProof:
     # explicitly, and a field that only appears when non-empty cannot make it.
     unresolved_residue: Tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        """RULING 52 (2026-07-31) - THE FREEZE GOES ALL THE WAY DOWN.
+
+        `frozen=True` froze the SHELL and left three `Dict` interiors writable.
+        That is the class `TruthPacket` closed at Ruling 33 - a frozen container
+        of mutable contents - and here it sat on the one object the architecture
+        treats as a mutation's ARGUMENT OF RECORD.
+
+        THE WINDOW WAS REAL, not theoretical. `validate_proof` checks this object
+        ONCE, at `SAE.mutate_doctrine`'s first line; `SAE.save()` re-serializes it
+        every time epoch state persists, which is at minimum once per symbolic
+        cycle and for as long as the record lives in `history`. An interior write
+        landing between those two moments is recorded as what forced the
+        mutation, and it is recorded in only ONE of the two places - so the
+        permanent CAE entry and the resumable state file could carry different
+        arguments for the same event, with nothing anywhere comparing them.
+
+        The three FROZEN fields are the three `Dict` interiors. `scar_lineage`,
+        `unresolved_residue` and `content_delta` need nothing: the first two are
+        already tuples and the third is itself a frozen dataclass of strings.
+
+        A DEEP COPY FIRST, THEN THE FREEZE. `copy.deepcopy` detaches leaf objects
+        the recursive rebuild would otherwise share with the caller; the rebuild
+        then makes every container read-only. Either alone is insufficient - see
+        `_deep_freeze` for why a proxy over the caller's own dict is a view and
+        not a freeze.
+
+        `object.__setattr__` is the standard frozen-dataclass idiom for this and
+        is not a bypass of the freeze: it runs during construction, before any
+        consumer holds the object, which is the only moment at which a frozen
+        value is legitimately established.
+        """
+        for name in ("contradiction_core", "echo_provenance", "preserved_invariants"):
+            value = getattr(self, name)
+            if value is None:
+                # `echo_provenance=None` is the ORDINARY case - no proposal
+                # authored this mutation - and it is not a gap. Nothing to freeze.
+                continue
+            object.__setattr__(self, name, _deep_freeze(copy.deepcopy(value)))
+
     def as_dict(self) -> Dict[str, Any]:
         """Plain JSON for the CAE entry and SAE's state file."""
+        # RULING 52: `_thaw` rather than `dict(...)`. The old shallow copy left
+        # nested interiors as `MappingProxyType` once the freeze landed, which
+        # `json.dumps` refuses - so the deep freeze needs a deep thaw at exactly
+        # this boundary, and only here. See `_thaw`.
         return {
-            "contradiction_core": dict(self.contradiction_core),
+            "contradiction_core": _thaw(self.contradiction_core),
             "scar_lineage": list(self.scar_lineage),
-            "echo_provenance": dict(self.echo_provenance) if self.echo_provenance else None,
+            "echo_provenance": _thaw(self.echo_provenance) if self.echo_provenance else None,
             "content_delta": (
                 {
                     "ancestor_id": self.content_delta.ancestor_id,

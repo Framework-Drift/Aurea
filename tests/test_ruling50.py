@@ -144,7 +144,21 @@ def test_a_not_countable_net_contributes_no_ref_but_says_why() -> None:
     relocated to the render boundary, where it becomes something AUREA SAYS.
 
     Four of the six nets are NOT_COUNTABLE on an ordinary pass. Each one that is
-    must be named in `unresolved`, carrying its own reason.
+    must be named, carrying its own reason.
+
+    MIGRATED 2026-07-31 UNDER THE RULING-14 PRECEDENT - THE RULING MOVED, and
+    old/new are recorded here verbatim rather than silently swapped.
+
+        WAS (Ruling 50):  the reason must appear in `packet.unresolved`.
+        IS  (Ruling 56):  the reason must appear in `packet.abstentions`, AND
+                          must NOT appear in `packet.unresolved`.
+
+    NARROWER, NEVER WEAKER: the old assertion is kept in full and a second one is
+    added forbidding the old location. Ruling 56's finding is that `unresolved`
+    is documented as "what is carried, unclosed" and a STANDING BUILD LIMITATION
+    is not an open thread of this claim - so this pin now asserts the separation
+    as well as the presence. Everything else here is untouched, including the
+    verbatim-reason rule and the equivalent-mutant note below.
     """
     result = _spoken("the kettle boiled quietly")
     packet = result["truth_packet"]
@@ -155,11 +169,15 @@ def test_a_not_countable_net_contributes_no_ref_but_says_why() -> None:
     assert abstaining, "precondition: the shallow nets cannot count"
 
     for net in abstaining:
-        assert any(u.startswith(f"uncounted_by:{net.net}:") for u in packet.unresolved), (
+        assert any(a.startswith(f"uncounted_by:{net.net}:") for a in packet.abstentions), (
             f"{net.net} abstained and the packet does not say so - a reader "
             f"cannot tell 'found nothing' from 'could not look'")
         # THE REASON ITSELF, not a pointer to it.
-        assert any(net.evidence.uncountable_reason in u for u in packet.unresolved)
+        assert any(net.evidence.uncountable_reason in a for a in packet.abstentions)
+        # RULING 56: and it is NOT reported as an unclosed thread of this claim.
+        assert not any(u.startswith(f"uncounted_by:{net.net}:")
+                       for u in packet.unresolved), (
+            f"{net.net}'s standing inability is not residue of THIS claim")
 
     # And no abstaining net smuggled a ref in.
     #
@@ -197,9 +215,15 @@ def test_an_honest_zero_needs_no_caveat() -> None:
     assert none_found, "precondition: at least one instrument reached an honest zero"
 
     for name in none_found:
+        # RULING 56 (2026-07-31) moved WHERE an abstention is reported, so this
+        # checks BOTH surfaces. The claim is unchanged and is now stronger by one
+        # field: an honest zero is captioned NOWHERE.
         assert not any(u.startswith(f"uncounted_by:{name}:") for u in packet.unresolved), (
             f"{name} ran and found nothing - captioning that as an abstention "
             f"claims a gap where there is a finding")
+        assert not any(a.startswith(f"uncounted_by:{name}:") for a in packet.abstentions), (
+            f"{name} ran and found nothing - it does not belong on the "
+            f"abstention surface either")
 
 
 def test_a_nominal_scar_id_is_never_lineage() -> None:
@@ -212,7 +236,15 @@ def test_a_nominal_scar_id_is_never_lineage() -> None:
     the packet must not merge them.
 
     Driven with NO scar store, where every scarline id is unconfirmable by
-    construction - the forcing configuration.
+    construction - the forcing configuration. (RULING 54 narrowed what NOMINAL
+    means, from "not confirmed LIVE" to "absent from the store"; the no-store
+    case is unaffected and is now the THIRD case - the store was never consulted
+    at all - which is why this configuration still forces the same way.)
+
+    MIGRATED 2026-07-31 UNDER THE RULING-14 PRECEDENT: `_spoken_grounding`
+    returns a FOUR-tuple since Ruling 56. The unpack widened; NOT ONE ASSERTION
+    MOVED, and a new one was added pinning that a nominal reference STAYS in
+    `unresolved` - which is the asymmetry Ruling 56 turns on.
     """
     from src.doctrine.codex import Codex
     from src.doctrine.doctrine_spine import DoctrineSpine
@@ -226,7 +258,7 @@ def test_a_nominal_scar_id_is_never_lineage() -> None:
     finding = collapse.overlay.fractures[0]
     assert finding.unconfirmed_scarline == finding.scarline, "precondition: none confirmable"
 
-    refs, lineage, unresolved = AureaCore._spoken_grounding(collapse)
+    refs, lineage, unresolved, abstentions = AureaCore._spoken_grounding(collapse)
 
     assert lineage == (), "not one nominal id may be reported as lineage"
     for scar_id in finding.scarline:
@@ -235,6 +267,11 @@ def test_a_nominal_scar_id_is_never_lineage() -> None:
         assert scar_id in refs, (
             "it IS counted evidence - the overlay enumerated it and named it "
             "ungrounded; the two fields answer different questions")
+        # RULING 56: and it stays in `unresolved` rather than migrating with the
+        # instrument abstentions. An unverified reference IS an unclosed thread
+        # of THIS claim; an unbuilt instrument is not.
+        assert not any(scar_id in a for a in abstentions), (
+            "a nominal scar reference is not an abstention")
 
 
 # =====================================================================

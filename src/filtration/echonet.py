@@ -219,11 +219,16 @@ class OverlayFinding:
     instrument: OverlayInstrument
     detail: str
     # The scars this doctrine's lineage names, read BIDIRECTIONALLY (Ruling 26):
-    # the doctrine's own `scar_links` UNION the live scars whose
-    # `linked_doctrines` name it. Either half alone is a partial view.
+    # the doctrine's own `scar_links` UNION the scars whose `linked_doctrines`
+    # name it. Either half alone is a partial view.
+    #
+    # RULING 54: read over the scars the store HOLDS, in any decay state - not
+    # over the live set. A lineage is history, and cooling is not absence.
     scarline: Tuple[str, ...] = ()
-    # Scarline ids the scar store did not confirm live - or could not, because
-    # no store was injected. NOMINAL references, named so a reader can subtract.
+    # Scarline ids the scar store does not hold at all - or could not be checked,
+    # because no store was injected. NOMINAL references, named so a reader can
+    # subtract them. RULING 54 narrowed this from "not live" to "not present":
+    # dangling, fabricated, or Cold-Purged, rather than merely cooled.
     unconfirmed_scarline: Tuple[str, ...] = ()
 
 
@@ -935,29 +940,60 @@ class EchoNet:
         half would report an empty scarline for the record every other scar is
         downstream of. Either half alone is a partial view.
 
-        Returns (scarline, unconfirmed). An id the scar store does not confirm
-        LIVE - or cannot, because no store is injected - is still reported (it
-        is a recorded fact on the doctrine) and NAMED as nominal, so a reader
-        can subtract it from the tally.
+        Returns (scarline, unconfirmed). An id the scar store does not hold at
+        all - or cannot be checked, because no store is injected - is still
+        reported (it is a recorded fact on the doctrine) and NAMED as nominal, so
+        a reader can subtract it from the tally.
+
+        RULING 54 (2026-07-31) - CONFIRMATION IS STORE PRESENCE, IN ANY DECAY
+        STATE. This read used `get_active_scars()` for both halves, which made a
+        doctrine's LINEAGE a function of which of its scars were still HOT.
+
+            Cooling a scar to WANING - the FIRST scheduled step, five cycles
+            before dormancy - flipped its confirmation to NOMINAL. So AUREA's
+            expressed grounding weakened because nothing had disturbed her, and
+            the quieter she was the less she could show she stood on.
+
+        Canon splits it and this now follows the split: DORMANT "no longer
+        influences output or filtration directly, BUT REMAINS PRESERVED"
+        (2b:916), FOSSILIZED is "part of symbolic lineage" (2b:921). Bearing
+        keeps `LIVE_STATES`; history asks the store what it holds.
+
+        BOTH HALVES MOVED, and the reverse one was the more severe: iterating
+        only live scars meant a cooled scar naming this doctrine in
+        `linked_doctrines` vanished from the lineage ENTIRELY rather than being
+        marked nominal. For a doctrine of `Doctrine-0`'s shape - no `scar_links`
+        of its own, named by four scars - a cooled store reported an EMPTY
+        lineage for the record every other scar is downstream of.
+
+        NOMINAL therefore narrows to its honest meaning: recorded on a doctrine
+        but ABSENT from the store - dangling, fabricated, or Cold-Purged to CSA
+        (canon: "sealed", audit-only, so absence from the store is the correct
+        read). It is not an empty category; it is a smaller and truer one.
         """
         recorded = [s for s in (getattr(doctrine, "scar_links", None) or []) if s]
         doctrine_id = getattr(doctrine, "id", "")
 
-        live_ids: Optional[set] = None
-        reader = getattr(self.scar_core, "get_active_scars", None)
+        present_ids: Optional[set] = None
+        # RULING 54: the owner's PRESENCE reader, not its BEARING reader. Asking
+        # `get_active_scars` here was asking the wrong question of the right
+        # store - see the docstring.
+        reader = getattr(self.scar_core, "all_scars", None)
         if callable(reader):
-            live = list(reader())
-            live_ids = {s.id for s in live}
-            for scar in live:
+            present = list(reader())
+            present_ids = {s.id for s in present}
+            for scar in present:
                 if doctrine_id in (getattr(scar, "linked_doctrines", None) or []):
                     recorded.append(scar.id)
 
         scarline = tuple(dict.fromkeys(recorded))
-        if live_ids is None:
-            # No store to confirm against: every id is a recorded reference and
-            # none is confirmed. NOMINAL, all of it, and said out loud.
+        if present_ids is None:
+            # No store to check against: every id is a recorded reference and
+            # none is confirmed. NOMINAL, all of it, and said out loud. This is a
+            # THIRD case, distinct from "absent from the store" - the store was
+            # never consulted (Docket H's two-absences cut).
             return scarline, scarline
-        return scarline, tuple(s for s in scarline if s not in live_ids)
+        return scarline, tuple(s for s in scarline if s not in present_ids)
 
     def _live_doctrines(self) -> Optional[List[Any]]:
         """The LIVE doctrine set (active + locked), or None if unreadable.

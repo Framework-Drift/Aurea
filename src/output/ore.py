@@ -235,6 +235,11 @@ class ORE:
         evidence_refs: Tuple[str, ...] = (),
         scar_lineage: Tuple[str, ...] = (),
         unresolved: Tuple[str, ...] = (),
+        # RULING 56 (2026-07-31): instrument abstentions, kept separate from
+        # `unresolved` all the way across the boundary. ORE threads it; it does
+        # not decide it (the split is made in `AureaCore._spoken_grounding`,
+        # where the countability states are read).
+        abstentions: Tuple[str, ...] = (),
         psi_directive: Optional[object] = None,
     ) -> TruthPacket:
         """Assemble the frozen packet HAIL renders.
@@ -257,6 +262,7 @@ class ORE:
             evidence_refs=evidence_refs,
             scar_lineage=scar_lineage,
             unresolved=unresolved,
+            abstentions=abstentions,
             psi_directive=psi_directive,      # type: ignore[arg-type]
         )
 
@@ -269,6 +275,11 @@ class ORE:
         evidence_refs: Tuple[str, ...] = (),
         scar_lineage: Tuple[str, ...] = (),
         unresolved: Tuple[str, ...] = (),
+        # RULING 56 (2026-07-31): instrument abstentions, kept separate from
+        # `unresolved` all the way across the boundary. ORE threads it; it does
+        # not decide it (the split is made in `AureaCore._spoken_grounding`,
+        # where the countability states are read).
+        abstentions: Tuple[str, ...] = (),
         psi_directive: Optional[object] = None,
     ) -> TruthPacket:
         """Resolve a known `process_input` exit through the mapping table.
@@ -291,5 +302,6 @@ class ORE:
             evidence_refs=evidence_refs,
             scar_lineage=scar_lineage,
             unresolved=unresolved,
+            abstentions=abstentions,
             psi_directive=psi_directive,
         )

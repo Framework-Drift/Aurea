@@ -179,6 +179,36 @@ class TruthPacket:
     evidence_refs: Tuple[str, ...] = ()      # ids only
     scar_lineage: Tuple[str, ...] = ()       # ids only
     unresolved: Tuple[str, ...] = ()         # what is carried, unclosed - ids/reasons
+    # RULING 56 (2026-07-31) - WHO COULD NOT LOOK, where that is its own fact.
+    #
+    # Ruling 50 routed instrument abstentions into `unresolved` on that ruling's
+    # letter, and the read-back registered the tension: `unresolved` is
+    # documented one line above as "what is carried, unclosed", and A STANDING
+    # BUILD LIMITATION IS NOT AN OPEN THREAD OF THIS CLAIM. "No evidence base
+    # exists in the tree" is true of every claim AUREA will ever process; it says
+    # nothing about this one, and reporting it as carried made her own
+    # unfinished construction look like this claim's residue.
+    #
+    # The `nominal_scar_ref:` entries STAY in `unresolved`, and the asymmetry is
+    # the whole ruling: an unverified scar reference IS an unclosed thread of
+    # this claim - the record says a scar bears on the doctrine and the store
+    # does not hold it, which is a question about THIS claim's grounding.
+    #
+    # CARRIES PROSE BY DESIGN. The ids-only enforcement below covers three fields
+    # and deliberately NOT this one: an abstention's value is the instrument's
+    # REASON, verbatim, which is the input a later pass reads to know what to
+    # build - Docket H's evidence vocabulary says so at its own reason field. A
+    # pointer to the reason is not the reason. It is still a TUPLE: Ruling 22's
+    # mutable-through hazard is not relaxed by carrying sentences instead of ids.
+    #
+    # (The filename is deliberately not spelled here. Docket H's consumer pin
+    # scans source text for that token, and this module is NOT a consumer - it
+    # imports nothing from the vocabulary and reads no countability state. Naming
+    # the file in a comment would register a false consumer, and the honest
+    # remedies would be to delete real documentation or to declare a non-consumer
+    # ruled. Reported to the architect rather than fixed here: the scan is
+    # substring-based and will false-positive on prose.)
+    abstentions: Tuple[str, ...] = ()
     psi_directive: Optional["PSIDirective"] = None
 
     def __post_init__(self) -> None:
@@ -224,6 +254,10 @@ class TruthPacket:
             )
 
         # --- data only, and immutable all the way down -----------------------
+        #
+        # RULING 56: `abstentions` is checked for TUPLE-NESS below but is NOT in
+        # this list, and the omission is a decision recorded at the field: it
+        # carries an instrument's reason as PROSE. Everything here is ids-only.
         for field in ("evidence_refs", "scar_lineage", "unresolved"):
             value = getattr(self, field)
             if not isinstance(value, tuple):
@@ -240,6 +274,38 @@ class TruthPacket:
                         f"{type(item).__name__}. Never a live Scar, Echo, Doctrine, "
                         "or store reference: holding one is holding a write path."
                     )
+
+        # RULING 56: prose is allowed HERE, and NEITHER a list NOR a live object
+        # is.
+        #
+        # FOUND BY A SURVIVING MUTANT, and the survivor was right. Adding
+        # `abstentions` to the ids-only loop above changed nothing observable, so
+        # the first reading was "equivalent, annotate it". It is not: without a
+        # per-item check this field accepted ANY object, including the live
+        # `Scar` / `Echo` / store reference the packet's founding rule exists to
+        # keep out - "holding a live Scar is holding a write path into someone
+        # else's store". A field that carries sentences is still a field.
+        #
+        # So the ITEM TYPE is enforced exactly as strictly as the other three.
+        # What Ruling 56 relaxes is what the strings may MEAN - a reason rather
+        # than an id - which is a semantic relaxation, never a type one. The
+        # separate loop exists so the error message says the right thing.
+        if not isinstance(self.abstentions, tuple):
+            raise TypeError(
+                f"TruthPacket.abstentions must be a tuple, got "
+                f"{type(self.abstentions).__name__}. It carries REASONS rather "
+                "than ids, which relaxes what the items may say - never that the "
+                "container may be mutated through a frozen shell (Ruling 22)."
+            )
+        for item in self.abstentions:
+            if not isinstance(item, str):
+                raise TypeError(
+                    f"TruthPacket.abstentions takes strings only, got a "
+                    f"{type(item).__name__}. The relaxation here is SEMANTIC - "
+                    "an item may be an instrument's reason rather than an id - "
+                    "and never a licence to carry a live Scar, Echo, Doctrine or "
+                    "store reference across the boundary."
+                )
 
         if self.psi_directive is not None:
             # Local import - psi.py pulls in the reflex stack, and this module

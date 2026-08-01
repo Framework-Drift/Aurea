@@ -154,6 +154,34 @@ class ScarLogicCore:
         return [self._snapshot(scar) for scar in self.scars
                 if normalize(scar.decay_state) in LIVE_STATES]
 
+    def all_scars(self) -> List[Scar]:
+        """EVERY scar in the store, in ANY decay state, as SNAPSHOTS (Ruling 22).
+
+        RULING 54 (2026-07-31). Added because lineage and bearing are DIFFERENT
+        QUESTIONS and only one of them had a reader.
+
+            `get_active_scars` answers "what still exerts pressure" - bearing,
+            filtered by `LIVE_STATES`, and it is UNTOUCHED.
+            This answers "what is on record as having happened" - history.
+
+        Canon draws the line itself: DORMANT "no longer influences output or
+        filtration directly, BUT REMAINS PRESERVED... may be recalled during
+        doctrine mutation, identity recursion" (2b:916), and FOSSILIZED is "part
+        of symbolic lineage" (2b:921). A cooled scar stops PUSHING; it does not
+        stop having HAPPENED.
+
+        Without this reader, EchoNet's Stage 3 confirmed a doctrine's scarline
+        against the LIVE set, so a scar that merely cooled was reported as an
+        unverified reference and AUREA's expressed grounding eroded as a function
+        of CALM - weakening precisely because nothing had disturbed her.
+
+        SNAPSHOTS, like every other read here. A bulk reader handing out live
+        records would be a write path into the most permanent store in the system
+        and the AST single-writer scan could not see it (Ruling 22's finding).
+        Owner-side writes resolve through `_find`, never through this.
+        """
+        return [self._snapshot(scar) for scar in self.scars]
+
     def get_scar(self, scar_id: str) -> Optional[Scar]:
         """
         Retrieve a scar by ID, as a SNAPSHOT (Ruling 22). Reading what is true

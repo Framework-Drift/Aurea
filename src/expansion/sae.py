@@ -204,6 +204,36 @@ class ExclusionViolation(Exception):
     """An attempt to mutate something 10.G places outside self-mutation entirely."""
 
 
+class EpochStateQuarantined(Exception):
+    """RULING 51 (2026-07-31): the epoch state could not be ADJUDICATED.
+
+    A corrupt-but-EXISTING state file is not a missing one. `load()`'s existence
+    check distinguishes them three lines before the branch that used to call them
+    "genuinely indistinguishable", so defaulting on a parse failure was fail-OPEN
+    on the Self-Mutation Ceiling: a file whose real contents recorded a spent
+    budget granted a fresh one because it could not be read.
+
+    That is Ruling 34's restart absolution arriving through the persistence layer
+    rather than the process boundary, and it needed no process death - a single
+    torn write would do it.
+
+        AUREA does not resume a constitution she cannot read.
+        She reports that she cannot read it, and she does not change herself
+        until it is adjudicated.
+
+    This is an INTEGRITY condition, not an operational refusal, which is why it
+    is NOT in DEE's expected pair (Ruling 48): `CeilingExceeded` is SAE
+    exercising authority the architecture gave it, and fermenting a doctrine on
+    that is correct. This says the engine's own state is unestablished. Reading
+    it as a judgement about a doctrine would be reading a breach as a decision,
+    so it PROPAGATES to the structural surface (Ruling 25's clause).
+
+    THE ONE LEGITIMATE RESET REMAINS, and it is distinguishable by construction:
+    DELETING the file is a deliberate human act and stays a first run. Repairing
+    it resumes. Neither is available by accident.
+    """
+
+
 class MutationPreflightViolation(Exception):
     """RULING 24 (2026-07-25): a mutation whose successor id cannot be written.
 
@@ -382,6 +412,13 @@ class SAE:
         # through `mutate_doctrine` like every other mutation.
         self.revert_refusals: List[Dict[str, Any]] = []
 
+        # RULING 51: the adjudication flag. Set by `load()` when the state file
+        # EXISTS and could not be read, and never cleared within this process -
+        # a repaired file is resumed by CONSTRUCTING an SAE, which starts here at
+        # False. Sticky for the process, exactly as Ruling 42 made RIL's refusal
+        # sticky, and for the same reason: a quarantine that lapses is not one.
+        self.state_quarantined = False
+
         # Authorized reflex changes awaiting execution by their owner (the Reflex Grid).
         # SAE authorizes; the owner writes. Ruling 1, same shape as the Codex path.
         self.pending_reflex_changes: List[tuple] = []
@@ -404,7 +441,38 @@ class SAE:
 
         `audit_extra` rides into the CAE entry unchanged - `mutate_doctrine`
         passes the `DoctrineMutationProof` through it (Ruling 45).
+
+        RULING 51: THE QUARANTINE GATE IS HERE, AND HERE IS THE POINT.
+
+        This is the SINGLE SPEND SITE - the header's own claim, that "both
+        doctrine entry paths converge on this single executor, so the cap binds
+        every path BY CONSTRUCTION rather than by a per-path check", is what
+        makes one check sufficient for every counted class. A new mutation path
+        cannot forget the gate, because a new mutation path must come here to
+        spend a slot.
+
+        It is checked FIRST, before the lineage and exclusion checks, because an
+        unadjudicated constitution is a fact about the ENGINE and those are facts
+        about the REQUEST. There is no point validating the details of a change
+        when it is unknown how much budget has already been spent.
+
+        AND IT IS BEFORE THE COUNTER, which is Ruling 24's spend/refuse boundary
+        holding: a refusal costs no ceiling slot, no `_touch` obligation and no
+        permanent CAE entry. It also leaves `_cycle_blocked` untouched, so
+        Ruling 34-A's saturation clock stays quiet - a quarantined epoch is not a
+        SATURATED one, and conflating them would report the wrong condition.
         """
+        if self.state_quarantined:
+            raise EpochStateQuarantined(
+                f"the epoch state at '{self.runtime_path}' EXISTS and could not "
+                f"be read, so the Self-Mutation Ceiling cannot be established. "
+                f"AUREA does not change herself against a constitution she "
+                f"cannot adjudicate - defaulting here would grant a fresh budget "
+                f"precisely because the record of the spent one was unreadable. "
+                f"Repair the file to resume, or delete it to declare a first run; "
+                f"both are deliberate acts and neither happens by accident."
+            )
+
         if not collapse_lineage:
             # AVT.017. A mutation with no scar behind it is not self-authorship;
             # it is self-editing, and AUREA does not edit herself.
@@ -1259,7 +1327,29 @@ class SAE:
         fields. `saved_at` is written and read back ONLY into the restart record;
         it is metadata about the file, not state. The within-cycle accumulators
         are deliberately absent - see `__init__`.
+
+        RULING 51 - A QUARANTINED ENGINE DOES NOT WRITE. The guard is HERE rather
+        than in `_persist`, and that placement is load-bearing: `_persist` is not
+        the only caller. `AureaCore.save_state` calls `save()` DIRECTLY, so a
+        guard one level up would have left the pipeline's own checkpoint free to
+        replace the unreadable file with a default-valued snapshot.
+
+        That is Ruling 42's stickiness in its exact words - "a file overwritten
+        one ingest later was not left BYTE-UNTOUCHED" - and it was not
+        hypothetical here: `advance_cycle()` calls `_persist()` every symbolic
+        cycle, so before this ruling the FIRST cycle after a corrupt load
+        destroyed the evidence and replaced it with something that read as a
+        clean first run. The fault erased its own record on the next tick.
+
+        Deliberately NOT recorded per call. The condition is already legible in
+        two places that do not grow without bound - `state_quarantined`, and the
+        `load` entry on `persist_failures` carrying the original exception - and
+        an append here would add a line per cycle forever while saying nothing
+        the flag does not already say.
         """
+        if self.state_quarantined:
+            return
+
         self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": 1,
@@ -1298,10 +1388,26 @@ class SAE:
         except (OSError, ValueError) as exc:
             # A corrupt epoch file must not make SAE unconstructable - but it must
             # not silently grant a fresh ceiling either. Recorded loudly; state
-            # stays at defaults, which is the conservative direction only because
-            # a first run and a corrupt file are genuinely indistinguishable here.
+            # stays at defaults, ~~which is the conservative direction only because
+            # a first run and a corrupt file are genuinely indistinguishable here.~~
+            #
+            # SUPERSEDED IN PLACE 2026-07-31 (RULING 51), history kept because the
+            # struck sentence is the whole reason the defect survived review: IT
+            # WAS FALSE WHEN WRITTEN. The two cases are distinguished THREE LINES
+            # ABOVE, by `if not self.runtime_path.exists(): return False` - this
+            # branch is reached ONLY when the file exists. So defaulting here was
+            # never "the conservative direction"; it was fail-OPEN on the
+            # Self-Mutation Ceiling, and a torn write was enough to trigger it.
+            #
+            # Defaults still load IN MEMORY, for OBSERVATION ONLY - `status()`
+            # must be able to report the condition, and an engine that cannot say
+            # what is wrong with it is Ruling 22's fail-silent shape applied to
+            # the guard that exists to make the fault visible. What changes is
+            # that those defaults now authorize NOTHING.
+            self.state_quarantined = True
             self.persist_failures.append({
                 "op": "load", "path": str(self.runtime_path), "error": repr(exc),
+                "quarantined": True,
                 "at": datetime.now().isoformat(),
             })
             return False
@@ -1446,6 +1552,12 @@ class SAE:
             "saturation_surfaced": self.saturation_surfaced,
             "divergence_trigger_eligible": self.divergence_trigger_eligible,
             "restarts_resumed": len(self.restart_records),
+            # RULING 51. Quarantine gates CHANGE, not SIGHT - so the condition is
+            # reported here, where a caller asking what state the engine is in
+            # gets a straight answer. An engine that refused every mutation while
+            # reporting a healthy ceiling would be the fail-silent shape wearing
+            # the guard's own uniform.
+            "state_quarantined": self.state_quarantined,
         }
 
     def _reissue(self, auth: MutationAuthorization) -> MutationAuthorization:

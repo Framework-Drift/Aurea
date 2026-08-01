@@ -272,6 +272,12 @@ def _expert(packet: TruthPacket) -> str:
         parts.append(f"  scar lineage: {', '.join(packet.scar_lineage)}")
     if packet.unresolved:
         parts.append(f"  carried unresolved: {', '.join(packet.unresolved)}")
+    # RULING 56: its own labelled line. HAIL renders WHAT IT IS HANDED - no
+    # verdict strings, no store reads, no summarisation of the reasons. The
+    # separation was decided at the packet; this only stops printing two
+    # different kinds of fact under one heading that fits only one of them.
+    if packet.abstentions:
+        parts.append(f"  could not look: {', '.join(packet.abstentions)}")
     return "\n".join(parts)
 
 
