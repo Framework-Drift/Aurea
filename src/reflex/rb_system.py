@@ -236,7 +236,7 @@ class RBSystem:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.log_path, "a") as f:
                 for entry in entries:
-                    f.write(json.dumps(entry.to_dict(), default=str) + "\n")
+                    f.write(json.dumps(entry.to_dict(), allow_nan=False) + "\n")
             return True
         except Exception as exc:  # any write error, by ruling - not a bare pass
             self.flush_failures.append({

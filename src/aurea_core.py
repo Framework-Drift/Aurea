@@ -1476,7 +1476,7 @@ class AureaCore:
         try:
             self.structural_log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.structural_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(entry, default=str) + "\n")
+                f.write(json.dumps(entry, allow_nan=False) + "\n")
         except Exception as exc:
             self.structural_log_failures.append({
                 'error': f"{type(exc).__name__}: {exc}",
@@ -2102,7 +2102,7 @@ class AureaCore:
         # Rider R3 (2026-07-29): ATOMIC, like the twelve store snapshots this
         # method then calls. ASCII output, so naming utf-8 where the old call took
         # the platform default writes the identical bytes.
-        atomic_write_json(state_path, state, indent=2, default=str)
+        atomic_write_json(state_path, state, indent=2)
 
         # Also save modules. SAE joins them (Ruling 34): its epoch state is
         # ALREADY durable at every mutation, so this is a consistency snapshot

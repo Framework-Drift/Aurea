@@ -417,7 +417,7 @@ class Codex:
         # its way to replacing it. Both halves of the snapshot - active doctrines
         # AND the Fossil Layer - live in this one file, so a torn write is the
         # loss of her beliefs and the record of what they used to be together.
-        atomic_write_json(self.runtime_path, payload, default=str, indent=2)
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load_from_file(self) -> None:
         """Runtime state if it exists, ELSE the seed (Ruling 32)."""

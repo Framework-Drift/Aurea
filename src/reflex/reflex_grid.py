@@ -285,7 +285,7 @@ class GSR(SymbolicReflex):
         }
         
         with open(alert_path, 'a') as f:
-            f.write(json.dumps(alert) + '\n')
+            f.write(json.dumps(alert, allow_nan=False) + '\n')
             
     def calculate_system_coherence(self, active_scars: int, 
                                   active_reflexes: int,

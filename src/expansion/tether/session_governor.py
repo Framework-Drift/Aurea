@@ -394,4 +394,4 @@ class TetherProtocol:
             payload.update(extra)
         import json
         with open(self.telemetry_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, default=str) + "\n")
+            f.write(json.dumps(payload, allow_nan=False) + "\n")

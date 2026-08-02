@@ -245,6 +245,7 @@ class OriginDeclaration:
 # AST pin naming `_deep_freeze` is unchanged.
 from src.utils.deep_freeze import deep_freeze as _deep_freeze  # noqa: E402
 from src.utils.deep_freeze import thaw as _thaw  # noqa: E402
+from src.utils.record_value import validate_record_value
 
 
 @dataclass(frozen=True)
@@ -461,9 +462,22 @@ class ClaimAncestryLedger:
         record = ClaimAncestryRecord.from_declaration(self._next_id(), declaration)
         entry = record.as_dict()
 
+        # RULING 66 (2026-08-02) - THE WRITER GATE. Refuse what this ledger
+        # cannot canonically hold, BEFORE the append. A record either holds what
+        # was presented or refuses it; it may not hold something else instead,
+        # and this store's entries are cited later by id, so a silently
+        # stringified leaf here is a permanent claim that a string was
+        # presented when it was not.
+        #
+        # BEFORE `mkdir` AND BEFORE `open`: a refused entry leaves no file, no
+        # line, and no directory it did not already need. `allow_nan=False`
+        # below is the SECOND half and is not redundant - it catches NaN and
+        # Infinity at the serializer boundary if a future caller ever reaches
+        # this write without passing through here.
+        validate_record_value(entry, path="ancestry_entry")
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.ledger_path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry, default=str) + "\n")
+            handle.write(json.dumps(entry, allow_nan=False) + "\n")
         self.entries.append(entry)
         return record
 

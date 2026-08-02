@@ -332,16 +332,63 @@ def test_witness_an_undeclared_claim_does_not_display_a_human_source():
 
 
 # =====================================================================
-# S4 - `default=str` ROUND-TRIP  (finding (i))
+# S4 - RECORD-VALUE FIDELITY  (finding (i))  -  CLOSED BY BATCH 66
 #
-# CONFIRMED, identically, on all three record ledgers:
-#   cae.py:262 - claim_ancestry.py:466 - prediction_ledger.py:484
+# CONFIRMED at `0b2072c`, identically, on all three record ledgers
+# (`cae.py:262`, `claim_ancestry.py:466`, `prediction_ledger.py:484`):
+# bytearray / set / frozenset / arbitrary objects persisted as their `repr`
+# STRING; an int-keyed map persisted with STRING keys; NaN and Infinity
+# persisted as bare non-standard constants (a separate defect in the same
+# family - `default=str` never sees them).
 #
-# bytearray / set / frozenset / arbitrary objects persist as their `repr`
-# STRING; an int-keyed map persists with STRING keys; NaN and Infinity persist
-# as bare `NaN` / `Infinity`, which are INVALID under strict JSON (a separate
-# defect in the same family - `default=str` never sees them). A tuple-keyed map
-# is the one shape that raises rather than diverging.
+# ================== MIGRATED 2026-08-02 BY BATCH 66 ==================
+# RULING-14 FORM, AND THE DIVERGENCE FROM PIN (a) IS RECORDED HERE RATHER THAN
+# ABSORBED SILENTLY.
+#
+# Batch 66's pin (a) says these five witnesses "TURN RED and retire" - markers
+# deleted, assertions kept. **THEY CANNOT, AS WRITTEN, AND THE REASON IS THE
+# RULING'S OWN RESOLUTION.** Each asserted ROUND-TRIP FIDELITY: that a bytearray
+# recorded is a bytearray read back. Ruling 66's answer is not fidelity for
+# these values - it is **REFUSAL, NEVER COERCION**. A refused value is never
+# written, so it can never round-trip, so an unmodified fidelity assertion over
+# a bytearray fails under the fix exactly as it failed under the defect.
+#
+# THE RULING RESOLVES ITS OWN PIN, IN RES.4: "ROUND-TRIP IDENTITY **for
+# admissible payloads**: write -> read yields equal values AND types." So the
+# ASSERTION IS KEPT and its DOMAIN is narrowed to where the ruling says it must
+# hold, and the complementary half - pin (e), "present a `set`, assert a raise,
+# never a serialized string" - carries the values the ruling says are refused.
+# Between them they cover exactly what the originals covered, in the direction
+# the ruling actually rules.
+#
+# MARKERS RECORDED VERBATIM, per Ruling-14 form:
+#
+#   `test_witness_cae_round_trips_a_recorded_value_unchanged` (parametrized over
+#   a 3-member `_NONCANONICAL` of bytearray / set / int-keyed map) carried
+#   `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (i): the persisted form
+#   of a recorded field differs from its live form. An argument of record must
+#   not change shape on the way to disk."))`.
+#   -> SUCCEEDED BY `test_an_admissible_payload_round_trips_unchanged` (res.4,
+#      the assertion kept) and `test_a_non_canonical_value_is_refused_not_coerced`
+#      (pin (e), the same three shapes, now asserting the refusal).
+#
+#   `test_witness_the_ledger_writes_strictly_valid_json` carried
+#   `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (i), separate from
+#   default=str: NaN and Infinity are written as bare non-standard constants, so
+#   the line is not valid JSON."))`.
+#   -> SUCCEEDED BY `test_every_written_ledger_line_is_strictly_valid_json`,
+#      which keeps the strict-parser assertion VERBATIM and adds the reason it
+#      now holds: the non-finite floats never reach the file.
+#
+#   `test_witness_a_proof_that_passes_validation_can_be_persisted` carried
+#   `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (i), the severe
+#   consequence: one non-canonical leaf in a proof completes the mutation, is
+#   audited by CAE stringified, then permanently disables every subsequent state
+#   checkpoint."))`.
+#   -> SUCCEEDED BY `test_the_bytearray_proof_moves_nothing_and_poisons_nothing`
+#      (pin (d)), which asserts the ORIGINAL title's property - a proof that
+#      passes validation can be persisted - by establishing that this one does
+#      NOT pass, that nothing moved, and that persistence still works after.
 # =====================================================================
 
 _NONCANONICAL = {
@@ -350,86 +397,133 @@ _NONCANONICAL = {
     "int_keyed_map": {1: "x"},
 }
 
-
-@pytest.mark.parametrize("name", sorted(_NONCANONICAL))
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (i): the persisted form of a recorded field differs from its "
-    "live form. An argument of record must not change shape on the way to disk."))
-def test_witness_cae_round_trips_a_recorded_value_unchanged(name, tmp_path):
-    """WITNESS on the audit ledger - the store whose whole purpose is that its
-    records can be CITED later (3a:112)."""
-    from src.doctrine.cae import CAE
-    leaf = _NONCANONICAL[name]
-    ledger = CAE(ledger_path=str(tmp_path / "cae.jsonl"))
-    ledger.record(event="e", target="T", payload=leaf)
-
-    live = ledger.entries[-1]["payload"]
-    persisted = json.loads(
-        ledger.ledger_path.read_text(encoding="utf-8").splitlines()[-1])["payload"]
-    assert persisted == live and type(persisted) is type(live), (
-        f"live={live!r} ({type(live).__name__}) but "
-        f"persisted={persisted!r} ({type(persisted).__name__})")
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (i), separate from default=str: NaN and Infinity are written as "
-    "bare non-standard constants, so the line is not valid JSON."))
-def test_witness_the_ledger_writes_strictly_valid_json(tmp_path):
-    """WITNESS. A forensic log outlives the code that wrote it, so it must be
-    readable by a strict parser in any language - not only by Python's `json`,
-    which accepts `NaN`/`Infinity` as an extension."""
-    from src.doctrine.cae import CAE
-    ledger = CAE(ledger_path=str(tmp_path / "cae.jsonl"))
-    ledger.record(event="e", target="T", payload=float("nan"))
-    ledger.record(event="e", target="T", payload=float("inf"))
-
-    def strict(line):
-        return json.loads(line, parse_constant=_reject)
-
-    bad = []
-    for line in ledger.ledger_path.read_text(encoding="utf-8").splitlines():
-        try:
-            strict(line)
-        except ValueError as exc:
-            bad.append(f"{line[:80]}... -> {exc}")
-    assert not bad, "non-standard JSON constants written:\n" + "\n".join(bad)
+# res.4's domain: one of every admissible leaf, nested through both admissible
+# containers, so a round-trip that quietly re-typed anything would show.
+_ADMISSIBLE = {
+    "s": "text", "b_true": True, "b_false": False, "n": None,
+    "i": 42, "i_neg": -7, "f": 1.5, "f_zero": 0.0,
+    "list": ["a", 1, 2.5, True, None, {"nested": "dict"}],
+    "dict": {"deep": {"deeper": ["x", 0]}},
+}
 
 
 def _reject(constant):
     raise ValueError(f"non-standard JSON constant {constant!r}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (i), the severe consequence: one non-canonical leaf in a proof "
-    "completes the mutation, is audited by CAE stringified, then permanently "
-    "disables every subsequent state checkpoint."))
-def test_witness_a_proof_that_passes_validation_can_be_persisted(tmp_path):
-    """WITNESS - THE MOST CONSEQUENTIAL RESULT OF THE VERIFICATION PASS.
+def test_an_admissible_payload_round_trips_unchanged(tmp_path):
+    """RULING 66 res.4, and the KEPT ASSERTION of the superseded witness.
 
-    `validate_proof` (`mutation_proof.py:266`) checks class, a non-empty
-    contradiction core, and a non-empty invariant record. It does NOT check
-    canonical serializability. CAE writes with `default=str`; SAE's
-    `atomic_write_json` (`sae.py:1372`) does NOT pass `default`.
+    Write -> read yields equal VALUES and equal TYPES. The type half is the
+    load-bearing one: `default=str` produced values that still compared equal to
+    nothing in particular while having silently become `str`, so an assertion on
+    equality alone would have passed against the defect for several of these.
+    """
+    from src.doctrine.cae import CAE
+    ledger = CAE(ledger_path=str(tmp_path / "cae.jsonl"))
+    ledger.record(event="e", target="T", payload=_ADMISSIBLE)
 
-    So a proof carrying, say, a bytearray:
-      - PASSES pre-flight;
-      - the ancestor is fossilized and the successor installed;
-      - a ceiling slot is spent and a permanent CAE entry is written
-        (with the leaf silently stringified);
-      - and THEN `_persist()` raises `TypeError`.
+    live = ledger.entries[-1]["payload"]
+    persisted = json.loads(
+        ledger.ledger_path.read_text(encoding="utf-8").splitlines()[-1])["payload"]
 
-    The mutation record never reaches disk, so Ruling 47's reversion path has
-    nothing to read - while the Codex, in memory, has already moved. And the
-    failure is not transient: `sae.save()` and `AureaCore.save_state()` raise
-    for the remainder of the process, so NO store is checkpointed again.
+    assert persisted == live
+    for key in _ADMISSIBLE:
+        assert type(persisted[key]) is type(live[key]), (
+            f"{key}: live {type(live[key]).__name__} -> "
+            f"persisted {type(persisted[key]).__name__}")
+
+
+@pytest.mark.parametrize("name", sorted(_NONCANONICAL))
+def test_a_non_canonical_value_is_refused_not_coerced(name, tmp_path):
+    """RULING 66 PIN (e) - REFUSAL, NEVER COERCION, on the exact three shapes
+    the superseded witness measured.
+
+    Both halves matter and the second is the one that would rot: the call must
+    RAISE, and the ledger must be left with NO LINE. A refusal that still wrote
+    something would be the original defect wearing an exception.
+    """
+    from src.doctrine.cae import CAE
+    from src.utils.record_value import NonCanonicalRecordValue
+
+    ledger = CAE(ledger_path=str(tmp_path / "cae.jsonl"))
+    ledger.record(event="e", target="T", payload="a real value")
+    before = ledger.ledger_path.read_text(encoding="utf-8")
+
+    with pytest.raises(NonCanonicalRecordValue) as caught:
+        ledger.record(event="e", target="T", payload=_NONCANONICAL[name])
+
+    assert "cae_entry" in caught.value.path, (
+        f"the refusal must name where it refused; got {caught.value.path!r}")
+    assert ledger.ledger_path.read_text(encoding="utf-8") == before, (
+        "a refused value must leave the ledger byte-unchanged")
+    assert "bytearray(" not in before and "{1, 2, 3}" not in before
+
+
+def test_every_written_ledger_line_is_strictly_valid_json(tmp_path):
+    """THE SUPERSEDED WITNESS'S ASSERTION, KEPT VERBATIM.
+
+    A forensic log outlives the code that wrote it, so it must be readable by a
+    strict parser in any language - not only by Python's `json`, which accepts
+    `NaN`/`Infinity` as an extension.
+
+    It now holds for the reason Ruling 66 gives: the non-finite floats are
+    REFUSED and never reach the file. Both directions are asserted, because "no
+    bad lines" is trivially true of an empty file.
+    """
+    from src.doctrine.cae import CAE
+    from src.utils.record_value import NonCanonicalRecordValue
+
+    ledger = CAE(ledger_path=str(tmp_path / "cae.jsonl"))
+    ledger.record(event="e", target="T", payload={"finite": 1.5})
+
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(NonCanonicalRecordValue):
+            ledger.record(event="e", target="T", payload=bad)
+
+    lines = ledger.ledger_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1, "only the admissible record may have been written"
+    bad_lines = []
+    for line in lines:
+        try:
+            json.loads(line, parse_constant=_reject)
+        except ValueError as exc:
+            bad_lines.append(f"{line[:80]}... -> {exc}")
+    assert not bad_lines, ("non-standard JSON constants written:\n"
+                           + "\n".join(bad_lines))
+
+
+def test_the_bytearray_proof_moves_nothing_and_poisons_nothing():
+    """RULING 66 PIN (d) - THE LOAD-BEARING PIN, and the successor to the
+    verification pass's most consequential witness.
+
+    AT `0b2072c` this exact configuration PASSED the proof gate, FOSSILIZED the
+    ancestor, INSTALLED the successor, SPENT a ceiling slot, wrote a PERMANENT
+    CAE entry with the leaf silently stringified - and THEN raised on
+    persistence, leaving `sae.save()` and `save_state()` raising for the rest of
+    the process.
+
+    Every one of those is asserted NOT to have happened, and the last is the one
+    that closes the worst of it: **the process is not poisoned.** Asserting only
+    the raise would pass against an implementation that refuses AFTER spending,
+    which is precisely the shape Ruling 46 had to fix on the birth path.
     """
     from src.doctrine.mutation_proof import (
-        DoctrineMutationProof, ContentDelta, all_criteria_absent)
+        DoctrineMutationProof, ContentDelta, all_criteria_absent,
+        InvalidMutationProof)
     from src.utils.models import Doctrine
 
     core = AureaCore()
     target = "Doctrine-3"
-    assert target in core.codex.doctrines
+    assert target in core.codex.doctrines, "precondition: a live mutable target"
+
+    before = {
+        "history": len(core.sae.history),
+        "epoch_count": core.sae.epoch_count,
+        "fossils": set(core.codex.fossils),
+        "doctrines": set(core.codex.doctrines),
+        "cae": len(core.cae.entries),
+    }
 
     proof = DoctrineMutationProof(
         contradiction_core={"triggers": ["t"], "pressure": 1.0,
@@ -446,8 +540,48 @@ def test_witness_a_proof_that_passes_validation_can_be_persisted(tmp_path):
                          created_at=datetime.now(), description="y",
                          mutation_lineage=[target])
 
-    core.sae.mutate_doctrine(target, successor, collapse_lineage="Scar-0",
-                             proof=proof)
+    with pytest.raises(InvalidMutationProof) as caught:
+        core.sae.mutate_doctrine(target, successor, collapse_lineage="Scar-0",
+                                 proof=proof)
+
+    # The refusal names WHERE, at depth - not merely that something was wrong.
+    assert "contradiction_core.evidence_blob" in str(caught.value)
+
+    assert len(core.sae.history) == before["history"], "history moved"
+    assert core.sae.epoch_count == before["epoch_count"], "a ceiling slot spent"
+    assert set(core.codex.fossils) == before["fossils"], "something fossilized"
+    assert set(core.codex.doctrines) == before["doctrines"], "the Codex moved"
+    assert len(core.cae.entries) == before["cae"], "a CAE entry was written"
+
+    # THE HALF THAT MATTERS MOST: persistence still works.
+    core.sae.save()
+    core.save_state()
+
+
+def test_an_admissible_proof_still_completes_a_mutation():
+    """THE CONTROL, and it is not optional.
+
+    A gate that refused EVERY proof would satisfy every assertion above. This
+    drives the same path with an admissible `contradiction_core` and requires
+    the mutation to COMPLETE - so the pins above witness the VALUE class, not a
+    broken mutation path.
+    """
+    from tests.proof_support import minimal_proof
+    from src.utils.models import Doctrine
+
+    core = AureaCore()
+    target = "Doctrine-3"
+    successor = Doctrine(id=f"{target}::ok", name="b",
+                         created_at=datetime.now(), description="y",
+                         mutation_lineage=[target])
+
+    core.sae.mutate_doctrine(
+        target, successor, collapse_lineage="Scar-0",
+        proof=minimal_proof("a test drove it", scar_lineage=("Scar-0",),
+                            ancestor_id=target))
+
+    assert successor.id in core.codex.doctrines
+    assert target in core.codex.fossils
     core.save_state()
 
 

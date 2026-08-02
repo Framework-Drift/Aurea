@@ -291,6 +291,54 @@ def _shared_runtime_listing() -> List[str]:
                   for p in SHARED_RUNTIME.rglob("*") if p.is_file())
 
 
+def footprint_audit(configured: List[str], root: Path,
+                    shared_before: List[str],
+                    shared_after: List[str]) -> Dict[str, Any]:
+    """RULING 67 (2026-08-02) - AN INSTRUMENT THAT MEASURES HER AUDITS ITS OWN
+    FOOTPRINT. **SHARED BY EVERY MEASUREMENT INSTRUMENT, ON PURPOSE.**
+
+    Returns the audit RESULT as a structured block, which both `soak.py` and
+    `differential.py` carry as a REQUIRED FIELD of their reports. A run without
+    its audit is INCOMPLETE and says so; a run whose audit FAILS fails loudly.
+
+    THE INCIDENT THIS EXISTS FOR, in one sentence: in a single session the
+    differential harness silently wrote 39 lines into shared
+    `data/runtime/logs/claim_ancestry.jsonl` while the audited soak REFUSED the
+    same contamination - **one session demonstrated both directions of the
+    argument.** The asymmetry was never a decision; it was that one instrument
+    had been given an audit and the other had not.
+
+    IT LIVES HERE, IN THE SOAK, AND THE DIFFERENTIAL IMPORTS IT. A second copy
+    in the other instrument would be a second definition free to drift from the
+    first - the defect class this project has closed repeatedly (Ruling 47's
+    criterion names, Ruling 35's status filter). ONE audit, two callers.
+
+    `foreign_writes` is the load-bearing field: files that appeared under the
+    SHARED runtime during a run that was supposed to touch only its sandbox.
+    """
+    appeared = sorted(set(shared_after) - set(shared_before))
+    vanished = sorted(set(shared_before) - set(shared_after))
+    outside_root = []
+    resolved_root = Path(root).resolve()
+    for target in configured:
+        resolved = Path(target).resolve()
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError:
+            outside_root.append(str(resolved))
+
+    return {
+        "performed": True,
+        "configured_paths": len(configured),
+        "root": str(root),
+        "shared_runtime": str(SHARED_RUNTIME),
+        "foreign_writes": appeared,
+        "shared_files_removed": vanished,
+        "configured_outside_root": outside_root,
+        "pass": not appeared and not vanished and not outside_root,
+    }
+
+
 # =====================================================================
 # P2 - THE PROGRAM
 # =====================================================================
@@ -635,6 +683,11 @@ def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
         "parameters": {"cycles": cycles, "claim_every": claim_every,
                        "seed": seed, "root": str(root)},
         "isolation": {"configured_paths": len(configured), "root": str(root)},
+        # RULING 67: the audit RESULT as a REQUIRED FIELD. Present in every
+        # report this instrument writes, so a run without its audit is visibly
+        # incomplete rather than indistinguishable from a clean one.
+        "footprint_audit": footprint_audit(configured, root,
+                                           shared_before, shared_after),
         "guarantees": guarantees,
         "all_guarantees_pass": all(g["pass"] for g in guarantees),
         "headline": {

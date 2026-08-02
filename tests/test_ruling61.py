@@ -218,13 +218,38 @@ def test_a_mutable_leaf_is_copied_not_shared(tmp_path) -> None:
 
     Batch 51 found this for `mutation_proof`, Ruling 58 re-pinned it for the
     ancestry record, and it survived again here until this pin existed.
+
+    MIGRATED 2026-08-02 BY BATCH 66 (Ruling-14 form) - THE PROPERTY IS
+    UNCHANGED; ITS PAYLOAD MOVED, BECAUSE A RULING MOVED.
+
+    The leaf was `bytearray(b"closes above 10")`, and the body read:
+
+        leaf = bytearray(b"closes above 10")
+        committed = _ledger(tmp_path).commit("X", success_criteria=provided(leaf))
+        leaf.extend(b" OR WHATEVER WE SAY LATER")
+        assert committed.success_criteria.value == bytearray(b"closes above 10"), (
+            "the committed criterion was edited through a reference the caller "
+            "still holds - the commitment is not fixed at commit time")
+
+    Ruling 66 REFUSES a bytearray at this ledger's writer, so that payload can
+    no longer reach a commitment at all - the pin would now fail on the refusal
+    rather than witness the copy. **A LIST IS THE RIGHT SUCCESSOR AND NOT A
+    WEAKENING:** it is ADMISSIBLE (so it still exercises the write path end to
+    end) and MUTABLE (so it still witnesses exactly what `_deep_freeze` passes
+    through untouched and what the caller can still edit afterwards).
+
+    Ruling 64 made this same move for the same reason - re-basing the standing
+    bytearray witness onto the surface where the property can still be violated
+    rather than the one where it no longer can. The bytearray FORM itself is not
+    lost: it is pinned at the validator's own home, as a REFUSAL, per Batch 66
+    pin (b).
     """
-    leaf = bytearray(b"closes above 10")
+    leaf = ["closes above 10"]
     committed = _ledger(tmp_path).commit("X", success_criteria=provided(leaf))
 
-    leaf.extend(b" OR WHATEVER WE SAY LATER")
+    leaf.append("OR WHATEVER WE SAY LATER")
 
-    assert committed.success_criteria.value == bytearray(b"closes above 10"), (
+    assert committed.success_criteria.value == ("closes above 10",), (
         "the committed criterion was edited through a reference the caller "
         "still holds - the commitment is not fixed at commit time")
 

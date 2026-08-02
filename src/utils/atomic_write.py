@@ -144,7 +144,31 @@ def atomic_write_json(path: Union[str, Path], payload: Any,
     """`json.dump` semantics, atomically. Serializes BEFORE touching the file.
 
     `dump_kwargs` are passed to `json.dumps` unchanged, so each owner keeps the
-    exact serialization options it already used (`indent`, `default=str`). This
-    function chooses nothing about the content.
+    exact serialization options it already used (`indent`). This function
+    chooses nothing about the content.
+
+    RULING 66 (2026-08-02) - `allow_nan=False` IS SET HERE, AT THE FUNNEL, AND
+    IT IS NOT OVERRIDABLE.
+
+    THE FUNNEL WAS CHOSEN OVER TWELVE CALL SITES DELIBERATELY. Every
+    `atomic_write_json` caller in `src/` serializes through this one statement,
+    so setting it here makes the guarantee true for all of them at once AND
+    keeps it true for the thirteenth caller nobody has written yet. Twelve
+    disciplined call sites are twelve chances to forget; one funnel is a
+    property. This is the same reasoning that put Ruling 51's guard at
+    `authorize()` - the single spend site - rather than on each mutation path.
+
+    IT IS PASSED POSITIONALLY-BEFORE-`**`, SO A CALLER SUPPLYING ITS OWN
+    `allow_nan` GETS A `TypeError` FOR A DUPLICATE KEYWORD. That is intended:
+    the wrong path is UNEXECUTABLE rather than discouraged (CLAUDE.md §3). A
+    `setdefault` would have left an override available, and an override on this
+    particular flag is the ability to write `NaN` into a forensic record.
+
+    WHY NaN AND Infinity ARE THE TARGET: `json.dumps` writes them as bare
+    non-standard constants that no conforming parser in any other language will
+    read. `default=` never sees them - the float serializer handles them first -
+    so deleting `default=str` alone would not have closed this, which is
+    precisely why the ruling names both halves.
     """
-    atomic_write_text(path, json.dumps(payload, **dump_kwargs), encoding=encoding)
+    atomic_write_text(path, json.dumps(payload, allow_nan=False, **dump_kwargs),
+                      encoding=encoding)

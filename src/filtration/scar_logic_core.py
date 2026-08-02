@@ -269,7 +269,7 @@ class ScarLogicCore:
         # able to afford a truncation.
         atomic_write_json(self.runtime_path,
                           [self._scar_to_dict(s) for s in self.scars],
-                          default=str, indent=2)
+                          indent=2)
 
     def load_from_file(self) -> None:
         """

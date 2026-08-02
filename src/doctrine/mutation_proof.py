@@ -60,6 +60,8 @@ from typing import Any, Dict, Optional, Tuple
 # AST pin naming `_deep_freeze` is unchanged.
 from src.utils.deep_freeze import deep_freeze as _deep_freeze  # noqa: E402
 from src.utils.deep_freeze import thaw as _thaw  # noqa: E402
+from src.utils.record_value import (  # noqa: E402
+    NonCanonicalRecordValue, validate_record_value)
 
 
 class CriterionResult(str, Enum):
@@ -290,3 +292,45 @@ def validate_proof(proof: Any) -> None:
             "are not reported as evaluated. A mutation must carry what it "
             "preserved, including which criteria were ABSENT rather than passed."
         )
+
+    # RULING 66 (2026-08-02) - THE PROOF GATE, and the reason it is HERE.
+    #
+    # This method's three checks above ask whether the argument SAYS anything.
+    # None of them asked whether it can be RECORDED, and that gap was the whole
+    # of the witnessed worst defect: a bytearray leaf passed all three, the
+    # mutation completed in full - ancestor fossilized, successor installed,
+    # ceiling slot spent, permanent CAE entry written with the leaf silently
+    # stringified - and only THEN did persistence raise, poisoning every
+    # subsequent save for the life of the process.
+    #
+    # THE POSITION IS THE POINT. `validate_proof` is called on
+    # `mutate_doctrine`'s FIRST LINE, before `_preflight` and before
+    # `authorize()`, so refusing here means NOTHING MOVES: no fossilize, no
+    # install, no ceiling spend, no CAE entry. Ruling 24's own boundary - a
+    # refusal must not also spend a slot - extended to this failure class, which
+    # is what makes the half-landed mutation UNREACHABLE rather than merely
+    # unlikely.
+    #
+    # OVER `as_dict()`, NOT THE LIVE OBJECT, and that is not a convenience: the
+    # proof holds `scar_lineage` as a TUPLE and Ruling 52's deep freeze turns
+    # every interior list into one, while the canonical container set is `list`
+    # and `str`-keyed `dict`. Validating the live object would refuse every
+    # proof AUREA can build. `as_dict()` is also EXACTLY what CAE and SAE
+    # serialize, so this gate tests the bytes that will actually be written
+    # rather than a hopeful proxy for them.
+    #
+    # RE-RAISED AS `InvalidMutationProof` - SAE's existing typed-refusal
+    # convention, already in `STRUCTURAL_VIOLATIONS` (Ruling 49's rider), so the
+    # taxonomy needs no new member and Ruling 66 coins only the validator's own
+    # error name. The key-path is carried through VERBATIM: it is the whole
+    # value of the refusal, and a gate that reported only "somewhere in this
+    # proof" would send the next investigation back to manual bisection.
+    try:
+        validate_record_value(proof.as_dict(), path="proof")
+    except NonCanonicalRecordValue as exc:
+        raise InvalidMutationProof(
+            f"the proof carries a value no record may hold: {exc}. A mutation's "
+            f"argument must be recordable EXACTLY as presented - a value that "
+            f"can only be stored by being turned into something else would make "
+            f"the permanent audit entry a record of an argument nobody made."
+        ) from exc

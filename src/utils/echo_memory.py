@@ -69,6 +69,23 @@ class EchoMemory:
         self.echoes.append(echo)
         self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.runtime_path, "a", encoding="utf-8") as f:
+            # RULING 66 (2026-08-02) - THIS SITE IS DELIBERATELY UNCHANGED, and
+            # the reason is a MEASUREMENT, not an oversight.
+            #
+            # EchoMemory is the ruling's NAMED FUTURE CONSUMER, declared OUT of
+            # Batch 66's scope: it joins the validator with its own wiring
+            # ruling. The batch's writer sweep nonetheless tried `allow_nan=False`
+            # here and the suite answered immediately - **this is the ONE store
+            # in `src/` where `default=str` is genuinely LOAD-BEARING.** It
+            # serializes `echo.__dict__` RAW, so `created_at` arrives as a live
+            # `datetime`; every other store converts through its own `_to_dict`
+            # or `.isoformat()` first and needed no default at all.
+            #
+            # That makes this site a REAL migration with a schema decision in it
+            # (what an echo's serialized form should be), which is exactly the
+            # kind of question the wiring ruling exists to answer and this batch
+            # is barred from inventing. Removing `default=str` here without that
+            # decision would either break the store or silently pick its schema.
             f.write(json.dumps(echo.__dict__, default=str) + "\n")
 
     def get_echo(self, echo_id: str) -> Optional[Echo]:

@@ -1489,7 +1489,7 @@ class SAE:
             path = Path(self.RESTART_LOG_PATH)
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record) + "\n")
+                f.write(json.dumps(record, allow_nan=False) + "\n")
         except OSError as exc:
             self.persist_failures.append({
                 "op": "restart_log", "path": str(self.RESTART_LOG_PATH),

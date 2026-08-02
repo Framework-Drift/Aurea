@@ -801,7 +801,7 @@ class NovaEngine:
         # torn write loses both together, which is the remint-over-an-authored-id
         # condition that would fire `ProvenanceOverwriteViolation` on a collision
         # that was never a double authorship.
-        atomic_write_json(self.runtime_path, payload, indent=2, default=str)
+        atomic_write_json(self.runtime_path, payload, indent=2)
 
     def load(self) -> bool:
         """Runtime state if present, ELSE an empty index. Returns whether it resumed.
