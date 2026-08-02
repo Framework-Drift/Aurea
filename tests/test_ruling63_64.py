@@ -1,18 +1,28 @@
 """
-test_ruling63.py - THE WORLD-STATE PROJECTION (Ruling 63 / Docket O item O5).
+test_ruling63_64.py - THE RECORD PROJECTION (Ruling 63, CORRECTED BY Ruling 64).
 
-Manifest twenty-eighth addendum, 2026-08-01.
+Manifest twenty-eighth addendum (Ruling 63) and twenty-ninth (Ruling 64),
+2026-08-01.
 
     The projection is COMPUTED, never KEPT,
-    and it says what KIND of knowing each part of it is.
+    it says what KIND of knowing each part of it is,
+    and it may not name itself after what it cannot see.
 
 THE GROUNDING FINDING: the corpus mentions world state ONCE, and there it is
 something AUREA RECEIVES and filters - never something she keeps. A projection
 that persisted would be the first stored world-model in the architecture,
 invented at the layer whose whole job is to refuse exactly that.
 
-EVERY PIN MARKED **RED FIRST** WAS WATCHED FAILING AGAINST `5f50264`, where
-`src/external/world_state.py` did not exist.
+WHAT RULING 64 CORRECTED. Ruling 63's CODE was faithful to Ruling 63's
+CONTRACT; the contract never said what a component's `detail` carries, and the
+gap produced a surface that REVERSED MEANING - a FALSIFIED prediction projected
+its refuted expectation in an unlabeled `detail` slot, tiered INFERRED. Section
+K holds the corrections, and THE FALSIFICATION PIN THERE WAS WRITTEN FIRST,
+against the pre-fix module, and watched RED.
+
+EVERY PIN MARKED **RED FIRST** WAS WATCHED FAILING - the Ruling 63 sections
+against `5f50264` (no module), the Ruling 64 section against `8217b9c` (the
+module as first built).
 
 COINS NOTHING: four tier members verbatim from the registration, the input
 shape is O2's, and no threshold, weight, magnitude or duration exists anywhere.
@@ -26,17 +36,19 @@ from pathlib import Path
 
 import pytest
 
-from src.external.claim_ancestry import (ClaimAncestryRecord, OriginKind,
-                                         declared_none, provided)
+from src.external.claim_ancestry import (ClaimAncestryRecord, FieldState,
+                                         OriginKind, absent, declared_none,
+                                         provided)
 from src.external.prediction_ledger import (PredictionCommitment,
                                             PredictionLedger,
                                             PredictionOutcome,
                                             PredictionResolution)
-from src.external.world_state import (KnowledgeTier, TierAnnotation,
-                                      WorldStateComponent,
-                                      WorldStateProjection, project)
+from src.external.record_projection import (ContradictoryResolutions,
+                                            KnowledgeTier, RecordComponent,
+                                            RecordProjection, TierAnnotation,
+                                            project)
 
-MODULE = Path("src/external/world_state.py")
+MODULE = Path("src/external/record_projection.py")
 HOISTED = Path("src/utils/deep_freeze.py")
 
 
@@ -77,10 +89,28 @@ def test_every_component_is_annotated_and_mixed_inputs_show_mixed_tiers(tmp_path
     components. That is the whole registered mechanism: the projection does not
     present one undifferentiated picture of what is known, it says what KIND of
     knowing each part of it is.
+
+    MIGRATED 2026-08-01 BY RULING 64, under the Ruling-14 precedent. THE RULING
+    MOVED, NOT THE TEST'S STANDARD. Recorded verbatim:
+
+        OLD (Ruling 63):
+            assert tiers["PRD-0002"] is KnowledgeTier.INFERRED  # resolved
+            assert len({t for t in tiers.values()}) == 4
+
+        NEW (Ruling 64 res.2):
+            assert tiers["PRD-0002"] is None
+            assert len({t for t in tiers.values()}) == 3
+
+    WHY: `INFERRED` is now structurally unproducible - a resolution's outcome
+    is caller-supplied with no adjudication provenance, so composing it is not
+    inferring it. The distinctness assertion drops to THREE because there are
+    now three distinct answers, not because the projection collapsed: REPORTED,
+    PREDICTED, and None. THE PROPERTY BEING PINNED IS UNCHANGED - mixed inputs
+    must still show different tiers on different components.
     """
     projection = project(*_mixed(tmp_path))
 
-    assert isinstance(projection, WorldStateProjection)
+    assert isinstance(projection, RecordProjection)
     assert len(projection.claims) == 4
     assert len(projection.predictions) == 3
 
@@ -95,10 +125,10 @@ def test_every_component_is_annotated_and_mixed_inputs_show_mixed_tiers(tmp_path
     assert tiers["CLM-0003"] is None
     assert tiers["CLM-0004"] is KnowledgeTier.REPORTED
     assert tiers["PRD-0001"] is KnowledgeTier.PREDICTED    # unresolved
-    assert tiers["PRD-0002"] is KnowledgeTier.INFERRED     # resolved CONFIRMED
+    assert tiers["PRD-0002"] is None                       # resolved CONFIRMED
     assert tiers["PRD-0003"] is KnowledgeTier.PREDICTED    # resolved UNRESOLVED
 
-    assert len({t for t in tiers.values()}) == 4, (
+    assert len({t for t in tiers.values()}) == 3, (
         "a projection over genuinely mixed inputs must not collapse to one tier")
 
 
@@ -113,17 +143,32 @@ def test_a_model_prediction_origin_lands_in_the_predicted_tier(tmp_path) -> None
     assert projection.claims[0].annotation.tier is KnowledgeTier.PREDICTED
 
 
-def test_a_settled_prediction_is_inferred_and_an_unsettled_one_is_not(tmp_path) -> None:
-    """THE JUDGMENT CALL, PINNED SO IT IS VISIBLE.
+def test_a_settled_prediction_is_untiered_and_an_unsettled_one_is_predicted(
+        tmp_path) -> None:
+    """SUPERSEDED AND REPLACED IN PLACE 2026-08-01 BY RULING 64, under the
+    Ruling-14 precedent. The old test is recorded verbatim, because Ruling
+    34-A's argument-from-history rests on eras like this one:
 
-    Res.5 names "a component AUREA's own pipeline produced from other
-    components -> INFERRED" without naming its producer, and this composition
-    has exactly one: a SETTLED prediction was not asserted by any channel and
-    is not a claim about the future - it is a fact AUREA's own ledger produced
-    by composing a commitment with a resolution.
+        OLD (Ruling 63) - test_a_settled_prediction_is_inferred_and_an_
+        unsettled_one_is_not:
+            "Res.5 names 'a component AUREA's own pipeline produced from other
+             components -> INFERRED' without naming its producer, and this
+             composition has exactly one: a SETTLED prediction ... it is a fact
+             AUREA's own ledger produced by composing a commitment with a
+             resolution."
+            assert tiers["PRD-0001"] is KnowledgeTier.INFERRED
 
-    Calling it REPORTED was refused because a resolution carries NO
-    `origin_kind`, so the attribution would be invented.
+    THE OLD REASONING WAS INTERNALLY VALID AND ITS PREMISE WAS FALSE. The
+    ledger does not produce the outcome - `resolve()` ACCEPTS a caller-supplied
+    one, evaluates no evidence, tests no criterion mechanically, and records no
+    adjudication provenance. THE COMPOSITION IS AUREA'S; THE CONTENT IS THE
+    CALLER'S. Labeling it INFERRED upgraded "a caller recorded this outcome"
+    into "AUREA inferred this outcome" - the fabrication class, at the tier
+    layer.
+
+    The old test's own last clause was the tell: it argued INFERRED must be
+    producible because the ruling had not declared it unproducible. Ruling 64
+    declares it.
     """
     ledger = _ledger(tmp_path)
     ledger.commit("A", success_criteria=provided("x"))
@@ -133,7 +178,7 @@ def test_a_settled_prediction_is_inferred_and_an_unsettled_one_is_not(tmp_path) 
     projection = project([], list(ledger.commitments()), list(ledger.resolutions()))
     tiers = {c.component_id: c.annotation.tier for c in projection.predictions}
 
-    assert tiers["PRD-0001"] is KnowledgeTier.INFERRED
+    assert tiers["PRD-0001"] is None
     assert tiers["PRD-0002"] is KnowledgeTier.PREDICTED
 
 
@@ -207,7 +252,8 @@ def test_the_projection_is_absent_from_store_owners() -> None:
         encoding="utf-8")
     owners_src = registry.split("STORE_OWNERS", 1)[1].split("}", 1)[0]
 
-    for token in ("world_state", "WorldState", "projection"):
+    for token in ("record_projection", "RecordProjection", "world_state",
+                  "WorldState", "projection"):
         assert token not in owners_src, (
             f"'{token}' is registered in STORE_OWNERS - the projection owns no "
             f"store, and a registration that guards nothing claims coverage "
@@ -250,12 +296,20 @@ def test_a_changed_input_is_reflected_immediately(tmp_path) -> None:
 
     before = project([], list(ledger.commitments()), list(ledger.resolutions()))
     assert before.predictions[0].annotation.tier is KnowledgeTier.PREDICTED
+    assert before.predictions[0].fields["outcome"] is None
 
     ledger.resolve("PRD-0001", PredictionOutcome.CONFIRMED, "success_criteria")
     after = project([], list(ledger.commitments()), list(ledger.resolutions()))
 
-    assert after.predictions[0].annotation.tier is KnowledgeTier.INFERRED, (
+    # MIGRATED 2026-08-01 BY RULING 64 (Ruling-14 precedent). The witness is
+    # UNCHANGED in kind and STRONGER in fact: it was `tier is INFERRED`, which
+    # Ruling 64 made unproducible, so it now watches the tier move PREDICTED ->
+    # None AND the outcome move None -> "confirmed". Two moving fields witness
+    # a recomputation better than one.
+    assert after.predictions[0].annotation.tier is None, (
         "the projection did not follow the record - it was memoized")
+    assert after.predictions[0].fields["outcome"] == "confirmed", (
+        "the recorded outcome did not reach the recomputed projection")
 
 
 def test_the_module_holds_no_mutable_state(tmp_path) -> None:
@@ -509,32 +563,53 @@ def test_a_mutable_leaf_in_an_input_record_cannot_edit_the_projection() -> None:
     untouched - it has escaped as a surviving mutant three times now (Batch 51,
     Ruling 58, Ruling 61).
 
-    THE HAZARD IS REAL HERE AND NOT CEREMONIAL: without the copy, the
-    projection's `detail` would ALIAS the input record's own leaf, so a caller
-    still holding that record could edit a projection AFTER it was returned -
-    which is a cache with extra steps, the thing res.1 refuses.
+    THE HAZARD IS REAL AND NOT CEREMONIAL: without the copy, a component's
+    field would ALIAS the input record's own leaf, so a caller still holding
+    that record could edit a projection AFTER it was returned - which is a
+    cache with extra steps, the thing res.1 refuses.
+
+    RE-BASED 2026-08-01 BY RULING 64, under the Ruling-14 precedent, AND THE
+    REASON IS A REAL STRENGTHENING WORTH RECORDING. The old form went through
+    `project()` and read `claims[0].detail`, which held the asserter's VALUE -
+    the very defect res.3 removed. AFTER RES.3/RES.4, NO MUTABLE LEAF CAN
+    REACH A COMPONENT THROUGH `project()` AT ALL: every projected value is now
+    a string (a field STATE, an `origin_kind`, an `expected_result`, an
+    `outcome`, a ref) or a tuple of strings.
+
+    So the leaf can only be introduced at the CONSTRUCTOR, and that is where it
+    is pinned. The defensive copy stays because `RecordComponent` is a public
+    frozen type: the day a ruling widens what a component carries, the guard is
+    already correct rather than remembered.
     """
+    # (1) The projection path no longer exposes a leaf AT ALL - res.3's effect.
     leaf = bytearray(b"Dr X")
     record = ClaimAncestryRecord(claim_id="CLM-0001",
                                  origin_kind=OriginKind.HUMAN,
                                  asserted_by=provided(leaf))
-
     projection = project([record], [], [])
-    assert projection.claims[0].detail == bytearray(b"Dr X")
+    assert "Dr X" not in str(dict(projection.claims[0].fields)), (
+        "the asserter's value reached the projection - res.3 was undone")
 
-    # The record made its own copy at construction (Ruling 58); mutate THAT one,
-    # which is what the projection was handed.
-    record.asserted_by.value.extend(b" OR WHOEVER WE SAY LATER")
+    # (2) The constructor still refuses to alias one, which is what keeps the
+    #     guarantee true for whatever a later ruling lets a component carry.
+    payload = bytearray(b"committed value")
+    component = RecordComponent(
+        component_id="PRD-0001",
+        fields={"expected_result": payload},
+        annotation=TierAnnotation(tier=None, basis_record="PRD-0001",
+                                  basis_field="outcome"))
 
-    assert projection.claims[0].detail == bytearray(b"Dr X"), (
-        "the returned projection moved when an input record's leaf was edited "
-        "- the projection aliases its inputs and is editable after return")
+    payload.extend(b" OR WHATEVER WE SAY LATER")
+
+    assert component.fields["expected_result"] == bytearray(b"committed value"), (
+        "the component moved when the caller edited a leaf it still holds - "
+        "the component aliases its input and is editable after construction")
 
 
 def test_an_unannotated_component_cannot_be_constructed() -> None:
     """The annotation is not optional anywhere."""
     with pytest.raises(TypeError):
-        WorldStateComponent(component_id="X", detail="y", annotation=None)
+        RecordComponent(component_id="X", detail="y", annotation=None)
 
 
 # =====================================================================
@@ -586,7 +661,7 @@ def test_nothing_in_src_consumes_the_projection() -> None:
                 names = {a.name for a in node.names}
             elif isinstance(node, ast.ImportFrom):
                 names = {node.module or ""} | {a.name for a in node.names}
-            if any("world_state" in name for name in names):
+            if any("record_projection" in name for name in names):
                 consumers.append(f"{path.as_posix()}:{node.lineno}")
 
     assert consumers == [], (
@@ -697,3 +772,364 @@ def test_the_hoist_preserved_the_local_names_at_both_call_sites() -> None:
     for module in (mutation_proof, claim_ancestry):
         assert module._deep_freeze is deep_freeze
         assert module._thaw is thaw
+
+
+# =====================================================================
+# K. RULING 64 - THE CORRECTIONS
+# =====================================================================
+
+def test_a_falsified_prediction_never_projects_its_expectation(tmp_path) -> None:
+    """PIN (RULING 64), THE LOAD-BEARING ONE. **RED FIRST at `8217b9c`** -
+    WRITTEN BEFORE THE FIX, AND WATCHED FAILING AGAINST THE MODULE AS BUILT.
+
+    THIS IS THE PIN THAT WOULD HAVE CAUGHT THE ORIGINAL DEFECT. Its failure
+    output at `8217b9c` was the defect verbatim:
+
+        WorldStateComponent(component_id='PRD-0001',
+                            detail='The bridge will hold.',
+                            annotation=TierAnnotation(tier=INFERRED, ...))
+
+    A FALSIFIED prediction, projecting its refuted expectation in an unlabeled
+    slot, with a tier vouching for it. A consumer reading `detail` would have
+    read a refuted claim as standing knowledge.
+
+    A settled component carries `expected_result` LABELED AS AN EXPECTATION,
+    the OUTCOME VALUE beside it, the criterion named at resolution, and both
+    refs - so the polarity is unmissable.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.commit("The bridge will hold.", success_criteria=provided("stands"))
+    ledger.resolve("PRD-0001", PredictionOutcome.FALSIFIED, "success_criteria")
+
+    component = project([], list(ledger.commitments()),
+                        list(ledger.resolutions())).predictions[0]
+
+    assert component.fields["outcome"] == "falsified", (
+        "the component carries NO record that the prediction was FALSIFIED - "
+        "a reader sees only the expectation")
+    assert component.fields["criterion"] == "success_criteria"
+    assert component.fields["commitment_ref"] == "PRD-0001"
+    assert component.fields["resolution_ref"] == "PRD-0001"
+
+    # The expectation is present, but ONLY under its own label.
+    assert component.fields["expected_result"] == "The bridge will hold."
+    assert not hasattr(component, "detail"), (
+        "`detail` is back - an unlabeled slot is where meaning goes to be lost")
+
+    for unqualified in ("detail", "value", "content", "statement", "fact",
+                        "knowledge", "result"):
+        assert unqualified not in component.fields, (
+            f"'{unqualified}' would present a refuted expectation as an "
+            f"unqualified fact")
+
+
+def test_an_unresolved_prediction_is_marked_unresolved(tmp_path) -> None:
+    """`outcome` is PRESENT and `None` rather than absent from the mapping.
+
+    A missing key reads as an oversight; an explicit `None` is this module's
+    own idiom for "no recorded fact determines this" and MARKS the component
+    rather than leaving a reader to notice a gap.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.commit("Rain tomorrow.", success_criteria=provided("rain"))
+
+    component = project([], list(ledger.commitments()), []).predictions[0]
+
+    assert "outcome" in component.fields and component.fields["outcome"] is None
+    assert "criterion" not in component.fields, (
+        "a criterion is only MET by an actual resolution (Ruling 61)")
+    assert "resolution_ref" not in component.fields
+    assert component.annotation.tier is KnowledgeTier.PREDICTED
+
+
+def test_a_claim_component_carries_no_proposition_shaped_field() -> None:
+    """RULING 64 res.3. AN ASSERTER'S NAME IN A DETAIL SLOT IS A
+    PROPOSITION-SHAPED HOLE WITH A PERSON'S NAME IN IT.
+
+    The proposition is not in the record and may not be invented -
+    `ClaimAncestryRecord` records WHERE a claim came from and never WHAT it
+    says. So a claim component carries `origin_kind` and the ancestry fields'
+    STATES, each labeled as the field it is, and the asserter's VALUE never
+    reaches the surface.
+    """
+    record = ClaimAncestryRecord(claim_id="CLM-0001",
+                                 origin_kind=OriginKind.HUMAN,
+                                 asserted_by=provided("Dr Helen Vance"),
+                                 basis=declared_none())
+    component = project([record], [], []).claims[0]
+
+    assert "Dr Helen Vance" not in str(dict(component.fields)), (
+        "the asserter's NAME reached the projection - a proposition-shaped "
+        "hole with a person's name in it")
+    assert not hasattr(component, "detail")
+
+    # The STATES survive to the surface - that is the epistemically meaningful
+    # fact, and it cannot be misread as the claim's substance.
+    assert component.fields["origin_kind"] == "human"
+    assert component.fields["asserted_by"] == "provided"
+    assert component.fields["basis"] == "declared_none"
+    assert component.fields["defeaters"] == "absent"
+
+
+def test_inferred_is_never_emitted_by_any_input_combination(tmp_path) -> None:
+    """RULING 64 res.2. **RED FIRST at `8217b9c`**, where a settled prediction
+    produced it.
+
+    AUREA HAS NO ADJUDICATION SURFACE, AS SHE HAS NO SENSOR SURFACE.
+    `resolve()` accepts a CALLER-SUPPLIED outcome, tested against nothing and
+    carrying no provenance - the COMPOSITION is AUREA's, the CONTENT is the
+    caller's, and COMPOSING IT IS NOT INFERRING IT.
+    """
+    ancestry = [ClaimAncestryRecord(claim_id=f"CLM-{n:04d}", origin_kind=kind)
+                for n, kind in enumerate(OriginKind, start=1)]
+    ledger = _ledger(tmp_path)
+    for label in ("A", "B", "C"):
+        ledger.commit(label, success_criteria=provided("x"),
+                      unresolved_criteria=provided("z"))
+    ledger.resolve("PRD-0001", PredictionOutcome.CONFIRMED, "success_criteria")
+    ledger.resolve("PRD-0002", PredictionOutcome.FALSIFIED, "success_criteria")
+    ledger.resolve("PRD-0003", PredictionOutcome.UNRESOLVED, "unresolved_criteria")
+
+    projection = project(ancestry, list(ledger.commitments()),
+                         list(ledger.resolutions()))
+
+    assert all(c.annotation.tier is not KnowledgeTier.INFERRED
+               for c in projection.components()), (
+        "INFERRED was emitted - that upgrades 'a caller recorded this outcome' "
+        "into 'AUREA inferred this outcome'")
+
+
+def test_inferred_remains_a_member_and_no_code_path_assigns_it() -> None:
+    """The member STAYS - a closed vocabulary missing a registered member is
+    the enum reopening later - and the ban is STRUCTURAL, exactly as OBSERVED's
+    is.
+
+    TWO OF FOUR TIERS UNPRODUCIBLE IS THE HONEST CENSUS OF WHAT THIS
+    ARCHITECTURE CAN CURRENTLY KNOW.
+    """
+    assert KnowledgeTier.INFERRED.value == "inferred"
+    assert {m.name for m in KnowledgeTier} == {
+        "OBSERVED", "REPORTED", "INFERRED", "PREDICTED"}
+
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    for banned in ("OBSERVED", "INFERRED"):
+        loads = [n.lineno for n in ast.walk(tree)
+                 if isinstance(n, ast.Attribute) and n.attr == banned]
+        assert loads == [], (
+            f"KnowledgeTier.{banned} is referenced in code at lines {loads}")
+
+
+def test_a_settled_prediction_has_no_producible_tier(tmp_path) -> None:
+    """THE JUDGMENT CALL RULING 64 LEFT OPEN, PINNED SO IT IS VISIBLE.
+
+    Res.2 removed INFERRED without naming a replacement. It is not REPORTED
+    either: REPORTED derives from a RECORDED `origin_kind` naming WHICH KIND of
+    channel asserted something, and a resolution carries no such field - so
+    REPORTED would invent the attribution rather than read it. And it is no
+    longer PREDICTED, because an outcome WAS recorded.
+
+    So no recorded fact determines the tier, and `None` is what this module
+    already says in that situation. THE POLARITY IS STILL CARRIED - the tier is
+    undecided, the outcome is not.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.commit("A", success_criteria=provided("x"))
+    ledger.resolve("PRD-0001", PredictionOutcome.CONFIRMED, "success_criteria")
+
+    component = project([], list(ledger.commitments()),
+                        list(ledger.resolutions())).predictions[0]
+
+    assert component.annotation.tier is None
+    assert component.annotation.basis_field == "outcome", (
+        "the basis still names WHERE the answer was sought and found absent")
+    assert component.fields["outcome"] == "confirmed"
+
+
+def test_two_contradictory_resolutions_raise(tmp_path) -> None:
+    """RULING 64 res.5. THE PROJECTION REFUSES TO ADJUDICATE BY LIST ORDER.
+
+    The ledger refuses a second resolution, but `project()` accepts arbitrary
+    lists - so `setdefault` first-wins silently weakened that guarantee,
+    asserting one of two contradicting records because of where it sat in a
+    list. Choosing between them is an ADJUDICATION, and this module has no
+    authority to make one - the same reason INFERRED is unproducible.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.commit("A", success_criteria=provided("x"),
+                  failure_criteria=provided("y"))
+    ledger.resolve("PRD-0001", PredictionOutcome.CONFIRMED, "success_criteria")
+
+    confirmed = list(ledger.resolutions())[0]
+    contradicting = PredictionResolution(prediction_id="PRD-0001",
+                                         outcome=PredictionOutcome.FALSIFIED,
+                                         criterion="failure_criteria")
+
+    with pytest.raises(ContradictoryResolutions, match="TWO resolutions"):
+        project([], list(ledger.commitments()), [confirmed, contradicting])
+
+    # ORDER-INDEPENDENT: the refusal is not a function of which came first.
+    with pytest.raises(ContradictoryResolutions):
+        project([], list(ledger.commitments()), [contradicting, confirmed])
+
+    # And one resolution still composes.
+    assert project([], list(ledger.commitments()), [confirmed]) is not None
+
+
+def test_the_old_module_name_resolves_nowhere() -> None:
+    """RULING 64 res.1. NO SHIM, NO ALIAS, NO RE-EXPORT.
+
+    A module named for what it structurally cannot represent is FALSE
+    DOCUMENTATION IN THE STRONGEST POSITION A NAME CAN OCCUPY, and a
+    compatibility shim would preserve exactly the lie the rename removes.
+    """
+    import importlib
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("src.external.world_state")
+
+    assert not Path("src/external/world_state.py").exists()
+
+    import src.external.record_projection as module
+    for banned in ("WorldStateProjection", "WorldStateComponent"):
+        assert not hasattr(module, banned), (
+            f"{banned} survives as an alias - the old name must be GONE")
+
+
+# =====================================================================
+# L. RULING 64's RIDERS - correcting three closed rulings
+# =====================================================================
+
+def test_the_minted_id_pattern_is_anchored() -> None:
+    """RIDER 6. Ruling 60 res.3 SAID "anchored"; the code was a bare
+    `CLM-` plus digits with no boundaries at all.
+
+    So `prefixCLM-0001suffix` MATCHED and minted a FALSE DESCENT EDGE out of a
+    substring - the Docket H substring lesson recurring INSIDE the module whose
+    own ruling cited it. Neither the pass nor the drafting lane caught it.
+    """
+    from src.external.source_genealogy import MINTED_ID_PATTERN
+
+    assert MINTED_ID_PATTERN.findall("prefixCLM-0001suffix") == []
+    assert MINTED_ID_PATTERN.findall("xCLM-0001") == []
+    assert MINTED_ID_PATTERN.findall("CLM-0001x") == []
+    assert MINTED_ID_PATTERN.findall("a-CLM-0001") == [], (
+        "a word-boundary escape would have admitted this - the hyphen is "
+        "itself a non-word character")
+
+    # The legitimate forms still match, and the no-match control still holds.
+    assert MINTED_ID_PATTERN.findall("see CLM-0001.") == ["CLM-0001"]
+    assert MINTED_ID_PATTERN.findall("[CLM-0001, CLM-0002]") == ["CLM-0001",
+                                                                "CLM-0002"]
+    assert MINTED_ID_PATTERN.findall("derived from the earlier report") == []
+
+
+def test_an_anchored_id_does_not_forge_a_descent_edge() -> None:
+    """RIDER 6, at the behaviour rather than the regex."""
+    from src.external.source_genealogy import (GenealogyVerdict,
+                                               pairwise_verdict,
+                                               recorded_reference_ids)
+
+    ancestor = ClaimAncestryRecord(
+        claim_id="CLM-0001", origin_kind=OriginKind.UNDECLARED,
+        asserted_by=declared_none(), basis=declared_none(),
+        replication_refs=declared_none())
+    embedded = ClaimAncestryRecord(
+        claim_id="CLM-0002", origin_kind=OriginKind.UNDECLARED,
+        asserted_by=declared_none(),
+        basis=provided("archiveCLM-0001entry"),
+        replication_refs=declared_none())
+
+    assert recorded_reference_ids(embedded) == frozenset()
+    assert pairwise_verdict(ancestor, embedded, [ancestor, embedded]) is (
+        GenealogyVerdict.NO_RECORDED_LINK)
+
+
+def test_provided_none_is_refused() -> None:
+    """RIDER 7. PROVIDED MEANS A VALUE IS PRESENT.
+
+    `provided(None)` was a MALFORMED FOURTH STATE wearing the first one's name,
+    and it was not harmless: two records carrying it are both PROVIDED and
+    compare EQUAL, so two EXPLICIT NULLS became ONE SHARED ASSERTER.
+    """
+    with pytest.raises(ValueError, match="not a state"):
+        provided(None)
+
+    # The two honest alternatives are untouched.
+    assert declared_none().state is FieldState.DECLARED_NONE
+    assert absent().state is FieldState.ABSENT
+
+
+def test_two_null_asserters_can_no_longer_become_one_source() -> None:
+    """RIDER 7, at the behaviour the defect actually reached."""
+    from src.external.source_genealogy import corroboration
+
+    pair = [ClaimAncestryRecord(claim_id=f"CLM-{n:04d}",
+                                origin_kind=OriginKind.UNDECLARED,
+                                asserted_by=declared_none(),
+                                basis=declared_none(),
+                                replication_refs=declared_none())
+            for n in (1, 2)]
+
+    summary = corroboration([r.claim_id for r in pair], pair)
+    assert summary.distinct_recorded_origins == 2, (
+        "two explicit nulls collapsed into one recorded origin - the "
+        "fabricated corroboration provided(None) used to manufacture")
+
+
+def test_overdue_consults_only_provided_horizons(tmp_path) -> None:
+    """RIDER 8, BOTH DIRECTIONS.
+
+    A commitment that DECLARED NO horizon is not overdue; one NEVER ASKED is
+    not knowable. Handing either to the predicate as though it were a date
+    invites the caller to make something up about a record that says nothing.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.commit("dated", resolution_horizon=provided("2027-01-01"))
+    ledger.commit("none declared", resolution_horizon=declared_none())
+    ledger.commit("never asked")
+
+    seen = []
+
+    def judge(horizon):
+        seen.append(horizon.state)
+        return True
+
+    overdue = ledger.overdue(judge)
+
+    assert [c.prediction_id for c in overdue] == ["PRD-0001"], (
+        "a commitment with no PROVIDED horizon was reported overdue")
+    assert seen == [FieldState.PROVIDED], (
+        f"a non-PROVIDED horizon was handed to the predicate: {seen}")
+
+    # All three are still OUTSTANDING - the filter narrows overdue, not
+    # visibility. Nothing is discarded and nothing is prematurely judged.
+    assert len(ledger.outstanding()) == 3
+
+
+def test_fields_must_be_a_labeled_mapping(tmp_path) -> None:
+    """ADDED AFTER A SURVIVING MUTANT, and it is a real gap rather than an
+    equivalence.
+
+    Deleting the Mapping check survived everything: a plain string would still
+    have failed on `dict(...)`, but with an unrelated error - and A LIST OF
+    PAIRS WOULD HAVE CONSTRUCTED CLEANLY, `dict([("expected_result", "X")])`
+    being perfectly valid. That is the labeled contract bypassed by a shape
+    that merely converts, which is precisely the unlabeled-slot defect Ruling
+    64 corrected arriving through the constructor instead.
+    """
+    annotation = TierAnnotation(tier=None, basis_record="PRD-0001",
+                                basis_field="outcome")
+
+    with pytest.raises(TypeError, match="LABELED recorded"):
+        RecordComponent(component_id="PRD-0001",
+                        fields=[("expected_result", "X")],
+                        annotation=annotation)
+
+    with pytest.raises(TypeError, match="LABELED recorded"):
+        RecordComponent(component_id="PRD-0001", fields="X",
+                        annotation=annotation)
+
+    # A real mapping still constructs.
+    assert RecordComponent(component_id="PRD-0001",
+                           fields={"expected_result": "X"},
+                           annotation=annotation).fields["expected_result"] == "X"

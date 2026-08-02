@@ -715,16 +715,41 @@ def test_nothing_resolves_without_an_explicit_resolve_call(tmp_path) -> None:
     assert Path(ledger.ledger_path).read_text(encoding="utf-8") == snapshot
 
 
-def test_a_declared_none_horizon_is_still_readable_by_the_caller(tmp_path) -> None:
-    """The horizon's three states reach the caller's judgement intact - the
-    module hands over the RECORD and interprets none of it."""
+def test_only_a_provided_horizon_reaches_the_callers_judgement(tmp_path) -> None:
+    """SUPERSEDED AND REPLACED IN PLACE 2026-08-01 BY RULING 64 res.8, under
+    the Ruling-14 precedent. Recorded verbatim:
+
+        OLD (Ruling 61) - test_a_declared_none_horizon_is_still_readable_by_
+        the_caller:
+            '''The horizon's three states reach the caller's judgement intact -
+            the module hands over the RECORD and interprets none of it.'''
+            assert seen == [FieldState.DECLARED_NONE, FieldState.PROVIDED]
+
+    THE OLD PIN WAS RIGHT ABOUT NON-INTERPRETATION AND WRONG ABOUT WHAT TO HAND
+    OVER. Ruling 61 refused to interpret a horizon's VALUE, which stands. But
+    passing a DECLARED_NONE or ABSENT horizon to a predicate that answers "has
+    this passed?" asks the caller a question about a date that does not exist -
+    and the honest answers (a commitment that declared no horizon is NOT
+    overdue; one never asked is NOT KNOWABLE) are both "not overdue", so
+    handing them over only invites a caller to invent one.
+
+    Docket H's two-absences cut, at the read: the predicate now sees only
+    horizons that EXIST. Nothing is hidden - all three commitments remain
+    OUTSTANDING and fully readable there.
+    """
     ledger = _ledger(tmp_path)
     ledger.commit("X", resolution_horizon=declared_none())
     ledger.commit("Y", resolution_horizon=provided("2027-01-01"))
+    ledger.commit("Z")
 
     seen = []
     _ledger(tmp_path).overdue(lambda horizon: seen.append(horizon.state) or False)
-    assert seen == [FieldState.DECLARED_NONE, FieldState.PROVIDED]
+    assert seen == [FieldState.PROVIDED], (
+        "a horizon that does not exist was handed to a predicate asked to "
+        "judge whether it had passed")
+
+    assert len(_ledger(tmp_path).outstanding()) == 3, (
+        "the filter narrows OVERDUE, never visibility")
 
 
 # =====================================================================
@@ -892,7 +917,8 @@ def test_nothing_in_src_consumes_the_prediction_ledger() -> None:
         NEW:  an AST scan for an import that BINDS THE STORE CLASS
 
     WHY IT MOVED, AND THE REASON IS SHARPER THAN THE PROSE CASE: Ruling 63's
-    `world_state.py` imports `PredictionCommitment` / `PredictionResolution` /
+    `record_projection.py` (then `world_state.py`) imports
+    `PredictionCommitment` / `PredictionResolution` /
     `PredictionOutcome` from this module - THE RECORD TYPES, which is exactly
     what O5 was designed to do (its inputs arrive as already-read records) -
     and the substring pin read that as consuming the LEDGER. It would have

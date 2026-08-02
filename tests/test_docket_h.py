@@ -639,9 +639,37 @@ def test_the_evidence_vocabulary_has_exactly_ONE_ruled_consumer() -> None:
     }
     OWNERS = {"src/filtration/net_evidence.py", "src/filtration/echonet.py"}
 
-    importers = {H.rel(p) for p in H.src_files()
-                 if H.rel(p) not in OWNERS
-                 and "net_evidence" in p.read_text(encoding="utf-8")}
+    # CONVERTED 2026-08-01 BY RULING 64's RIDE-ALONG, under the Ruling-14
+    # precedent. THE ASSERTIONS BELOW ARE UNCHANGED; the INSTRUMENT is strictly
+    # narrower and now says what it always meant.
+    #
+    #     OLD:  "net_evidence" in p.read_text(...)      # source-text substring
+    #     NEW:  an AST scan for an actual IMPORT of the module
+    #
+    # WHY IT MOVED: the substring form matched PROSE. It registered
+    # `claim_ancestry.py` as a consumer of the evidence vocabulary because that
+    # file's docstring MENTIONED the module - twice, in Batch 51 and again at
+    # Ruling 58 - and both times the remedy was to word the prose around the
+    # scanner rather than fix it. THE FIRST TWO OF FIVE OCCURRENCES OF THIS
+    # DEFECT; Ruling 63 produced the fourth and fifth, and the manifest made
+    # the conversion no longer deferrable.
+    #
+    # A guard that misfires on correct documentation teaches its readers to
+    # route around it, and two files already had.
+    importers = set()
+    for path in H.src_files():
+        if H.rel(path) in OWNERS:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = set()
+            if isinstance(node, ast.Import):
+                names = {a.name for a in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                names = {node.module or ""} | {a.name for a in node.names}
+            if any("net_evidence" in name for name in names):
+                importers.add(H.rel(path))
+                break
 
     unruled = importers - RULED_CONSUMERS
     assert unruled == set(), (

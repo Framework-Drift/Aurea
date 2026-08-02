@@ -137,7 +137,19 @@ DESCENT_FIELDS: Tuple[str, ...] = ("basis", "replication_refs")
 # anywhere: `CLM-0001` and `CLM-1` are different strings and stay different.
 # The pins carry a NO-MATCH CONTROL so a pattern that has stopped discriminating
 # fails there rather than quietly grouping everything.
-MINTED_ID_PATTERN = re.compile(r"CLM-\d+")
+# RULING 64 res.6 - ANCHORED, AS RULING 60 res.3 ALREADY SAID IN WORDS AND
+# THIS PATTERN DID NOT DO. It was `re.compile(r"CLM-\d+")`, so
+# `prefixCLM-0001suffix` MATCHED and minted a false descent edge out of a
+# substring - THE DOCKET H SUBSTRING LESSON RECURRING INSIDE THE MODULE WHOSE
+# OWN RULING CITED IT. Neither the pass nor the drafting lane caught it; an
+# external review did.
+#
+# The boundaries are explicit rather than `\b`: `\b` sits between a word
+# character and a non-word character, and `-` is a non-word character, so
+# `\bCLM-\d+\b` would still match inside `x-CLM-0001`. These lookarounds
+# exclude every identifier character on both sides, which is what "anchored"
+# has to mean for a house-minted id embedded in free text.
+MINTED_ID_PATTERN = re.compile(r"(?<![0-9A-Za-z_\-])CLM-\d+(?![0-9A-Za-z_\-])")
 
 
 # =====================================================================

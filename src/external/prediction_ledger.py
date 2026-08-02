@@ -671,9 +671,19 @@ class PredictionLedger:
         derive standing, never store it redundantly; and Ruling 42's
         cached-status lesson). An overdue commitment remains UNRESOLVED and
         VISIBLE - passing a horizon changes the record not at all.
+
+        RULING 64 res.8 - ONLY PROVIDED HORIZONS ARE CONSULTED. A commitment
+        that DECLARED NO horizon is not overdue, and one that was NEVER ASKED
+        is not knowable; handing either to the predicate as though it were a
+        date invites the caller to make something up about a record that says
+        nothing. The predicate now sees only horizons that exist, and the
+        other two states are reported by `outstanding()` or not at all -
+        Docket H's two-absences cut, at the read.
         """
-        return tuple(c for c in self.outstanding()
-                     if horizon_has_passed(c.resolution_horizon))
+        return tuple(
+            c for c in self.outstanding()
+            if c.resolution_horizon.state is FieldState.PROVIDED
+            and horizon_has_passed(c.resolution_horizon))
 
 
 # NOT REGISTERED IN `STORE_OWNERS`, and CAE's reason applies verbatim: the

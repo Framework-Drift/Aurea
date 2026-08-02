@@ -159,6 +159,28 @@ class AncestryField:
 
 
 def provided(value: Any) -> AncestryField:
+    """A channel supplied a value. RULING 64 res.7: `None` is REFUSED.
+
+    PROVIDED MEANS A VALUE IS PRESENT. `provided(None)` is a MALFORMED FOURTH
+    STATE wearing the first one's name, and it is not harmless: two records
+    with `asserted_by=provided(None)` are both PROVIDED and compare EQUAL, so
+    `source_genealogy.shares_recorded_asserter` reads TWO EXPLICIT NULLS AS ONE
+    SHARED ASSERTER - manufacturing the corroboration collapse that module
+    exists to compute honestly.
+
+    This is Ruling 58's own three-state argument ENFORCED AT THE CONSTRUCTOR
+    rather than trusted: a caller who means "there is no asserter" has
+    `declared_none()`, and one who was never asked has `absent()`. Both already
+    refuse to carry a value (`AncestryField.__post_init__`); this closes the
+    third door.
+    """
+    if value is None:
+        raise ValueError(
+            "provided(None) is not a state. PROVIDED means a value IS "
+            "present - use declared_none() for 'there are none' or absent() "
+            "for 'the channel said nothing'. Two records carrying "
+            "provided(None) would compare EQUAL and be read as sharing one "
+            "recorded asserter.")
     return AncestryField(state=FieldState.PROVIDED, value=value)
 
 

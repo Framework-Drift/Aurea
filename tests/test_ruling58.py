@@ -386,10 +386,27 @@ def test_no_epistemic_standing_is_ever_stored(tmp_path) -> None:
       * MODULE-SCOPED for the generic ones (`tier`, `standing`) - on the
         ancestry record they would be stored standing; elsewhere they are
         someone else's vocabulary.
+
+    CONVERTED 2026-08-01 BY RULING 64's RIDE-ALONG. THE ASSERTION IS
+    UNCHANGED; the GENERIC half now matches WHOLE snake_case WORDS instead of
+    substrings.
+
+        OLD:  any(word in name.lower() for word in distinctive + generic)
+        NEW:  substring for `distinctive`, whole-word for `generic`
+
+    WHY: written as a substring scan, the generic half flagged `frontier` -
+    which CONTAINS `tier` - inside a transitive-closure loop, i.e. a correct
+    local variable reported as stored epistemic standing. THE THIRD OF FIVE
+    OCCURRENCES of the substring-scanner defect; Ruling 60 sharpened its OWN
+    copy of this scanner and left this one, and the manifest has since made
+    the conversion no longer deferrable.
+
+    The DISTINCTIVE half stays a substring match on purpose: those tokens have
+    no legitimate partner anywhere, and `epistemic_` is a prefix by design.
     """
     distinctive = ("admissibility", "reliability", "trust_score",
                    "credibility", "epistemic_")
-    generic = ("tier", "standing")
+    generic = {"tier", "standing"}
 
     def assigned_names(tree):
         for node in ast.walk(tree):
@@ -407,10 +424,20 @@ def test_no_epistemic_standing_is_ever_stored(tmp_path) -> None:
     offenders = []
     for path in Path("src").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        # MODULE SCOPE STAYS `claim_ancestry.py` ALONE, and an attempt to widen
+        # it to `record_projection.py` during Ruling 64 was REVERTED for the
+        # reason this scanner's own docstring gives: that module's `tier` is
+        # its RULED VOCABULARY (Ruling 63 mandates a `KnowledgeTier` on every
+        # component), derived on every call and never stored - it is the
+        # `tcaml.py` THRESHOLD-tier false positive in a new file. The
+        # tree-wide distinctive tokens still cover it.
         module_scoped = path.as_posix().endswith("external/claim_ancestry.py")
         for lineno, name in assigned_names(tree):
-            words = distinctive + (generic if module_scoped else ())
-            if any(word in name.lower() for word in words):
+            lowered = name.lower()
+            hit = any(word in lowered for word in distinctive)
+            if module_scoped and set(lowered.split("_")) & generic:
+                hit = True
+            if hit:
                 offenders.append(f"{path.as_posix()}:{lineno} {name}")
 
     assert offenders == [], (
