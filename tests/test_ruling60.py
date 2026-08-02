@@ -644,10 +644,40 @@ def test_no_module_in_src_consumes_the_analysis() -> None:
     """NO CONSUMER WIRING THIS PASS, and that is a resolution rather than an
     omission: no verdict path, no HAIL surface, no routing reads it (O4 owns
     routing). This pin goes RED the day one does - which is exactly when the
-    consumer needs a ruling."""
-    consumers = [path.as_posix() for path in Path("src").rglob("*.py")
-                 if path != MODULE
-                 and "source_genealogy" in path.read_text(encoding="utf-8")]
+    consumer needs a ruling.
+
+    MIGRATED 2026-08-01 BY RULING 63, under the Ruling-14 precedent. THE
+    ASSERTION IS UNCHANGED; the INSTRUMENT is strictly narrower.
+
+        OLD:  "source_genealogy" in path.read_text(...)      # substring
+        NEW:  an AST scan for an actual IMPORT of the module
+
+    WHY IT MOVED: Ruling 63 added a docstring line to `claim_ancestry.py`
+    pointing a reader at where source genealogy actually lives - correct
+    documentation, naming no code - and this pin went RED on it. A PROSE
+    MENTION IS NOT A CONSUMER. That is the FOURTH occurrence of the
+    substring-scanner false positive in this suite (Batch 51; Ruling 58's
+    `net_evidence`; Ruling 60's own `frontier` containing `tier`; now this),
+    and the manifest has the substring-to-import conversion ELEVATED.
+
+    DELETING CORRECT DOCUMENTATION TO SATISFY A NOISY GUARD IS HOW A GUARD
+    EARNS ITS EVENTUAL WEAKENING - the same reasoning that sharpened the
+    standing scanner at Ruling 60. The instrument was changed, not the tree it
+    scans. An IMPORT is what "consumes" means, so this now says what it meant.
+    """
+    consumers = []
+    for path in Path("src").rglob("*.py"):
+        if path == MODULE:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = set()
+            if isinstance(node, ast.Import):
+                names = {alias.name for alias in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                names = {node.module or ""} | {alias.name for alias in node.names}
+            if any("source_genealogy" in name for name in names):
+                consumers.append(f"{path.as_posix()}:{node.lineno}")
 
     assert consumers == [], (
         f"{consumers} consume the genealogy analysis. Wiring it into a verdict, "

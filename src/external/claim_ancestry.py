@@ -49,8 +49,18 @@ WHAT IS DELIBERATELY NOT HERE, each with its owner
     authority-dependent). That table classifies claim FORM, requires content
     judgment, and is SIF's own instrument when SIF is built. It is not in O1's
     registered field list and it stays OUT.
-  * SOURCE GENEALOGY - O2. It will need an echo <-> claim_id linkage, and that
-    SCHEMA DECISION IS O2'S. It is flagged here and deliberately not made.
+  * ~~SOURCE GENEALOGY - O2. It will need an echo <-> claim_id linkage, and
+    that SCHEMA DECISION IS O2'S. It is flagged here and deliberately not
+    made.~~ SUPERSEDED 2026-08-01 BY RULING 60, kept as the record of what was
+    true when written. THE DECISION WAS MADE, and THIS RECORD'S OWN STRUCTURE
+    FORCED IT: the ancestry record is deep-frozen and minted BEFORE the echo
+    exists (after the suspension gate, before the SPL wrap), so it cannot carry
+    an echo id without mutating a frozen record or deferring the gate - both
+    barred by Ruling 58 itself. So the LATER artifact references the EARLIER:
+    `Echo.claim_id`, a join key and not an origin fact. The ledger still stores
+    origin ONCE (L3 clean). Source genealogy itself lives in
+    `src/external/source_genealogy.py` and reads these records without
+    validating anything against this ledger.
   * OUTCOME ROUTING - O4.
   * TRUST SCORES - REFUSED, standing.
   * ANY STORED EPISTEMIC STANDING. The record holds origin FACTS ONLY - no
@@ -74,7 +84,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -206,46 +215,14 @@ class OriginDeclaration:
 # THE RECORD
 # =====================================================================
 
-def _deep_freeze(value: Any) -> Any:
-    """Rebuild a container graph as read-only, all the way down.
-
-    RULING 52's `mutation_proof._deep_freeze` IS THE TEMPLATE and this is a
-    deliberate re-implementation rather than an import: that helper is private
-    to the doctrine layer and semantically about mutation proofs, and importing
-    it here would point `src/external/` at `src/doctrine/` for a utility.
-
-    REPORTED AS A JUDGMENT CALL rather than hidden: this is a SECOND definition
-    of one behaviour, which is the drift hazard Ruling 35 named. It is accepted
-    for one user; if a THIRD appears, the honest move is to hoist one copy into
-    `src/utils/` (the `continuity.py` precedent) rather than write a third.
-
-    EVERY CONTAINER IT RETURNS IS NEW - see Ruling 52: a proxy over the caller's
-    own dict is a VIEW, and a freeze that stops the honest caller while the one
-    holding the reference writes through is the appearance of immutability.
-    """
-    if isinstance(value, MappingProxyType):
-        return value
-    if isinstance(value, dict):
-        return MappingProxyType({k: _deep_freeze(v) for k, v in value.items()})
-    if isinstance(value, (list, tuple)):
-        return tuple(_deep_freeze(v) for v in value)
-    if isinstance(value, (set, frozenset)):
-        return frozenset(_deep_freeze(v) for v in value)
-    return value
-
-
-def _thaw(value: Any) -> Any:
-    """The inverse, at the serialization boundary ONLY (Ruling 52's `_thaw`).
-
-    A `MappingProxyType` is not JSON-serializable, so the deep freeze needs a
-    deep thaw exactly where the record leaves memory for the ledger - and
-    nowhere else.
-    """
-    if isinstance(value, (MappingProxyType, dict)):
-        return {k: _thaw(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_thaw(v) for v in value]
-    return value
+# RULING 52's freeze/thaw pair. HOISTED TO `src/utils/deep_freeze.py` BY
+# RULING 63 (2026-08-01) - one behaviour, one definition. The two copies
+# that lived here and in the sibling module were verified BYTE-IDENTICAL by
+# AST (docstrings stripped) before the hoist, so nothing was reconciled or
+# chosen between. The LOCAL NAMES ARE PRESERVED so every call site and every
+# AST pin naming `_deep_freeze` is unchanged.
+from src.utils.deep_freeze import deep_freeze as _deep_freeze  # noqa: E402
+from src.utils.deep_freeze import thaw as _thaw  # noqa: E402
 
 
 @dataclass(frozen=True)

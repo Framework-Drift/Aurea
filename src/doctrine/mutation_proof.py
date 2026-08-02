@@ -49,62 +49,17 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from enum import Enum
-from types import MappingProxyType
 from typing import Any, Dict, Optional, Tuple
 
 
-def _deep_freeze(value: Any) -> Any:
-    """Rebuild a container graph as read-only, all the way down. RULING 52.
-
-    dict -> `MappingProxyType`, list -> tuple, set -> frozenset, recursively.
-    Anything else is returned as-is: this converts CONTAINERS, and inventing a
-    freeze for arbitrary leaf objects would be inventing structure the proof does
-    not have (`mutation_proof`'s standing refusal, one field down).
-
-    EVERY CONTAINER IT RETURNS IS NEW. That is not incidental - it is the half
-    that makes the freeze airtight, and the reason the ruling says "a fresh deep
-    copy" rather than "a proxy". `MappingProxyType(caller_dict)` is a VIEW: it
-    would refuse `proof.contradiction_core["x"] = 1` while leaving
-    `caller_dict["x"] = 1` writing straight through to the recorded argument. A
-    freeze that stops the honest caller and not the one holding the reference is
-    the appearance of immutability, which is what stops anyone looking.
-    """
-    if isinstance(value, MappingProxyType):
-        # Already frozen by a previous construction (a proof rebuilt from
-        # another proof's `as_dict`, or a nested value passed twice). Rebuilding
-        # is still correct but pointless; returning it avoids a proxy of a proxy.
-        return value
-    if isinstance(value, dict):
-        return MappingProxyType({k: _deep_freeze(v) for k, v in value.items()})
-    if isinstance(value, (list, tuple)):
-        return tuple(_deep_freeze(v) for v in value)
-    if isinstance(value, (set, frozenset)):
-        return frozenset(_deep_freeze(v) for v in value)
-    return value
-
-
-def _thaw(value: Any) -> Any:
-    """The inverse of `_deep_freeze`, for `as_dict`. RULING 52.
-
-    FOUND BY A PIN, NOT BY DESIGN, and worth recording as the reason this
-    function exists. `as_dict` did `dict(self.contradiction_core)` - a SHALLOW
-    copy, which was correct while the interiors were plain dicts and became a
-    `TypeError: Object of type mappingproxy is not JSON serializable` the moment
-    they were frozen one level down. The ruling requires the serialized shape to
-    be UNCHANGED, so the freeze has to be invisible at the boundary where the
-    proof leaves memory for the CAE ledger and the SAE state file.
-
-    Converts back exactly what `_deep_freeze` converted and no more:
-    `MappingProxyType` -> dict, tuple -> list. A `frozenset` is deliberately left
-    alone - a set was never JSON-serializable here either, so thawing one would
-    change behaviour for an input that already failed, and choosing an order for
-    it would be inventing one.
-    """
-    if isinstance(value, (MappingProxyType, dict)):
-        return {k: _thaw(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_thaw(v) for v in value]
-    return value
+# RULING 52's freeze/thaw pair. HOISTED TO `src/utils/deep_freeze.py` BY
+# RULING 63 (2026-08-01) - one behaviour, one definition. The two copies
+# that lived here and in the sibling module were verified BYTE-IDENTICAL by
+# AST (docstrings stripped) before the hoist, so nothing was reconciled or
+# chosen between. The LOCAL NAMES ARE PRESERVED so every call site and every
+# AST pin naming `_deep_freeze` is unchanged.
+from src.utils.deep_freeze import deep_freeze as _deep_freeze  # noqa: E402
+from src.utils.deep_freeze import thaw as _thaw  # noqa: E402
 
 
 class CriterionResult(str, Enum):

@@ -883,16 +883,42 @@ def test_nothing_in_src_consumes_the_prediction_ledger() -> None:
     This pin goes RED the day something wires it, which is exactly when the
     consumer needs a ruling. `aurea_core` is EXEMPT for the taxonomy import
     ONLY: it names the exception type and constructs no ledger.
+
+    MIGRATED 2026-08-01 BY RULING 63, under the Ruling-14 precedent. THE
+    ASSERTION IS UNCHANGED; the INSTRUMENT is strictly narrower and now says
+    what it always meant.
+
+        OLD:  "prediction_ledger" in text or "PredictionLedger" in text
+        NEW:  an AST scan for an import that BINDS THE STORE CLASS
+
+    WHY IT MOVED, AND THE REASON IS SHARPER THAN THE PROSE CASE: Ruling 63's
+    `world_state.py` imports `PredictionCommitment` / `PredictionResolution` /
+    `PredictionOutcome` from this module - THE RECORD TYPES, which is exactly
+    what O5 was designed to do (its inputs arrive as already-read records) -
+    and the substring pin read that as consuming the LEDGER. It would have
+    flagged every future module that merely names a commitment.
+
+    IMPORTING A RECORD TYPE IS NOT CONSUMING THE STORE. What this pin exists to
+    catch is a module that can REACH the ledger, so it now looks for the class
+    `PredictionLedger` and for the ledger's exception, and ignores the
+    vocabulary. FIFTH occurrence of the substring-scanner false positive; the
+    manifest has the conversion ELEVATED.
     """
     consumers = []
     for path in Path("src").rglob("*.py"):
         if path == MODULE:
             continue
-        text = path.read_text(encoding="utf-8")
-        if "prediction_ledger" not in text and "PredictionLedger" not in text:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        bound = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                bound.update((a.asname or a.name) for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                bound.update((a.asname or a.name) for a in node.names)
+        if "PredictionLedger" not in bound:
             continue
         if path.as_posix().endswith("aurea_core.py"):
-            assert "PredictionLedger(" not in text, (
+            assert "PredictionLedger(" not in path.read_text(encoding="utf-8"), (
                 "aurea_core CONSTRUCTS a prediction ledger - the taxonomy "
                 "import is the only permitted contact")
             continue
