@@ -484,18 +484,83 @@ class AureaCore:
         # NO NEW PLACEMENT RULE AND NO NEW WEIGHTS. Every position, mass,
         # constellation assignment and edge weight below is `tca_integration`'s
         # own, unmoved. The fix is ORDER plus EXISTENCE.
+        #
+        # RULING 65 (2026-08-02) - THIS SEQUENCE IS NOW THE MAP'S ONLY AUTHOR.
+        #
+        # `TopologicalSpace` no longer reads a file at construction - the read
+        # path is DELETED FROM THE CLASS (res.1), not merely uncalled - so these
+        # loops do not re-place on top of a restored map. They ARE the map. A
+        # restarted AUREA therefore holds the SAME relational map as a fresh
+        # one, which is this ruling's named property.
+        #
+        # ORDER IS STILL THE MECHANISM, unchanged from Ruling 57 and extended by
+        # exactly one loop: scars -> doctrines -> paradoxes.
         for scar in self.scar_core.all_scars():
             self.tca.place_scar(scar)
 
         # Map existing doctrines to topological space
         for doctrine in self.codex.doctrines.values():
             self.tca.place_doctrine(doctrine)
-    
+
+        # RULING 65 res.1 - THE THIRD SOURCE, and the gap this closes.
+        #
+        # Paradox nodes had exactly one creator (the PARADOX_SUSPENDED branch of
+        # `process_input`), so before this loop they survived a restart ONLY via
+        # the topology file. Deleting the read path without adding this loop
+        # would have lost them - so the rebuild is what makes the deletion safe,
+        # and the two land together.
+        #
+        # THE BLACK SPHERE PERSISTS (`data/runtime/suspension/black_sphere.json`,
+        # loaded in its own `__init__`), which is what qualifies it as a SOURCE
+        # rather than another derivation. Scars, doctrines and paradoxes are the
+        # three persisted sources; the map is a pure derivation over them.
+        #
+        # ECHO NODES ARE DELIBERATELY EXCLUDED (res.4), and this is the whole of
+        # the reason: an Echo record persists NOWHERE. `EchoMemory` is canonical
+        # ("complete input lineage") and UNWIRED - `aurea_core` never persists an
+        # echo. So a restored echo node asserts a holding no store holds, and
+        # dropping it at restart is a CORRECTION, not a loss: the record it
+        # shadowed was already gone at process exit.
+        #
+        # REOPENING CONDITION, stated here because this is the site that would
+        # change: the day the EchoMemory wiring ruling lands, echoes become the
+        # FOURTH source and an echo loop joins this sequence. Until then, adding
+        # one would place nodes for records that do not exist.
+        #
+        # A MEASURED CONSEQUENCE OF RES.4, RECORDED SO IT IS NOT "FIXED" LATER:
+        # after a restart `paradox_void` has NO gravity center. A paradox node's
+        # only edge is the echo->paradox edge written at suspension time, and
+        # echoes are not rebuilt - so every rebuilt paradox node carries zero
+        # edges, `_recalculate_center` scores `mass * len(edges)` = 0, and its
+        # strict `>` correctly selects nothing.
+        #
+        # THAT IS RULING 57 res.3 WORKING, NOT A GAP: a constellation whose
+        # members all carry zero edges honestly has no anchor, and a fallback
+        # (first member, heaviest, centroid) would COIN one at the exact point
+        # placement is decided. It resolves itself when echoes become the fourth
+        # source. Do not add a fallback to make this look tidier.
+        for entry in self.black_sphere.entries.values():
+            self.tca.place_paradox(entry)
+
     def _create_seed_doctrines(self):
         """Create foundational doctrines.
 
         The ONLY doctrine writes that did not survive collapse - because nothing had
         yet collapsed. `Codex.seal()` closes this window permanently.
+
+        RULING 65 res.5 (2026-08-02) - GENESIS PLACES ONCE, BY PLACING NOTHING.
+
+        This method used to call `self.tca.place_doctrine(doctrine)` on each seed
+        it created, and `__init__`'s rebuild loop then placed every doctrine in
+        the codex - including these three, which it had just created. So on the
+        genesis fallback each seed was placed TWICE and `total_mass` ran 15.0
+        high (three doctrines, `len(scar_links) + 5.0` mass, no scar links).
+
+        THE FIX IS STRUCTURAL, NOT DISCIPLINARY: placement belongs to the rebuild
+        sequence ALONE. There is now ONE placement path rather than two that have
+        to be kept in agreement, which is the same reason the read path was
+        deleted rather than corrected. `codex.seed()` stays - this method's job
+        is to author the doctrines, and mapping them is not its job.
         """
         seed_doctrines = [
             ("AVT.001", "Truth survives collapse"),
@@ -512,8 +577,6 @@ class AureaCore:
                 description="Foundational doctrine"
             )
             self.codex.seed(doctrine)
-            # Map to topological space
-            self.tca.place_doctrine(doctrine)
     
     def process_input(self, raw_input: str, source: str = "user", *,
                       origin: Optional[OriginDeclaration] = None) -> Dict[str, Any]:

@@ -8,7 +8,17 @@ behaviour - with exactly ONE exception, marked as such at the site (§5's
 one-resolution guard, which is the half of finding (j) this pass REFUTED and is
 therefore pinned as a real property).
 
-The witnesses are `xfail(strict=True)`. That is the load-bearing choice:
+RULING 65 (2026-08-02) RETIRED THE FIVE §1 WITNESSES. Their markers are DELETED
+and their assertions KEPT IN PLACE, per PATH v39's close instruction - each
+docstring records the exact marker it carried, verbatim, so the defect that
+justified it stays legible at the site that now forbids it. They are ordinary
+passing pins now and guard Ruling 65's named property: a restarted AUREA holds
+the same relational map as a fresh one. FOURTEEN witnesses remain xfail, for
+findings (g) through (j).
+
+That retirement is the mechanism working exactly as designed below, on the first
+ruling to reach one of these findings. The remaining witnesses are `xfail(strict=True)`.
+That is the load-bearing choice:
 
   - The suite stays GREEN, because these record defects that are NOT this pass's
     to repair. PATH v38's mandate is MEASURE BEFORE FIXING; each of these five
@@ -90,15 +100,21 @@ def _ledger_lines(ledger) -> list:
 # was written to repair.
 # =====================================================================
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (f): total_mass is exactly 2x the true node-mass sum after any "
-    "restart. add_node replaces by id but increments mass unconditionally."))
 def test_witness_total_mass_survives_a_restart_unchanged():
-    """WITNESS. `total_mass` must equal the sum of the masses actually present.
+    """`total_mass` must equal the sum of the masses actually present.
 
-    Measured: 130.6 fresh -> 261.2 after one restart, and STABLE at 261.2
-    thereafter (the load recomputes from nodes, then re-placement doubles it
-    again). A permanent 2x overcount, not an unbounded drift.
+    Measured at `0b2072c`: 130.6 fresh -> 261.2 after one restart, and STABLE at
+    261.2 thereafter (the load recomputed from nodes, then re-placement doubled
+    it again). A permanent 2x overcount, not an unbounded drift.
+
+    RETIRED 2026-08-02 BY RULING 65 - marker deleted, assertion KEPT, per PATH
+    v39's close instruction. This was `@pytest.mark.xfail(strict=True, reason=(
+    "CONFIRMED (f): total_mass is exactly 2x the true node-mass sum after any
+    restart. add_node replaces by id but increments mass unconditionally."))`.
+    It now passes for TWO independent reasons, and that is deliberate: res.1
+    deleted the load-then-re-add path entirely, and res.6 made replacement
+    mass-correct on its own terms so the arithmetic does not depend on nobody
+    re-placing a node.
     """
     core = AureaCore()
     fresh = core.tca.topology.total_mass
@@ -111,16 +127,19 @@ def test_witness_total_mass_survives_a_restart_unchanged():
         f"{_true_mass(topo)}; fresh run reported {fresh}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (f), the consequential half: identity_core's gravity center "
-    "moves AVT.014 -> Delta-77 across a restart, because the restarted graph "
-    "carries 9 edges the fresh graph does not."))
 def test_witness_gravity_centers_survive_a_restart_unchanged():
-    """WITNESS, AND THIS IS THE ONE THAT BEARS ON RULING 57.
+    """THE ONE THAT BORE ON RULING 57.
 
     Ruling 57 res.2 made centers follow edges. It did not make the EDGE SET
-    restart-invariant, so the center of her largest constellation is a function
-    of whether this is a fresh run or a resumed one.
+    restart-invariant, so the center of her largest constellation was a function
+    of whether this was a fresh run or a resumed one.
+
+    RETIRED 2026-08-02 BY RULING 65 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (f), the consequential
+    half: identity_core's gravity center moves AVT.014 -> Delta-77 across a
+    restart, because the restarted graph carries 9 edges the fresh graph does
+    not."))`. Ruling 65 does not repair the center; it removes the divergent
+    graph the center was being computed from.
     """
     core = AureaCore()
     before = {cid: c.gravity_center
@@ -133,17 +152,25 @@ def test_witness_gravity_centers_survive_a_restart_unchanged():
         + repr({k: (before[k], after[k]) for k in before if before[k] != after[k]}))
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (f): a restart adds 9 edges - exactly the reverse-only seed "
-    "links Ruling 57's own seam row records as forming no edge at construction."))
 def test_witness_the_edge_set_survives_a_restart_unchanged():
-    """WITNESS. The restarted graph is not the fresh graph.
+    """The restarted graph must be the fresh graph.
 
-    The 9 additions are all `scar.linked_doctrines` back-references. On a fresh
+    The 9 additions were all `scar.linked_doctrines` back-references. On a fresh
     run `place_scar` runs before any doctrine node exists, so its reverse loop
-    forms nothing (Ruling 57, KNOWN AND FLAGGED). On a restart every node is
-    already loaded, so the same loop fires - and the restart silently performs
+    forms nothing (Ruling 57, KNOWN AND FLAGGED). On a restart every node was
+    already loaded, so the same loop fired - and the restart silently performed
     the repair the record documents as NOT done.
+
+    RETIRED 2026-08-02 BY RULING 65 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (f): a restart adds 9
+    edges - exactly the reverse-only seed links Ruling 57's own seam row records
+    as forming no edge at construction."))`.
+
+    RULING 65 res.8 IS WHAT THIS PIN NOW GUARDS, AND THE DIRECTION MATTERS: the
+    rebuild reproduces the CONSTRUCTION graph exactly - 21 edges, not 40 - and
+    Ruling 57's seam row STANDS UNTOUCHED. The reverse-only links still form no
+    edge. This ruling does not repair them and must not silently perform half of
+    that repair, which is precisely what the restart was doing.
     """
     core = AureaCore()
     before = _edge_set(core.tca.topology)
@@ -154,13 +181,15 @@ def test_witness_the_edge_set_survives_a_restart_unchanged():
         f"only before: {sorted('|'.join(p) for p in before - after)}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (f), previously unrecorded anywhere: a restart leaves 9 ONE-WAY "
-    "edges. This is the mechanism behind the gravity-center move."))
 def test_witness_no_edge_is_one_way_after_a_restart():
-    """WITNESS - THE CAUSE, not just the symptom, and it is a NEW finding.
+    """THE CAUSE, not just the symptom.
 
-    Order of events on a restart:
+    RETIRED 2026-08-02 BY RULING 65 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (f), previously
+    unrecorded anywhere: a restart leaves 9 ONE-WAY edges. This is the mechanism
+    behind the gravity-center move."))`.
+
+    Order of events on a restart, under the DELETED read path:
       1. every node loads, scars and doctrines alike;
       2. the scar loop re-places each scar; its reverse loop now FINDS the
          doctrine nodes and calls `create_edge`, which writes BOTH directions;
@@ -177,16 +206,25 @@ def test_witness_no_edge_is_one_way_after_a_restart():
     assert not one_way, f"{len(one_way)} one-way edges after restart: {one_way}"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (f), fresh-run half: on the genesis fallback the three seed "
-    "doctrines are placed TWICE, overcounting mass by 15.0."))
 def test_witness_genesis_places_each_seed_doctrine_once(monkeypatch):
-    """WITNESS for the duplication the review alleged on the genesis path.
+    """The duplication the review alleged on the genesis path.
 
-    `_create_seed_doctrines` calls `place_doctrine` per doctrine, and the loop
-    immediately below it in `__init__` places every doctrine in the codex -
+    `_create_seed_doctrines` called `place_doctrine` per doctrine, and the loop
+    immediately below it in `__init__` placed every doctrine in the codex -
     including the three just seeded. Reached only when the codex loads empty, so
-    it is dormant in production; it is real, and it is on a live path.
+    it was dormant in production; it was real, and it was on a live path.
+
+    RETIRED 2026-08-02 BY RULING 65 res.5 - marker deleted, assertion KEPT. This
+    was `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (f), fresh-run half:
+    on the genesis fallback the three seed doctrines are placed TWICE,
+    overcounting mass by 15.0."))`.
+
+    DIVERGENCE RECORDED AT THE SITE: the Ruling 65 handoff and the manifest's
+    pin (a) both say the pass retires "the four TCA strict-xfail witnesses".
+    FIVE were retired. This is the fifth, and it is retired by res.5 ("GENESIS
+    PLACES ONCE") rather than by res.1's restart identity - the manifest's own
+    pin (e) covers it in terms, so the count in (a) is the thing that was short,
+    not the scope of the ruling. Reported rather than silently absorbed.
     """
     from src.doctrine.codex import Codex
     monkeypatch.setattr(Codex, "load_from_file", lambda self: None)

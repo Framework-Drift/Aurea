@@ -27,10 +27,16 @@ import json
 import pytest
 
 from src.doctrine.dee import DMW, DMW_QUEUE_MAX, MutationTrigger, PressureFlag
-from src.topology.tca_core import (
-    ConstellationNode, ConstellationType, NodeType, SymbolicPosition,
-    TopologicalSpace,
-)
+# RULING 65 (2026-08-02): the `src.topology.tca_core` import block is REMOVED.
+# It read `ConstellationNode, ConstellationType, NodeType, SymbolicPosition,
+# TopologicalSpace` - and with PIN 5 superseded and the `tca` taxonomy cases
+# dropped, this file no longer references the topology at all.
+#
+# RECORDED HONESTLY BECAUSE THE TWO CAUSES ARE DIFFERENT: four of those names
+# died with this pass's migration; `ConstellationType` was ALREADY UNUSED AT
+# `0b2072c` and is pre-existing dead weight this pass removed only because the
+# statement holding it had to go anyway. It is not a Ruling 65 consequence and
+# is not claimed as one.
 from src.topology.tcaml import (
     TTL, LockClass, Status, TCAML,
 )
@@ -325,146 +331,71 @@ def test_no_codex_quarantines_nothing(tmp_path):
 
 # =====================================================================
 # PIN 5 - TCA: reference validation and the bridge mint
-# =====================================================================
-
-def _node(space, node_id):
-    space.nodes[node_id] = ConstellationNode(
-        id=node_id, node_type=NodeType.DOCTRINE,
-        position=SymbolicPosition(semantic_vector=[0.0], temporal_layer=0,
-                                  collapse_depth=1.0),
-        mass=1.0)
-
-
-def test_the_relational_map_round_trips(tmp_path):
-    path = str(tmp_path / "tca.json")
-    space = TopologicalSpace(filepath=path)
-    _node(space, "n1")
-    _node(space, "n2")
-    space.create_scar_bridge("n1", "n2")
-    space.save_to_file()
-
-    resumed = TopologicalSpace(filepath=path)
-
-    assert resumed.load_report.outcome is RestorationOutcome.RESTORED
-    assert set(resumed.nodes) == {"n1", "n2"}
-    assert resumed.wormholes == {"bridge_0": ("n1", "n2")}, (
-        "and the pair is a TUPLE, not the list JSON turned it into")
-
-
-def test_a_wormhole_naming_a_vanished_node_is_quarantined(tmp_path):
-    """RULING 42 res.5, and the half that had NO CHECK AT ALL. `load_from_file`
-    did `self.wormholes = data.get('wormholes', {})` - a bridge to a node that no
-    longer exists came back as a live shortcut, and `find_path` would route
-    through it.
-
-    Never silently dropped (that erases a relation she carved) and never silently
-    re-pointed (nothing may choose a different node for it)."""
-    path = tmp_path / "tca.json"
-    path.write_text(json.dumps({
-        "version": TopologicalSpace.STATE_VERSION,
-        "nodes": {"n1": {"type": "doctrine", "mass": 1.0, "charge": 0, "spin": 0,
-                         "position": {"semantic_vector": [0.0], "temporal_layer": 0,
-                                      "collapse_depth": 1.0, "constellation_id": None},
-                         "edges": {}, "scar_bridges": [], "tags": []}},
-        "constellations": {}, "wormholes": {"bridge_0": ["n1", "GONE"]},
-        "metrics": {},
-    }), encoding="utf-8")
-
-    space = TopologicalSpace(filepath=str(path))
-
-    assert space.load_report.outcome is RestorationOutcome.PARTIALLY_RESTORED
-    assert space.wormholes == {}
-    assert len(space.quarantined_edges) == 1
-    held = space.quarantined_edges[0]
-    assert held["kind"] == "wormhole" and held["missing_nodes"] == ["GONE"]
-
-
-def test_a_constellation_member_that_vanished_is_quarantined_not_silently_dropped(tmp_path):
-    """The other half of res.5. This filter EXISTED (`if node_id in self.nodes`)
-    and silently discarded the reference - a fail-silent check is not a check,
-    it is the appearance of one."""
-    path = tmp_path / "tca.json"
-    path.write_text(json.dumps({
-        "version": TopologicalSpace.STATE_VERSION,
-        "nodes": {}, "wormholes": {},
-        "constellations": {"c1": {"type": "identity", "node_ids": ["GONE"],
-                                  "gravity_center": None, "stability": 1.0,
-                                  "bridges": {}}},
-        "metrics": {},
-    }), encoding="utf-8")
-
-    space = TopologicalSpace(filepath=str(path))
-
-    assert space.load_report.outcome is RestorationOutcome.PARTIALLY_RESTORED
-    assert [q["node_id"] for q in space.quarantined_edges] == ["GONE"]
-    assert space.constellations["c1"].nodes == {}
-
-
-def test_a_refused_topology_map_is_never_overwritten(tmp_path):
-    """CASE PIN ADDED AFTER A SURVIVING MUTANT (M28: deleting the sticky-refusal
-    guard from `save_to_file` left all 548 green).
-
-    THE QUESTION THE SURVIVOR GOT: what path would have to run? A process whose
-    topology load REFUSED, which then SAVES - and every real pipeline pass does,
-    because `AureaCore.save_state` calls `self.tca.topology.save_to_file()`. So
-    an older build meeting a future-version map would have DESTROYED it on the
-    first save, which is the precise opposite of "left BYTE-UNTOUCHED".
-
-    NOT AN EQUIVALENT MUTANT, and the gap was mine: I pinned sticky refusal on
-    TCAML and assumed the same guard on TCA was covered by the same reasoning.
-    Reasoning is not coverage.
-    """
-    path = tmp_path / "tca.json"
-    path.write_text(json.dumps({"version": 999, "nodes": {}, "wormholes": {}}),
-                    encoding="utf-8")
-    before = hashlib.sha256(path.read_bytes()).hexdigest()
-
-    space = TopologicalSpace(filepath=str(path))
-    assert space.load_report.outcome is RestorationOutcome.REFUSED
-
-    _node(space, "n1")
-    space.save_to_file()
-
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == before, (
-        "a map she could not read is not a map she may replace with a blank one")
-
-
-def test_the_bridge_mint_never_reissues_an_id_a_quarantined_edge_still_carries(tmp_path):
-    """THE RE-CLASSIFICATION, AS A PIN.
-
-    The Ruling 42 sweep classified `bridge_{len(self.wormholes)}` as "no
-    collision today; LATENT if removal is added" - correct then: nothing removed
-    a wormhole, and `load_from_file` restored the whole dict, so the counter was
-    store-derived and survived restarts.
-
-    QUARANTINE IS THAT REMOVAL. A dangling bridge is held OUT of
-    `self.wormholes`, `len()` drops, and the old expression would remint an id a
-    quarantined record still carries - the latent hazard made LIVE by this very
-    pass. So the mint derives from the MAX ORDINAL over live AND quarantined ids
-    (Nova's `_derive_seq` shape, res.4).
-    """
-    path = tmp_path / "tca.json"
-    path.write_text(json.dumps({
-        "version": TopologicalSpace.STATE_VERSION,
-        "nodes": {n: {"type": "doctrine", "mass": 1.0, "charge": 0, "spin": 0,
-                      "position": {"semantic_vector": [0.0], "temporal_layer": 0,
-                                   "collapse_depth": 1.0, "constellation_id": None},
-                      "edges": {}, "scar_bridges": [], "tags": []}
-                  for n in ("n1", "n2")},
-        "constellations": {},
-        "wormholes": {"bridge_0": ["n1", "GONE"]},      # quarantined on load
-        "metrics": {},
-    }), encoding="utf-8")
-
-    space = TopologicalSpace(filepath=str(path))
-    assert space.wormholes == {}                        # len() is now 0
-    assert space.quarantined_edges[0]["bridge_id"] == "bridge_0"
-
-    space.create_scar_bridge("n1", "n2")
-
-    assert "bridge_0" not in space.wormholes, (
-        "bridge_0 already MEANS something - it may never be reissued")
-    assert list(space.wormholes) == ["bridge_1"]
+#
+# SUPERSEDED IN FULL 2026-08-02 BY RULING 65, and this block is the record of
+# what stood here. FIVE PINS, all migrated in Ruling-14 form: THE RULING MOVED,
+# and none of them was adjusted to keep a passing suite.
+#
+# Ruling 65 res.2 supersedes Ruling 42 Slice 2 FOR THE TOPOLOGY MAP ONLY. That
+# store exits the durable-source set because it never was a source: the map is a
+# pure derivation over the scar store, the Codex and the Black Sphere. The
+# version gate, refusal semantics and reference validation were a CORRECT
+# contract applied to a store that should not have been one.
+#
+# THE RESTORATION CONTRACT STANDS, UNWEAKENED, FOR EVERY ACTUAL STORE - which is
+# why the TCAML and DMW pins above this block are untouched, and why the three
+# taxonomy pins below lost only their `tca` parameter.
+#
+# `TopologicalSpace.load_from_file` IS DELETED FROM THE CLASS (res.1), so every
+# pin here asserted against a method that no longer exists. They did not fail
+# because they were wrong; they failed because their subject was removed on
+# purpose.
+#
+#   1. `test_the_relational_map_round_trips`
+#      Asserted `resumed.load_report.outcome is RestorationOutcome.RESTORED`,
+#      `set(resumed.nodes) == {"n1", "n2"}` and `resumed.wormholes ==
+#      {"bridge_0": ("n1", "n2")}` ("and the pair is a TUPLE, not the list JSON
+#      turned it into") after a save/reconstruct.
+#      SUPERSEDED BY: `tests/test_ruling65.py` pin (a), RESTART IDENTITY. The
+#      map no longer round-trips - it is REBUILT - and the successor property is
+#      strictly stronger: a restarted space equals a fresh one on node set, edge
+#      set, `total_mass`, `total_edges` and every gravity center. The old pin
+#      would have passed against the very drift the sixty-second entry measured,
+#      because it never compared the resumed map to a FRESH one.
+#
+#   2. `test_a_wormhole_naming_a_vanished_node_is_quarantined`
+#   3. `test_a_constellation_member_that_vanished_is_quarantined_not_silently_dropped`
+#      Both asserted `PARTIALLY_RESTORED` plus a `quarantined_edges` entry.
+#      SUPERSEDED WITH NO SUCCESSOR, and that is correct rather than a gap:
+#      quarantine answered "what do I do with a persisted reference I cannot
+#      resolve", and no reference is read any more. A dangling reference cannot
+#      be restored because nothing is restored. `quarantined_edges` left with
+#      the read path it served (res.1).
+#
+#   4. `test_a_refused_topology_map_is_never_overwritten`
+#      Itself a CASE PIN ADDED AFTER A SURVIVING MUTANT (M28), asserting that a
+#      space whose load REFUSED does not then destroy the file on its next save.
+#      SUPERSEDED BY: `tests/test_ruling65.py` pin (g), THE ADVERSARIAL
+#      SNAPSHOT - and the replacement is strictly stronger in the direction that
+#      matters. The old pin protected the FILE from the process. The new one
+#      establishes that the file cannot influence the PROCESS: a corrupted or
+#      fabricated snapshot and an absent snapshot produce identical live state.
+#      Nothing is read, so nothing can be refused, so sticky refusal has no
+#      referent (res.3).
+#
+#   5. `test_the_bridge_mint_never_reissues_an_id_a_quarantined_edge_still_carries`
+#      Asserted the mint skips `bridge_0` when a quarantined record still
+#      carries it, deriving from MAX ORDINAL over live AND quarantined ids.
+#      SUPERSEDED BY: res.7, which NARROWS Ruling 42 res.4's mint semantics for
+#      this store CONSCIOUSLY. With quarantine gone there is no set of ids that
+#      were issued and are not present, so bridge ids are PER-BOOT DERIVATIONS:
+#      issuance restarts each boot and derives identically each boot, because
+#      placement order is deterministic and nothing outside the write-only
+#      snapshot references a bridge id. The max-ordinal FORM is kept in
+#      `_next_bridge_id` - same answer while nothing removes, still correct if
+#      anything ever does.
+#
+# The `_node` helper went with them; it had no other caller.
 
 
 # =====================================================================
@@ -474,7 +405,11 @@ def test_the_bridge_mint_never_reissues_an_id_a_quarantined_edge_still_carries(t
 @pytest.mark.parametrize("build,name", [
     (lambda p: TCAML(runtime_path=str(p)), "tcaml"),
     (lambda p: DMW(runtime_path=str(p)), "dmw"),
-    (lambda p: TopologicalSpace(filepath=str(p)), "tca"),
+    # RULING 65 res.2 (2026-08-02): the `tca` case is SUPERSEDED and REMOVED.
+    # It read `(lambda p: TopologicalSpace(filepath=str(p)), "tca")`. The
+    # topology map has no load path to hold to this taxonomy - see the PIN 5
+    # supersession block above. TCAML and DMW are untouched: the restoration
+    # contract stands for every store that is actually a source.
 ])
 def test_an_unknown_version_is_refused_and_the_file_is_left_byte_untouched(build, name, tmp_path):
     """Slice 1's governing sentence, on all three of Slice 2's stores:
@@ -497,7 +432,11 @@ def test_an_unknown_version_is_refused_and_the_file_is_left_byte_untouched(build
 @pytest.mark.parametrize("build,name", [
     (lambda p: TCAML(runtime_path=str(p)), "tcaml"),
     (lambda p: DMW(runtime_path=str(p)), "dmw"),
-    (lambda p: TopologicalSpace(filepath=str(p)), "tca"),
+    # RULING 65 res.2 (2026-08-02): the `tca` case is SUPERSEDED and REMOVED.
+    # It read `(lambda p: TopologicalSpace(filepath=str(p)), "tca")`. The
+    # topology map has no load path to hold to this taxonomy - see the PIN 5
+    # supersession block above. TCAML and DMW are untouched: the restoration
+    # contract stands for every store that is actually a source.
 ])
 def test_unreadable_json_is_refused(build, name, tmp_path):
     path = tmp_path / f"{name}.json"
@@ -511,7 +450,11 @@ def test_unreadable_json_is_refused(build, name, tmp_path):
 @pytest.mark.parametrize("build,name", [
     (lambda p: TCAML(runtime_path=str(p)), "tcaml"),
     (lambda p: DMW(runtime_path=str(p)), "dmw"),
-    (lambda p: TopologicalSpace(filepath=str(p)), "tca"),
+    # RULING 65 res.2 (2026-08-02): the `tca` case is SUPERSEDED and REMOVED.
+    # It read `(lambda p: TopologicalSpace(filepath=str(p)), "tca")`. The
+    # topology map has no load path to hold to this taxonomy - see the PIN 5
+    # supersession block above. TCAML and DMW are untouched: the restoration
+    # contract stands for every store that is actually a source.
 ])
 def test_a_first_run_reports_nothing_because_it_restored_nothing(build, name, tmp_path):
     """No sixth enum member for "nothing happened" - absence is not an event."""
