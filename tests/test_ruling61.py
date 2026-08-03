@@ -18,6 +18,28 @@ three-state vocabulary is Docket H's (reused, not redeclared), and no
 threshold, weight, magnitude or duration exists anywhere in the module.
 """
 
+# =====================================================================
+# RULING 69 MIGRATION (2026-08-02) - Ruling-14 form, recorded once for this
+# file because the transformation is IDENTICAL at every site.
+#
+# `_seq` DIED AS INSTANCE STATE. It was a cached derivation of the file trusted
+# over its source, and every mint now derives afresh. So each assertion of the
+# form
+#
+#     assert <ledger>._seq == N          /  assert <ledger>._seq is None
+#
+# reads a surface that no longer exists, and is migrated to
+#
+#     assert <ledger>._derive_seq() == N /  assert <ledger>._derive_seq() is None
+#
+# **NO ASSERTION MOVED.** `_derive_seq()` returns exactly the value `_seq` was
+# initialised from - the same number, the same `None`, the same meaning ("the
+# highest ordinal on disk, or UNDERIVED"). What changed is that it is now asked
+# at the moment of the question instead of remembered from construction, which
+# is the whole of Ruling 69 res.1.
+# =====================================================================
+
+
 from __future__ import annotations
 
 import ast
@@ -420,8 +442,29 @@ def test_a_failed_write_raises_and_records_nothing(tmp_path, monkeypatch) -> Non
     ledger = _ledger(tmp_path)
     _full(ledger)
 
-    def _boom(*args, **kwargs):
-        raise OSError("disk is gone")
+    # MIGRATED 2026-08-02 BY RULING 69 (Ruling-14 form). This was:
+    #
+    #     def _boom(*args, **kwargs):
+    #         raise OSError("disk is gone")
+    #     monkeypatch.setattr("builtins.open", _boom)
+    #     with pytest.raises(OSError):
+    #         ledger.commit(...)
+    #
+    # THE FIXTURE IS SHARPENED, NOT THE ASSERTION WEAKENED. Killing EVERY open
+    # used to reach the append first; now the mint DERIVES from the file, so a
+    # wholly dead disk refuses one frame earlier with `PredictionLedgerUnreadable`
+    # - correct, and arguably better (it refuses before attempting anything),
+    # but it is no longer a test of the WRITE path this pin is named for.
+    #
+    # So the failure is injected on WRITE MODE ONLY, which is what "a failed
+    # write" always meant. `_UnreadableFor`'s inverse, and the pin now measures
+    # exactly what its docstring claims. The three measures below are unchanged.
+    real_open = open
+
+    def _boom(file, mode="r", *args, **kwargs):
+        if "a" in mode or "w" in mode:
+            raise OSError("disk is gone")
+        return real_open(file, mode, *args, **kwargs)
 
     monkeypatch.setattr("builtins.open", _boom)
     with pytest.raises(OSError):
@@ -459,7 +502,7 @@ def test_a_missing_ledger_is_a_first_run_not_a_fault(tmp_path) -> None:
     """PIN (f), branch one. Absence is a first run; answering an unreadable
     file with 0 would be a claim about content the code never saw."""
     ledger = _ledger(tmp_path, "nothing_here.jsonl")
-    assert ledger._seq == 0
+    assert ledger._derive_seq() == 0
     assert ledger.commit("X").prediction_id == "PRD-0001"
 
 
@@ -474,27 +517,70 @@ def test_an_unreadable_existing_ledger_refuses_to_mint(tmp_path, monkeypatch) ->
     ledger.commit("X", success_criteria=provided("X observed"))
 
     fresh = _ledger(tmp_path)
-    assert fresh._seq == 1
+    assert fresh._derive_seq() == 1
 
     def _boom(*args, **kwargs):
         raise OSError("unreadable")
 
     monkeypatch.setattr("builtins.open", _boom)
     broken = _ledger(tmp_path)
-    assert broken._seq is None, "an unreadable EXISTING ledger must not read 0"
+    assert broken._derive_seq() is None, "an unreadable EXISTING ledger must not read 0"
     with pytest.raises(PredictionLedgerUnreadable):
         broken.commit("Y")
 
 
 def test_the_mint_re_derives_once_when_the_disk_recovers(tmp_path) -> None:
     """Ruling 53's single re-derivation: the condition is transient by nature,
-    so a recovered ledger resumes from its REAL maximum."""
+    so a recovered ledger resumes from its REAL maximum.
+
+    MIGRATED 2026-08-02 BY RULING 69 (Ruling-14 form). The body read:
+
+        broken = _ledger(tmp_path)
+        broken._seq = None          # as an unreadable load would leave it
+        assert broken.commit("Z").prediction_id == "PRD-0003", (
+            "a recovered ledger must resume from the file maximum, never from
+            zero")
+
+    **THAT LINE HAD ALREADY STOPPED WITNESSING ANYTHING**, and this pass caught
+    it: with `_seq` deleted, `broken._seq = None` merely sets a NEW attribute
+    nothing reads, so the test passed for a reason unrelated to its subject -
+    the quietest possible way for a pin to rot.
+
+    **RES.1 SUBSUMES THE RE-DERIVE.** There is no cached value for a transient
+    failure to poison, because EVERY mint derives; a recovered ledger resumes
+    from its real maximum BY CONSTRUCTION rather than by a special case. So the
+    property is now driven through a REAL unreadable file that then RECOVERS -
+    which is the scenario Ruling 53 was written about, and which the assignment
+    was only ever standing in for.
+
+    The assertion is unchanged: `PRD-0003`, never zero.
+    """
     ledger = _ledger(tmp_path)
     ledger.commit("X")
     ledger.commit("Y")
 
     broken = _ledger(tmp_path)
-    broken._seq = None                      # as an unreadable load would leave it
+    path = Path(broken.ledger_path)
+    real = path.read_bytes()
+
+    # The disk is failing: the ledger exists and cannot be read.
+    real_open = open
+
+    def _reads_fail(file, mode="r", *a, **k):
+        if str(file) == str(path) and "r" in mode:
+            raise OSError("disk is failing")
+        return real_open(file, mode, *a, **k)
+
+    import builtins
+    builtins.open = _reads_fail
+    try:
+        with pytest.raises(PredictionLedgerUnreadable):
+            broken.commit("Z")
+    finally:
+        builtins.open = real_open
+
+    # The disk recovers. Nothing was cached, so nothing has to be re-derived.
+    assert path.read_bytes() == real, "the refused mint wrote nothing"
     assert broken.commit("Z").prediction_id == "PRD-0003", (
         "a recovered ledger must resume from the file maximum, never from zero")
 
@@ -508,7 +594,7 @@ def test_an_unparseable_line_is_floored_not_fatal(tmp_path) -> None:
     Path(ledger.ledger_path).open("a", encoding="utf-8").write("{not json\n")
 
     fresh = _ledger(tmp_path)
-    assert fresh._seq == 1
+    assert fresh._derive_seq() == 1
     assert len(fresh.commitments()) == 1
     assert fresh.commit("Y").prediction_id == "PRD-0002"
 
@@ -712,7 +798,21 @@ def test_the_read_path_holds_no_clock() -> None:
 def test_nothing_resolves_without_an_explicit_resolve_call(tmp_path) -> None:
     """PIN (h), second half. The ONLY writer of a resolution line is
     `resolve()` - AST-pinned, because an auto-resolution buried in a read is
-    exactly the defect that would be invisible from the outside."""
+    exactly the defect that would be invisible from the outside.
+
+    MIGRATED 2026-08-02 BY RULING 69 (Ruling-14 form). The expectation read:
+
+        assert sorted(writers) == ["_mint_and_append", "resolve"], (
+            f"the ledger is appended from {sorted(writers)} - a third write
+            path means something records without being asked to")
+
+    **THE PROPERTY IS UNCHANGED AND THE COUNT IS UNCHANGED: exactly TWO write
+    paths.** `commit` was split so the mint-append critical section is a whole
+    method held under the lock (res.3) rather than an indented region inside
+    `commit`; the appending frame is now `_mint_and_append`, which `commit` is
+    the sole caller of. Nothing new records, and nothing records unasked - the
+    assertion below still fails on a genuine third path.
+    """
     tree = ast.parse(MODULE.read_text(encoding="utf-8"))
     writers = []
     for node in ast.walk(tree):
@@ -723,7 +823,7 @@ def test_nothing_resolves_without_an_explicit_resolve_call(tmp_path) -> None:
                         and inner.func.attr == "_append"):
                     writers.append(node.name)
 
-    assert sorted(writers) == ["commit", "resolve"], (
+    assert sorted(writers) == ["_mint_and_append", "resolve"], (
         f"the ledger is appended from {sorted(writers)} - a third write path "
         f"means something records without being asked to")
 

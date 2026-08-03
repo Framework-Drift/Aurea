@@ -245,6 +245,7 @@ class OriginDeclaration:
 # AST pin naming `_deep_freeze` is unchanged.
 from src.utils.deep_freeze import deep_freeze as _deep_freeze  # noqa: E402
 from src.utils.deep_freeze import thaw as _thaw  # noqa: E402
+from src.utils.ledger_mint import derive_max_ordinal, mint_lock
 from src.utils.record_value import validate_record_value
 
 
@@ -379,64 +380,78 @@ class ClaimAncestryLedger:
         # In-memory mirror of what THIS PROCESS appended. NOT the ledger: the
         # file is the ledger. Nothing reads this back into a decision.
         self.entries: List[Dict[str, Any]] = []
-        self._seq = self._derive_seq()
+        # RULING 69 (2026-08-02): THERE IS NO `self._seq`.
+        #
+        # It was derived once HERE and then incremented in memory forever after,
+        # never re-synced - a CACHED DERIVATION OF THE FILE TRUSTED OVER ITS
+        # SOURCE, the structure Ruling 63 refused at the projection and Ruling 65
+        # refused at the topology. Two live instances over one path minted the
+        # same ordinals whenever the second derived before the first appended.
+        # Every mint now derives afresh under the file's lock; see `_next_id`.
 
     # -----------------------------------------------------------------
     # THE MINT - continuity state (Ruling 42 res.4), sentinel per Ruling 53
     # -----------------------------------------------------------------
 
     def _derive_seq(self) -> Optional[int]:
-        """The highest `CLM-` ordinal already in the ledger, or `None`.
+        """The highest `CLM-` ordinal already ON DISK, or `None` if UNDERIVED.
 
-        RULING 53 WHOLE: `None` IFF the ledger EXISTS and the read raised. A
-        MISSING ledger is a legitimate `0`, because absence is a first run and
-        not a fault - and answering an unreadable file with `0` is a claim about
-        content the code never saw.
+        RULING 69 res.1/res.2/res.5. The body moved to
+        `src.utils.ledger_mint.derive_max_ordinal` - **HOISTED, not merely
+        shared**: the three ledgers' derivations differed in exactly two ways (a
+        local variable name and the JSON key each parsed), and res.2 deletes the
+        second BY CONSTRUCTION because the scan no longer parses JSON. What
+        remained was identical modulo `ID_PREFIX`.
 
-        PER-LINE FLOOR SEMANTICS for anything that will not parse: a forensic
-        log outlives the code that wrote it, and a build that refuses to start
-        because it met a line it does not understand has turned an append-only
-        record into a liability. An unreadable FILE and an unparseable LINE are
-        different failures and get different answers.
+        RULING 53'S SENTINEL IS UNCHANGED IN SEMANTICS: `None` IFF the ledger
+        EXISTS and the read raised; a MISSING ledger is a legitimate `0`. The
+        typed refusal stays HERE, in `_next_id`, because the error type is this
+        ruling's own vocabulary and not the helper's.
+
+        WHAT CHANGED IS WHAT IS SCANNED. This read `json.loads(line).get(...)`,
+        so an ordinal on a TORN OR UNPARSEABLE LINE WAS INVISIBLE and the next
+        mint would reissue it. The helper scans RAW TEXT with the anchored
+        pattern, so any id that reached disk is seen and never reissued.
         """
-        if not self.ledger_path.exists():
-            return 0
-        highest = 0
-        try:
-            with open(self.ledger_path, "r", encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry_id = json.loads(line).get("claim_id", "")
-                    except ValueError:
-                        continue
-                    if isinstance(entry_id, str) and entry_id.startswith(self.ID_PREFIX):
-                        tail = entry_id[len(self.ID_PREFIX):]
-                        if tail.isdigit():
-                            highest = max(highest, int(tail))
-        except OSError:
-            return None
-        return highest
+        return derive_max_ordinal(self.ledger_path, self.ID_PREFIX)
 
     def _next_id(self) -> str:
-        """Mint the next id, or REFUSE. Ruling 53's shape exactly."""
-        if self._seq is None:
-            self._seq = self._derive_seq()
-        if self._seq is None:
+        """Mint the next id, or REFUSE. **DERIVED AT MINT TIME (Ruling 69).**
+
+        CALLERS MUST HOLD `mint_lock(self.ledger_path)` ACROSS derive → mint →
+        append. Deriving inside the lock and appending outside it would leave
+        exactly the race this ruling closes, so the lock is taken at the WRITE
+        path and this method is called within it.
+
+        ~~RE-DERIVES ONCE against an underived mint before refusing, because the
+        condition this guards is characteristically TRANSIENT - the whole defect
+        was a read failure at construction that had cleared by write time. A
+        recovered ledger therefore resumes from its REAL maximum rather than
+        refusing a mutation it is now perfectly able to audit.~~
+
+        SUPERSEDED 2026-08-02 BY RULING 69 res.1, kept because it names the
+        property that still holds. **THE RE-DERIVE IS SUBSUMED: every mint
+        derives**, so a recovered ledger resumes from its real maximum BY
+        CONSTRUCTION rather than by a special case that had to be remembered.
+        There is no longer a cached value for a transient failure to poison.
+
+        STILL UNDERIVED, IT RAISES. It does NOT fall back to a number: an id
+        minted from an unknown floor is exactly the collision Ruling 53 closed,
+        and a duplicate id in an append-only ledger is unrecoverable by
+        construction (entries are never overwritten, 3a:112, so nothing can ever
+        go back and disambiguate the two).
+        """
+        seq = self._derive_seq()
+        if seq is None:
             raise AncestryLedgerUnreadable(
+
                 f"the claim-ancestry ledger at '{self.ledger_path}' exists and "
                 f"cannot be read, so the next CLM ordinal is UNKNOWN. Minting "
                 f"one anyway could write an id that already names a different "
                 f"claim, and an append-only ledger cannot later tell the two "
                 f"apart. A claim whose origin cannot be recorded is not "
                 f"perceived.")
-        self._seq += 1
-        # `{n:04d}` matches the house convention and GROWS NATURALLY past 9999 -
-        # `CLM-10000` is what the format produces, not an overflow.
-        return f"{self.ID_PREFIX}{self._seq:04d}"
-
+        return f"{self.ID_PREFIX}{seq + 1:04d}"
     # -----------------------------------------------------------------
     # THE ONLY WRITE PATH
     # -----------------------------------------------------------------
@@ -458,6 +473,24 @@ class ClaimAncestryLedger:
         log through `atomic_write` would rewrite the whole ledger per entry -
         converting the exempt failure class into the dangerous one in the name
         of fixing it.
+        """
+        # RULING 69 res.3 - IN-PROCESS MINT-APPEND ATOMICITY. The lock is keyed
+        # by the RESOLVED PATH and held across DERIVE -> MINT -> APPEND as one
+        # unit; deriving inside it and appending outside would leave exactly the
+        # race this ruling closes. It answers the threat that is real under the
+        # declared topology (one AUREA process per data root, res.4): two
+        # instances, or two threads, inside ONE process. OS file locking is
+        # DECLARED OUT with its reopening condition named in `ledger_mint.py`.
+        with mint_lock(self.ledger_path):
+            return self._mint_and_append(declaration)
+
+    def _mint_and_append(self, declaration: Optional[OriginDeclaration]
+                         ) -> ClaimAncestryRecord:
+        """The locked critical section: derive, mint, validate, append.
+
+        Split out so the lock scope is a whole method rather than an indented
+        region - the boundary is then visible in the diff of any future
+        change, which is what stops an append drifting out of it.
         """
         record = ClaimAncestryRecord.from_declaration(self._next_id(), declaration)
         entry = record.as_dict()

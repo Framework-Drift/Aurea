@@ -8,29 +8,30 @@ behaviour - with exactly ONE exception, marked as such at the site (§5's
 one-resolution guard, which is the half of finding (j) this pass REFUTED and is
 therefore pinned as a real property).
 
-RULING 65 (2026-08-02) RETIRED THE FIVE §1 WITNESSES. Their markers are DELETED
-and their assertions KEPT IN PLACE, per PATH v39's close instruction - each
-docstring records the exact marker it carried, verbatim, so the defect that
-justified it stays legible at the site that now forbids it. They are ordinary
-passing pins now and guard Ruling 65's named property: a restarted AUREA holds
-the same relational map as a fresh one. FOURTEEN witnesses remain xfail, for
-findings (g) through (j).
+**EVERY WITNESS IN THIS FILE HAS NOW BEEN RETIRED. 19 -> 14 -> 9 -> 3 -> 0.**
 
-That retirement is the mechanism working exactly as designed below, on the first
-ruling to reach one of these findings. The remaining witnesses are `xfail(strict=True)`.
-That is the load-bearing choice:
+Each ruling that reached one of these findings turned its own witnesses RED, and
+per PATH v39's close instruction the marker was DELETED and the assertion KEPT IN
+PLACE - each docstring recording verbatim the marker it carried, so the defect
+that justified it stays legible at the site that now forbids it.
 
-  - The suite stays GREEN, because these record defects that are NOT this pass's
-    to repair. PATH v38's mandate is MEASURE BEFORE FIXING; each of these five
-    has a genuine fork that only a ruling may decide, so none was repaired here.
-  - The failure output IS the finding of record (Ruling 64's standing form: a
-    ruling that corrects a live surface writes the witness against the OLD code
-    first, and the witness's failure output is the finding). Run with `-rx` to
-    read them.
-  - `strict=True` means the day a ruling lands and the defect is fixed, the
-    witness XPASSes and THE SUITE GOES RED. It cannot be quietly forgotten. The
-    correct response to that red is to delete the `xfail` marker and keep the
-    assertion - the witness becomes the ruling's pin, in place.
+    Ruling 65  (2026-08-02)  the five §1 TCA-restart witnesses
+    Batch  66  (2026-08-02)  the five §4 record-value witnesses
+    Ruling 68  (2026-08-02)  the six §2/§3 perception-lifecycle witnesses
+    Ruling 69  (2026-08-02)  the last three §5 writer-ownership witnesses
+
+They are ordinary passing pins now, and they are the strongest ones in the suite:
+each was written against the DEFECT, carries its measured values, and was watched
+failing before the code that closes it existed. **THE SUITE CARRIES NO KNOWN
+CONFIRMED DEFECTS.**
+
+The mechanism is worth stating once, now that it has completed: a witness written
+as `xfail(strict=True)` keeps the suite GREEN while a measured, reported,
+unrepaired defect stands, and turns it RED the moment a fix lands - so a defect
+cannot be quietly forgotten, and a fix cannot land without the record noticing.
+**Do NOT `xfail` anything on this basis without the same standing** - a measured
+and reported defect, awaiting a named ruling. §4's absolute bar on weakening
+`tests/invariants/` is untouched.
 
 NOTHING IN `src/` WAS CHANGED BY THE PASS THAT WROTE THIS FILE. These tests do
 not encode a preference for any particular remedy; each asserts the property the
@@ -662,6 +663,10 @@ def test_an_admissible_proof_still_completes_a_mutation():
 # construction and then increments a private `_seq`, so two live instances over
 # one path both mint the same id.
 #
+# CLOSED BY RULING 69 (2026-08-02): `_seq` died as state, the derivation runs
+# at mint time over RAW TEXT, and a path-keyed mutex holds derive -> mint ->
+# append together.
+#
 # REFUTED for the one-resolution guarantee - see the guard at the end. That half
 # of the review's claim does not hold: `resolve()` re-reads the FILE, so a
 # second instance is correctly refused. (It remains racy between that read and
@@ -669,12 +674,21 @@ def test_an_admissible_proof_still_completes_a_mutation():
 # should be told the difference.)
 # =====================================================================
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (j): two CAE instances over one path both mint CAE-001."))
 def test_witness_cae_ids_are_unique_across_two_writers(tmp_path):
-    """WITNESS on the append-only ledger whose ids are meant to be CITABLE.
-    Ruling 53 closed the re-derivation hole for an UNREADABLE ledger; a second
-    concurrent writer reaches the same duplicate-id outcome by another door."""
+    """The append-only ledger whose ids are meant to be CITABLE. Ruling 53
+    closed the re-derivation hole for an UNREADABLE ledger; a second concurrent
+    writer reached the same duplicate-id outcome by another door.
+
+    RETIRED 2026-08-02 BY RULING 69 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (j): two CAE instances
+    over one path both mint CAE-001."))`.
+
+    **THIS IS THE LAST OF THE NINETEEN.** The verification pass landed 19
+    strict-xfail witnesses against confirmed defects; Ruling 65 retired five,
+    Batch 66 five, Ruling 68 six, and this ruling the final three.
+    **19 -> 14 -> 9 -> 3 -> 0.** Every confirmed defect of that pass has now
+    died of its intended cause, witnessed by the tripwire written against it.
+    """
     from src.doctrine.cae import CAE
     path = str(tmp_path / "cae.jsonl")
     a, b = CAE(ledger_path=path), CAE(ledger_path=path)
@@ -683,12 +697,16 @@ def test_witness_cae_ids_are_unique_across_two_writers(tmp_path):
     assert len(set(minted)) == len(minted), f"duplicate ids minted: {minted}"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (j): two ClaimAncestryLedger instances both mint CLM-0001, so "
-    "Ruling 60's descent edges can point at two different claims."))
 def test_witness_claim_ids_are_unique_across_two_writers(tmp_path):
-    """WITNESS. A duplicated CLM id is worse than a duplicated CAE id: Ruling 60
-    resolves descent by EXACT STRING EQUALITY on exactly these ids."""
+    """A duplicated CLM id is worse than a duplicated CAE id: Ruling 60 resolves
+    descent by EXACT STRING EQUALITY on exactly these ids, so two claims wearing
+    one id forge a descent edge between unrelated claims.
+
+    RETIRED 2026-08-02 BY RULING 69 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (j): two
+    ClaimAncestryLedger instances both mint CLM-0001, so Ruling 60's descent
+    edges can point at two different claims."))`.
+    """
     from src.external.claim_ancestry import (
         ClaimAncestryLedger, OriginDeclaration, OriginKind)
     path = str(tmp_path / "anc.jsonl")
@@ -699,11 +717,14 @@ def test_witness_claim_ids_are_unique_across_two_writers(tmp_path):
     assert len(set(minted)) == len(minted), f"duplicate ids minted: {minted}"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (j): two PredictionLedger instances both mint PRD-0001."))
 def test_witness_prediction_ids_are_unique_across_two_writers(tmp_path):
-    """WITNESS. Two commitments sharing an id are indistinguishable to
-    `resolve()`, which is the module's own stated hazard (`:178`)."""
+    """Two commitments sharing an id are indistinguishable to `resolve()`, which
+    is the module's own stated hazard (`:178`).
+
+    RETIRED 2026-08-02 BY RULING 69 - marker deleted, assertion KEPT. This was
+    `@pytest.mark.xfail(strict=True, reason=("CONFIRMED (j): two
+    PredictionLedger instances both mint PRD-0001."))`.
+    """
     from src.external.prediction_ledger import PredictionLedger, provided
     path = str(tmp_path / "prd.jsonl")
     a, b = PredictionLedger(ledger_path=path), PredictionLedger(ledger_path=path)

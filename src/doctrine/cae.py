@@ -101,6 +101,7 @@ from typing import Any, Dict, List, Optional
 
 # RULING 66: the shared record-value validator. A pure function - it owns no
 # store, opens no file, and mutates nothing.
+from src.utils.ledger_mint import derive_max_ordinal, mint_lock
 from src.utils.record_value import validate_record_value
 
 
@@ -140,84 +141,71 @@ class CAE:
         # file is the ledger, and this is a convenience for readers in the same
         # run. Nothing reads it back into a decision.
         self.entries: List[Dict[str, Any]] = []
-        self._seq = self._derive_seq()
+        # RULING 69 (2026-08-02): THERE IS NO `self._seq`.
+        #
+        # It was derived once HERE and then incremented in memory forever after,
+        # never re-synced - a CACHED DERIVATION OF THE FILE TRUSTED OVER ITS
+        # SOURCE, the structure Ruling 63 refused at the projection and Ruling 65
+        # refused at the topology. Two live instances over one path minted the
+        # same ordinals whenever the second derived before the first appended.
+        # Every mint now derives afresh under the file's lock; see `_next_id`.
 
     # -----------------------------------------------------------------
     # THE MINT - continuity state (Ruling 42 res.4)
     # -----------------------------------------------------------------
 
     def _derive_seq(self) -> Optional[int]:
-        """The highest `CAE-` ordinal already in the ledger, or `None` if the
-        ledger EXISTS and could not be read (RULING 53).
+        """The highest `CAE-` ordinal already ON DISK, or `None` if UNDERIVED.
 
-        FLOOR SEMANTICS FOR A LINE, A SENTINEL FOR THE FILE - and the two must
-        not be confused. A line that will not parse contributes NOTHING rather
-        than raising: a forensic log outlives the code that wrote it, and a build
-        that refuses to start because it met a line it does not understand has
-        turned an append-only record into a liability. That half is UNCHANGED.
+        RULING 69 res.1/res.2/res.5. The body moved to
+        `src.utils.ledger_mint.derive_max_ordinal` - **HOISTED, not merely
+        shared**: the three ledgers' derivations differed in exactly two ways (a
+        local variable name and the JSON key each parsed), and res.2 deletes the
+        second BY CONSTRUCTION because the scan no longer parses JSON. What
+        remained was identical modulo `ID_PREFIX`.
 
-        A FILE that cannot be read is a different fact. It does not mean "there
-        is nothing here"; it means "what is here is unknown", and answering it
-        with `0` is a claim about content the code never saw.
+        RULING 53'S SENTINEL IS UNCHANGED IN SEMANTICS: `None` IFF the ledger
+        EXISTS and the read raised; a MISSING ledger is a legitimate `0`. The
+        typed refusal stays HERE, in `_next_id`, because the error type is this
+        ruling's own vocabulary and not the helper's.
 
-        A MISSING ledger still returns `0`, and the asymmetry is the ruling's:
-        absence is a first run, which is a real and legitimate state, while an
-        existing-and-unreadable file is an unestablished one.
+        WHAT CHANGED IS WHAT IS SCANNED. This read `json.loads(line).get(...)`,
+        so an ordinal on a TORN OR UNPARSEABLE LINE WAS INVISIBLE and the next
+        mint would reissue it. The helper scans RAW TEXT with the anchored
+        pattern, so any id that reached disk is seen and never reissued.
         """
-        if not self.ledger_path.exists():
-            return 0
-        highest = 0
-        try:
-            with open(self.ledger_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry_id = json.loads(line).get("id", "")
-                    except ValueError:
-                        continue
-                    if isinstance(entry_id, str) and entry_id.startswith(self.ID_PREFIX):
-                        tail = entry_id[len(self.ID_PREFIX):]
-                        if tail.isdigit():
-                            highest = max(highest, int(tail))
-        except OSError:
-            # Unreadable ledger: the mint cannot be derived, so it does not
-            # pretend to have been. ~~Starting at 0 here would remint over real
-            # ids, so the read failure surfaces on the next append instead -
-            # `record()` raises, and a mutation that cannot be audited does not
-            # happen.~~
-            #
-            # SUPERSEDED IN PLACE 2026-07-31 (RULING 53), history kept because
-            # the struck sentence diagnosed the hazard CORRECTLY and then relied
-            # on the fault to still be there when the fix was needed. `record()`
-            # raises only while the disk is still failing; a read failure that
-            # has cleared by write time let the append succeed - carrying an id
-            # minted from a `0` that meant "could not look", not "nothing here".
-            #
-            # The sentinel replaces the contingency. `None` is UNDERIVED.
-            return None
-        return highest
+        return derive_max_ordinal(self.ledger_path, self.ID_PREFIX)
 
     def _next_id(self) -> str:
-        """Mint the next id, or REFUSE. RULING 53.
+        """Mint the next id, or REFUSE. **DERIVED AT MINT TIME (Ruling 69).**
 
-        RE-DERIVES ONCE against an underived mint before refusing, because the
+        CALLERS MUST HOLD `mint_lock(self.ledger_path)` ACROSS derive → mint →
+        append. Deriving inside the lock and appending outside it would leave
+        exactly the race this ruling closes, so the lock is taken at the WRITE
+        path and this method is called within it.
+
+        ~~RE-DERIVES ONCE against an underived mint before refusing, because the
         condition this guards is characteristically TRANSIENT - the whole defect
         was a read failure at construction that had cleared by write time. A
         recovered ledger therefore resumes from its REAL maximum rather than
-        refusing a mutation it is now perfectly able to audit.
+        refusing a mutation it is now perfectly able to audit.~~
 
-        Still underived after that attempt, it raises. It does NOT fall back to a
-        number: an id minted from an unknown floor is exactly the collision this
-        ruling closes, and a duplicate id in an append-only ledger is
-        unrecoverable by construction (entries are never overwritten, 3a:112, so
-        nothing can ever go back and disambiguate the two).
+        SUPERSEDED 2026-08-02 BY RULING 69 res.1, kept because it names the
+        property that still holds. **THE RE-DERIVE IS SUBSUMED: every mint
+        derives**, so a recovered ledger resumes from its real maximum BY
+        CONSTRUCTION rather than by a special case that had to be remembered.
+        There is no longer a cached value for a transient failure to poison.
+
+        STILL UNDERIVED, IT RAISES. It does NOT fall back to a number: an id
+        minted from an unknown floor is exactly the collision Ruling 53 closed,
+        and a duplicate id in an append-only ledger is unrecoverable by
+        construction (entries are never overwritten, 3a:112, so nothing can ever
+        go back and disambiguate the two).
         """
-        if self._seq is None:
-            self._seq = self._derive_seq()
-        if self._seq is None:
+        seq = self._derive_seq()
+        if seq is None:
             raise LedgerUnreadable(
+
                 f"the audit ledger at '{self.ledger_path}' exists and cannot be "
                 f"read, so the next CAE ordinal is UNKNOWN. Minting one anyway "
                 f"could write an id that already names a different recorded "
@@ -225,9 +213,7 @@ class CAE:
                 f"apart. Canon 3a:111 makes the entry a precondition for the "
                 f"change: a mutation that cannot be audited does not happen."
             )
-        self._seq += 1
-        return f"{self.ID_PREFIX}{self._seq:03d}"
-
+        return f"{self.ID_PREFIX}{seq + 1:03d}"
     # -----------------------------------------------------------------
     # THE ONLY WRITE PATH
     # -----------------------------------------------------------------
@@ -248,6 +234,30 @@ class CAE:
 
         RAISES on a write failure. See the module docstring: the record is a
         PRECONDITION for the change, not a side effect of it.
+        """
+        # RULING 69 res.3 - IN-PROCESS MINT-APPEND ATOMICITY.
+        #
+        # The lock is keyed by the RESOLVED PATH and is held across
+        # DERIVE -> MINT -> APPEND, as one unit. Deriving inside it and
+        # appending outside would leave precisely the race this ruling closes:
+        # a second instance deriving from a file the first has not yet written.
+        #
+        # It answers the threat that is REAL under the declared topology (one
+        # AUREA process per data root, res.4): two ledger instances, or two
+        # threads, inside ONE process - which is exactly the measured defect.
+        # OS-level file locking is DECLARED OUT with its reopening condition
+        # named in `src/utils/ledger_mint.py`.
+        with mint_lock(self.ledger_path):
+            return self._mint_and_append(event, target, collapse_lineage,
+                                         epoch, extra)
+
+    def _mint_and_append(self, event: str, target: str, collapse_lineage: str,
+                         epoch: int, extra: Dict[str, Any]) -> str:
+        """The locked critical section: derive, mint, validate, append.
+
+        Split out so the lock scope is a whole method rather than an indented
+        region - the boundary is then visible in the diff of any future change,
+        which is what stops an append drifting out of it.
         """
         entry = {
             "id": self._next_id(),

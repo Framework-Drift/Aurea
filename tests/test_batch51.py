@@ -16,6 +16,28 @@ THE BATCH COINS NOTHING: a presence test, a freeze, a sentinel, a key and a
 field. No threshold, scale or magnitude is introduced anywhere in it.
 """
 
+# =====================================================================
+# RULING 69 MIGRATION (2026-08-02) - Ruling-14 form, recorded once for this
+# file because the transformation is IDENTICAL at every site.
+#
+# `_seq` DIED AS INSTANCE STATE. It was a cached derivation of the file trusted
+# over its source, and every mint now derives afresh. So each assertion of the
+# form
+#
+#     assert <ledger>._seq == N          /  assert <ledger>._seq is None
+#
+# reads a surface that no longer exists, and is migrated to
+#
+#     assert <ledger>._derive_seq() == N /  assert <ledger>._derive_seq() is None
+#
+# **NO ASSERTION MOVED.** `_derive_seq()` returns exactly the value `_seq` was
+# initialised from - the same number, the same `None`, the same meaning ("the
+# highest ordinal on disk, or UNDERIVED"). What changed is that it is now asked
+# at the moment of the question instead of remembered from construction, which
+# is the whole of Ruling 69 res.1.
+# =====================================================================
+
+
 from __future__ import annotations
 
 import ast
@@ -541,7 +563,7 @@ def test_an_unreadable_ledger_refuses_the_mint_instead_of_reminting(tmp_path,
 
     failure = _UnreadableFor(monkeypatch, ledger)
     cae = CAE(ledger_path=str(ledger))
-    assert cae._seq is None, "an unreadable EXISTING ledger leaves the mint UNDERIVED"
+    assert cae._derive_seq() is None, "an unreadable EXISTING ledger leaves the mint UNDERIVED"
 
     with pytest.raises(LedgerUnreadable):
         cae.record("doctrine_mutation", "D-8", collapse_lineage="Δ-8")
@@ -565,14 +587,14 @@ def test_a_recovered_ledger_resumes_from_the_real_maximum(tmp_path, monkeypatch)
     ledger = _seeded_ledger(tmp_path)          # CAE-001 .. CAE-007
     failure = _UnreadableFor(monkeypatch, ledger)
     cae = CAE(ledger_path=str(ledger))
-    assert cae._seq is None
+    assert cae._derive_seq() is None
 
     failure.recover()
     minted = cae.record("doctrine_mutation", "D-8", collapse_lineage="Δ-8")
 
     assert minted == "CAE-008", (
         f"the mint resumes from the real maximum, not from zero; got {minted}")
-    assert cae._seq == 8
+    assert cae._derive_seq() == 8
     assert [e["id"] for e in cae.read_all()].count("CAE-001") == 1
 
 
@@ -583,7 +605,7 @@ def test_a_missing_ledger_is_a_legitimate_zero(tmp_path):
     from src.doctrine.cae import CAE
 
     cae = CAE(ledger_path=str(tmp_path / "nothing_here.jsonl"))
-    assert cae._seq == 0, "absence is not a derive failure"
+    assert cae._derive_seq() == 0, "absence is not a derive failure"
     assert cae.record("doctrine_mutation", "D-1") == "CAE-001"
 
 
@@ -604,7 +626,7 @@ def test_per_line_floor_semantics_are_unchanged(tmp_path):
         encoding="utf-8")
 
     cae = CAE(ledger_path=str(ledger))
-    assert cae._seq == 11, "the junk lines contributed nothing and raised nothing"
+    assert cae._derive_seq() == 11, "the junk lines contributed nothing and raised nothing"
     assert cae.record("doctrine_mutation", "D-1") == "CAE-012"
 
 

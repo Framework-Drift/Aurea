@@ -20,6 +20,28 @@ the docket's own registration, the three-state vocabulary is Docket H's, and no
 threshold, weight or magnitude exists anywhere in this path.
 """
 
+# =====================================================================
+# RULING 69 MIGRATION (2026-08-02) - Ruling-14 form, recorded once for this
+# file because the transformation is IDENTICAL at every site.
+#
+# `_seq` DIED AS INSTANCE STATE. It was a cached derivation of the file trusted
+# over its source, and every mint now derives afresh. So each assertion of the
+# form
+#
+#     assert <ledger>._seq == N          /  assert <ledger>._seq is None
+#
+# reads a surface that no longer exists, and is migrated to
+#
+#     assert <ledger>._derive_seq() == N /  assert <ledger>._derive_seq() is None
+#
+# **NO ASSERTION MOVED.** `_derive_seq()` returns exactly the value `_seq` was
+# initialised from - the same number, the same `None`, the same meaning ("the
+# highest ordinal on disk, or UNDERIVED"). What changed is that it is now asked
+# at the moment of the question instead of remembered from construction, which
+# is the whole of Ruling 69 res.1.
+# =====================================================================
+
+
 from __future__ import annotations
 
 import ast
@@ -248,7 +270,7 @@ def test_the_mint_resumes_from_the_file_across_a_restart(tmp_path) -> None:
     assert first.entries[-1]["claim_id"] == "CLM-0003"
 
     second = _ledger(tmp_path)                      # a "restart"
-    assert second._seq == 3
+    assert second._derive_seq() == 3
     assert second.record().claim_id == "CLM-0004"
     assert [e["claim_id"] for e in _lines(second)] == [
         "CLM-0001", "CLM-0002", "CLM-0003", "CLM-0004"]
@@ -283,7 +305,7 @@ def test_an_unreadable_ledger_refuses_the_mint(tmp_path, monkeypatch) -> None:
 
     _UnreadableFor(monkeypatch, ledger.ledger_path)
     reopened = _ledger(tmp_path)
-    assert reopened._seq is None, "UNDERIVED, not zero"
+    assert reopened._derive_seq() is None, "UNDERIVED, not zero"
 
     with pytest.raises(AncestryLedgerUnreadable):
         reopened.record()
@@ -300,7 +322,7 @@ def test_a_recovered_ledger_resumes_from_the_real_maximum(tmp_path, monkeypatch)
 
     failure = _UnreadableFor(monkeypatch, ledger.ledger_path)
     reopened = _ledger(tmp_path)
-    assert reopened._seq is None
+    assert reopened._derive_seq() is None
 
     failure.recover()
     assert reopened.record().claim_id == "CLM-0006", (
@@ -311,7 +333,7 @@ def test_a_missing_ledger_is_a_legitimate_first_run(tmp_path) -> None:
     """MUST STAY GREEN. `None` means "exists and could not be read"; ABSENCE is
     a first run, and the asymmetry is the ruling."""
     ledger = _ledger(tmp_path, "nothing_here.jsonl")
-    assert ledger._seq == 0
+    assert ledger._derive_seq() == 0
     assert ledger.record().claim_id == "CLM-0001"
 
 
@@ -352,7 +374,7 @@ def test_an_unknown_origin_kind_is_floor_dropped_never_defaulted(tmp_path) -> No
                r.claim_id == "CLM-0001" for r in records)
 
     # And the junk lines raise NOTHING - per-line floor semantics, unchanged.
-    assert _ledger(tmp_path)._seq == 2, (
+    assert _ledger(tmp_path)._derive_seq() == 2, (
         "the mint still floors past both bad lines, reading the real maximum")
 
 
