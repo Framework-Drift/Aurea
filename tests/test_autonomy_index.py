@@ -50,7 +50,6 @@ def make_echo(id_, doctrine_link=None):
     return Echo(
         id=id_,
         content="test content",
-        source="test",
         resonance_score=0.5,
         created_at=datetime.now(),
         doctrine_link=doctrine_link,

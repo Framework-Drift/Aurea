@@ -55,27 +55,37 @@ class Echo:
 
     id: str
     content: str
-    # ~~e.g., user/system~~
+    # ~~e.g., user/system~~  ~~source: str~~
     #
-    # DEMOTED 2026-08-01 BY RULING 58, superseded in place with history kept.
-    # THIS IS A LEGACY DISPLAY STRING. It is NOT the origin of the claim, and it
-    # never honestly was: `process_input(raw_input, source="user")` handed a
-    # free-text DEFAULT down to SPL, which wrote it here - into a durable store
-    # field - so every claim the suite, the soak or any bare caller has ever
-    # processed is on record as having originated from a human user, including
-    # the ones that did not. A fact stored because a field existed to hold it.
+    # DEMOTED 2026-08-01 BY RULING 58; **DELETED 2026-08-02 BY RULING 68.**
+    # Superseded in place, history kept, because Ruling 58's reasoning is the
+    # record of why the field could not simply stay.
+    #
+    # IT WAS A LEGACY DISPLAY STRING AND IT WAS NEVER HONESTLY AN ORIGIN:
+    # `process_input(raw_input, source="user")` handed a free-text DEFAULT down
+    # to SPL, which wrote it here - into a durable store field - so every claim
+    # the suite, the soak or any bare caller ever processed was on record as
+    # having originated from a human user, including the ones that did not. A
+    # fact stored because a field existed to hold it.
+    #
+    # RULING 58 DEMOTED IT AND SWEPT ITS READERS, and deferred the `"user"`
+    # default as "not this ruling's remit". **DEMOTION IS DISCIPLINE, AND THE
+    # MANUFACTURE CONTINUED UNDERNEATH IT:** one pass could carry
+    # `origin_kind=undeclared` with all five ancestry fields ABSENT while
+    # simultaneously reporting `source == 'user'` here and tagging its topology
+    # node `source:user`. Ruling 68 is the ruling 58 deferred to, and it deletes
+    # the parameter, this field, and the tag together - Ruling 61's form:
+    # deletion, not deprecation, because an unread legacy field is a loaded gun
+    # for the next caller who defaults it.
     #
     # THE SINGLE AUTHORITATIVE ORIGIN SURFACE IS THE CLAIM-ANCESTRY LEDGER
     # (`src/external/claim_ancestry.py`), which records origin ONCE, at ingress,
     # with a closed source vocabulary and an honest UNDECLARED for a channel
-    # that said nothing. Read origin from there.
+    # that said nothing. Reach it from `claim_id`, below.
     #
-    # THE `"user"` DEFAULT IS UNTOUCHED THIS PASS, deliberately: those bytes are
-    # already in persisted stores and rewriting them is not Ruling 58's remit.
-    # A sweep of `src/` at that ruling found ZERO readers of this field - the
-    # only consumer anywhere is a display line in `scripts/aurea_diagnostic.py`
-    # - so the demotion changes no behaviour. Do not add a reader.
-    source: str
+    # LEGACY BYTES ARE UNTOUCHED: every `"source": "user"` already written into a
+    # store stays exactly where it is. Forensic record - no migration, and no
+    # reader-side reinterpretation of what a stored value used to mean.
     resonance_score: float
     created_at: datetime
     doctrine_link: Optional[str] = None

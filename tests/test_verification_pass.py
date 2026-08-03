@@ -244,48 +244,76 @@ def test_witness_genesis_places_each_seed_doctrine_once(monkeypatch):
 
 
 # =====================================================================
-# S2 - THE ANCESTRY ORPHAN  (finding (g))
+# S2 - THE ANCESTRY ORPHAN  (finding (g))  -  CLOSED BY RULING 68
 #
-# CONFIRMED, and BROADER than the review's `None` case: the mint at
-# `aurea_core.py:673` is deliberately outside the `try:` at :702, while SPL's
-# `raw_input.strip()` (`spl.py:40`) is inside it. EVERY non-`str` input
-# therefore writes a permanent CLM line, raises inside the try, degrades into
-# `result['errors']`, and returns normally with no echo and no node.
+# CONFIRMED at `0b2072c`, and BROADER than the review's `None` case: the mint
+# sat outside the `try:` while SPL's `raw_input.strip()` sat inside it, so EVERY
+# non-`str` input wrote a permanent CLM line, raised, degraded into
+# `result['errors']`, and returned normally with no echo and no node.
 #
-# `""` and whitespace are NOT orphans - they are perceived and produce an echo.
-# The soak's 40/40 one-to-one observation was true of what it measured; the
-# property is simply not GUARANTEED for all accepted call shapes.
+# RULING 68 (2026-08-02) DECIDED THE FORK AS **CLAIM-PERCEIVED** and put a TYPE
+# GATE between the suspension gate and the mint. A non-`str` arrival is refused
+# at the door: no CLM line, no echo, no node, no verdict.
+#
+# THE DECIDING DATUM WAS THE DEFECT'S OWN JUSTIFICATION: the mint site's in-file
+# comment defended its position as keeping ledger lines "in ONE-TO-ONE
+# correspondence with claims actually PERCEIVED". The PERCEIVED semantics were
+# never merely assumed by the docstrings and pins - they were ASSERTED in the
+# comment justifying the very placement that broke them. So the property was
+# made TRUE rather than the claim made CAREFUL.
 # =====================================================================
 
 @pytest.mark.parametrize("bad", [None, 12345, ["a"], {"k": "v"}, object()],
                          ids=["None", "int", "list", "dict", "object"])
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (g): a non-str input mints a permanent ancestry record for a "
-    "claim that is never perceived - no echo, no node, no linkage."))
 def test_witness_a_rejected_input_leaves_no_orphan_ancestry_record(bad):
-    """WITNESS. A ledger line must correspond to a claim actually perceived.
+    """A ledger line must correspond to a claim actually perceived.
 
-    That correspondence is asserted verbatim in `aurea_core.py:667` ("keeps
-    ledger lines in ONE-TO-ONE correspondence with claims actually perceived")
-    and relied on in `tests/test_ruling58.py:224`. It holds for the suspension
-    gate, which is what that pin covers. It does not hold here.
+    That correspondence is asserted verbatim at the mint site ("keeps ledger
+    lines in ONE-TO-ONE correspondence with claims actually perceived") and
+    relied on in `tests/test_ruling58.py`. It held for the suspension gate,
+    which is what that pin covers. It did not hold here.
+
+    RETIRED 2026-08-02 BY RULING 68 - marker deleted, assertion KEPT. This
+    carried, on the parametrize below it:
+
+        @pytest.mark.xfail(strict=True, reason=(
+            "CONFIRMED (g): a non-str input mints a permanent ancestry record
+            for a claim that is never perceived - no echo, no node, no
+            linkage."))
+
+    THE ASSERTION IS NOW UNCONDITIONAL. The original was written `if
+    result.get("echo") is None:` - guarded, because under the defect an echo was
+    genuinely never built and the pin had to say so without asserting the cause.
+    Under the gate the refusal is guaranteed, so the guard is dropped: both
+    halves are now REQUIRED, and a build that started perceiving a `bytearray`
+    would fail here instead of passing vacuously.
     """
     core = AureaCore()
     before = len(_ledger_lines(core.ancestry))
     result = core.process_input(bad)
     after = len(_ledger_lines(core.ancestry))
 
-    if result.get("echo") is None:
-        assert after == before, (
-            f"no echo was built, yet {after - before} ancestry line(s) were "
-            f"written (claim_id={result.get('claim_id')!r}, "
-            f"errors={result.get('errors')!r})")
+    assert result.get("echo") is None, (
+        f"a {type(bad).__name__} was perceived as a claim")
+    assert after == before, (
+        f"no echo was built, yet {after - before} ancestry line(s) were "
+        f"written (claim_id={result.get('claim_id')!r}, "
+        f"errors={result.get('errors')!r})")
+    assert result.get("claim_id") is None, "a claim id was minted for a non-claim"
+    assert result.get("structural_violation") is None, (
+        "an ordinary bad input is an ORDINARY rejection, not one of AUREA's own "
+        "guards firing (Docket N's form)")
+    assert result["errors"], "the refusal must be caller-visible"
 
 
 def test_an_empty_or_whitespace_claim_is_perceived_and_is_not_an_orphan():
-    """GUARD of existing behaviour, and a deliberate CONTROL for the witness
-    above: the orphan is caused by the TYPE, not by emptiness. `""` and `"  "`
-    strip cleanly, build an echo, and their ledger lines are honest."""
+    """THE CONTROL, and Ruling 68 res.1 keeps it pinned deliberately.
+
+    The orphan was caused by the TYPE, never by emptiness. `""` and `"  "` strip
+    cleanly, build an echo, and their ledger lines are honest - so they REMAIN
+    PERCEIVED. A type gate that also swallowed empty strings would be a
+    different and unruled narrowing of what counts as a claim.
+    """
     core = AureaCore()
     for claim in ("", "   "):
         before = len(_ledger_lines(core.ancestry))
@@ -294,24 +322,63 @@ def test_an_empty_or_whitespace_claim_is_perceived_and_is_not_an_orphan():
         assert len(_ledger_lines(core.ancestry)) == before + 1
 
 
+def test_one_to_one_holds_across_a_mixed_batch():
+    """RULING 68 res.2 - **THE ONE-TO-ONE SENTENCE AS A BEHAVIOURAL PROPERTY.**
+
+    The sixty-second entry ordered the sentence to stop being used unqualified.
+    This ruling makes the qualification unnecessary instead: for every
+    `process_input` call, CLM lines written EQUALS echoes built.
+
+    Driven over a MIXED batch in one process - valid, empty, whitespace, and all
+    five non-`str` shapes - because the property is about the relationship
+    holding across a stream, and a per-call pin would not catch a drift that
+    only appears when the two counters are compared in aggregate. This is the
+    soak's one-line-per-cycle observation promoted to a suite property.
+    """
+    core = AureaCore()
+    arrivals = ["A real claim.", "", "   ", None, 12345, ["a"], {"k": "v"},
+                object(), "Another real claim."]
+
+    echoes = 0
+    for arrival in arrivals:
+        if core.process_input(arrival).get("echo") is not None:
+            echoes += 1
+
+    lines = len(_ledger_lines(core.ancestry))
+    assert lines == echoes, (
+        f"{lines} ancestry line(s) for {echoes} echo(es) - the one-to-one "
+        f"property is the whole of res.2")
+    assert echoes == 4, f"expected the four str arrivals to be perceived, got {echoes}"
+
+
 # =====================================================================
-# S3 - `source="user"` STILL MANUFACTURED  (finding (h))
+# S3 - `source="user"` MANUFACTURED  (finding (h))  -  CLOSED BY RULING 68
 #
-# CONFIRMED at both sites the review named: `spl.py:44` writes it into
-# `Echo.source`, and `aurea_core.py:722` stamps `source:{source}` onto the
-# echo's topology node. Ruling 58 DEMOTED the field and swept its readers; it
-# did not stop the value being manufactured.
+# CONFIRMED at both sites the review named: SPL wrote it into `Echo.source` and
+# `aurea_core` stamped `source:{source}` onto the echo's topology node. Ruling
+# 58 DEMOTED the field and swept its readers; **demotion is discipline, and the
+# manufacture continued underneath it.** Ruling 68 res.3 deletes the parameter,
+# the field and the tag together - Ruling 61's form: deletion, not deprecation.
 # =====================================================================
 
-@pytest.mark.xfail(strict=True, reason=(
-    "CONFIRMED (h): a claim whose recorded origin is UNDECLARED with all five "
-    "fields ABSENT simultaneously displays 'user' on the echo and the node."))
 def test_witness_an_undeclared_claim_does_not_display_a_human_source():
-    """WITNESS. The two surfaces must not contradict the record.
+    """The two surfaces must not contradict the record.
 
-    Measured on one pass: `origin_kind='undeclared'`, `asserted_by` ABSENT -
-    and `Echo.source == 'user'` with the node tagged `source:user`. The ledger
-    says nobody said; the display says a human did.
+    Measured at `0b2072c` on ONE pass: `origin_kind='undeclared'`,
+    `asserted_by` ABSENT - and `Echo.source == 'user'` with the node tagged
+    `source:user`. The ledger said nobody said; the display said a human did.
+
+    RETIRED 2026-08-02 BY RULING 68 - marker deleted, assertion KEPT. This was:
+
+        @pytest.mark.xfail(strict=True, reason=(
+            "CONFIRMED (h): a claim whose recorded origin is UNDECLARED with
+            all five fields ABSENT simultaneously displays 'user' on the echo
+            and the node."))
+
+    The `getattr(..., None)` survives from the original and is now doing a
+    STRICTLY STRONGER job: it asserted "not the string 'user'" against a field
+    that existed, and asserts the same thing against a field that no longer
+    can. Both readings pass only if nothing manufactures a human origin.
     """
     core = AureaCore()
     result = core.process_input("A claim with no declared origin.")
@@ -329,6 +396,9 @@ def test_witness_an_undeclared_claim_does_not_display_a_human_source():
         f"Echo.source={echo_source!r} while the ancestry record says "
         f"UNDECLARED/ABSENT")
     assert "source:user" not in tags, f"node tags manufacture a human: {tags}"
+    assert not any(t.startswith("source:") for t in tags), (
+        f"a source tag is back on the node: {tags}. Origin is reached from "
+        f"`claim_id`, not copied onto the topology (Ruling 68 res.3)")
 
 
 # =====================================================================

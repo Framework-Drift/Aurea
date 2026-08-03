@@ -532,7 +532,7 @@ def test_a_structural_violation_is_not_flattened_into_errors():
     """
     aurea = _armed_pipeline()
 
-    result = aurea.process_input("Honesty is pointless.", source="test")
+    result = aurea.process_input("Honesty is pointless.")
 
     violation = result.get("structural_violation")
     assert violation is not None, "the guard fired and nothing said so"
@@ -574,7 +574,7 @@ def test_a_structural_violation_suppresses_normal_output():
     """
     aurea = _armed_pipeline()
 
-    result = aurea.process_input("Honesty is pointless.", source="test")
+    result = aurea.process_input("Honesty is pointless.")
 
     assert result["output_blocked"] is True
     assert not result["output"].startswith("[ERROR:"), (
@@ -593,7 +593,7 @@ def test_a_structural_violation_is_recorded_durably_and_does_not_crash():
     record is the point. The record is legible in memory AND on disk."""
     aurea = _armed_pipeline()
 
-    aurea.process_input("Honesty is pointless.", source="test")
+    aurea.process_input("Honesty is pointless.")
 
     assert len(aurea.structural_violations) == 1
     entry = aurea.structural_violations[0]
@@ -604,7 +604,7 @@ def test_a_structural_violation_is_recorded_durably_and_does_not_crash():
     assert "ProvenanceOverwriteViolation" in log.read_text(encoding="utf-8")
 
     # The pipeline is not dead: an ordinary pass afterward still runs.
-    after = aurea.process_input("The sky is blue.", source="test")
+    after = aurea.process_input("The sky is blue.")
     assert after.get("structural_violation") is None
 
 
@@ -634,11 +634,15 @@ def test_an_ordinary_exception_still_degrades_gracefully():
     aurea = AureaCore()
 
     class _Boom:
-        def process_input(self, raw_input, source, *, claim_id=None):
+        # RULING 68 (2026-08-02): the double follows the collaborator it
+        # stands in for - `source` was DELETED from `SPL.process_input`.
+        # A double whose signature has drifted from the real thing tests the
+        # double (Ruling 60's finding, same file). No assertion moved.
+        def process_input(self, raw_input, *, claim_id=None):
             raise ValueError("ordinary malformed-input hiccup")
 
     aurea.spl = _Boom()
-    result = aurea.process_input("anything", source="test")
+    result = aurea.process_input("anything")
 
     assert result.get("structural_violation") is None
     assert result["errors"] == ["ordinary malformed-input hiccup"]

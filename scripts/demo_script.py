@@ -31,7 +31,7 @@ def main():
         print(f"Input: \"{input_text}\"")
         print("─" * 60)
     
-        result = aurea.process_input(input_text, source="demo")
+        result = aurea.process_input(input_text)
     
         # Visualize pressure
         pressure = result['pressure_generated']

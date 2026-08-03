@@ -39,7 +39,7 @@ def test_collapse_to_scar_to_doctrine_populates_ril_identity_threads():
     # verdict as "irreconcilable" on SBSRE's first cycle, so the contradiction chamber
     # collapses immediately (LoopOutcome.COLLAPSE) and requests a scar - the real,
     # un-mocked pipeline path, not a shortcut to one.
-    result = aurea.process_input("Honesty is pointless.", source="test")
+    result = aurea.process_input("Honesty is pointless.")
 
     assert result["collapse_result"].verdict is EchoVerdict.SCARRED
     scar = result["scar_formed"]

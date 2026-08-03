@@ -292,7 +292,7 @@ def test_an_echo_places_on_the_wired_pipeline() -> None:
     and 0 of 10 in the pre-pass probe. The echo had nothing to be near, because
     nothing had an anchor."""
     core = AureaCore()
-    result = core.process_input("Water is wet.", source="test")
+    result = core.process_input("Water is wet.")
 
     node = core.tca.topology.nodes[result["echo"].id]
     assert node.position.constellation_id is not None, (
@@ -306,7 +306,7 @@ def test_the_runtime_path_still_places_its_own_scars() -> None:
     freshness for free from res.2."""
     core = AureaCore()
     before = len(core.tca.topology.nodes)
-    result = core.process_input("Honesty is pointless.", source="test")
+    result = core.process_input("Honesty is pointless.")
 
     scar = result.get("scar_formed")
     if scar is None:

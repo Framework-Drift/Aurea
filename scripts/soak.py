@@ -586,7 +586,7 @@ def run_soak(cycles: int = 200, claim_every: int = 5, seed: int = 42,
                     kind = "claim"
                     claim = SCENARIO_CLAIMS[claim_index % len(SCENARIO_CLAIMS)]
                     claim_index += 1
-                    result = core.process_input(claim, source="soak")
+                    result = core.process_input(claim)
                 else:
                     quiet_cycle(core)
                 record = observe(core, cycle, kind, claim, result)

@@ -53,8 +53,7 @@ def _mutate_and_save(store):
         store.scars.clear()
         store.save_to_file()
     else:
-        store.add_echo(Echo(id="E-test", content="runtime only",
-                            source="test", resonance_score=0.0,
+        store.add_echo(Echo(id="E-test", content="runtime only", resonance_score=0.0,
                             created_at=datetime(2026, 7, 26)))
 
 

@@ -125,7 +125,7 @@ def test_a_structural_violation_leaks_neither_input_nor_violation_text():
     from tests.test_docket_n import _armed_pipeline
 
     secret = "Honesty is pointless."
-    result = _armed_pipeline().process_input(secret, source="test")
+    result = _armed_pipeline().process_input(secret)
 
     assert result["structural_violation"]["type"] == "ProvenanceOverwriteViolation"
     assert result["output_blocked"] is True
@@ -182,16 +182,18 @@ def _drive_every_reachable_exit():
 
     from tests.test_docket_n import _armed_pipeline
     exits[OutputPath.STRUCTURAL_VIOLATION] = _armed_pipeline().process_input(
-        "Honesty is pointless.", source="test")
+        "Honesty is pointless.")
 
     core = AureaCore()
 
     class _Boom:
-        def process_input(self, raw_input, source):
+        # RULING 68: `source` deleted from `SPL.process_input`; the double
+        # follows. No assertion moved.
+        def process_input(self, raw_input):
             raise ValueError("ordinary malformed-input hiccup")
 
     core.spl = _Boom()
-    exits[OutputPath.ORDINARY_ERROR] = core.process_input("anything", source="test")
+    exits[OutputPath.ORDINARY_ERROR] = core.process_input("anything")
 
     return exits
 

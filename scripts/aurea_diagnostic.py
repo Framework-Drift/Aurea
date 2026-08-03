@@ -25,7 +25,7 @@ def diagnose_input(text: str):
     aurea = AureaCore()
     
     # Process with detailed tracking
-    result = aurea.process_input(text, source="diagnostic")
+    result = aurea.process_input(text)
     
     # 1. Echo Analysis
     print("\n1. ECHO FORMATION")
@@ -34,7 +34,6 @@ def diagnose_input(text: str):
         echo = result['echo']
         print(f"  ID: {echo.id}")
         print(f"  Content: {echo.content}")
-        print(f"  Source: {echo.source}")
         print(f"  Resonance: {echo.resonance_score}")
     
     # 2. Collapse Testing Breakdown

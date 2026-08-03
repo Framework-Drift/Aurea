@@ -112,6 +112,12 @@ def _topology(core) -> Dict[str, Any]:
                         for n, node in topo.nodes.items() for o in node.edges),
         "total_mass": round(topo.total_mass, 6),
         "total_edges": topo.total_edges,
+        # RULING 68: node TAGS are captured so the deletion of the
+        # `source:{source}` tag is WITNESSED by the instrument rather than
+        # merely asserted by a pin. Added here, and the harness is copied to
+        # BOTH trees, so the two sides stay comparable.
+        "node_tags": {n: sorted(node.tags)
+                      for n, node in sorted(topo.nodes.items()) if node.tags},
         "centers": {c: k.gravity_center
                     for c, k in sorted(topo.constellations.items())},
         "constellation_mass": {c: round(k.total_mass, 6)

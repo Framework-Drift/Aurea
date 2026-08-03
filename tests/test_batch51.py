@@ -840,7 +840,7 @@ def test_the_founding_doctrines_lineage_confirms_whole_against_the_real_seed():
 
 def _paradox_pass():
     from src.aurea_core import AureaCore
-    return AureaCore().process_input("this statement is false", source="test")
+    return AureaCore().process_input("this statement is false")
 
 
 def test_a_paradox_pass_records_the_paradox_node(tmp_path):
@@ -901,7 +901,7 @@ def test_the_paradox_node_is_now_reachable_by_const_id(tmp_path):
     from src.aurea_core import AureaCore
 
     core = AureaCore()
-    result = core.process_input("this statement is false", source="test")
+    result = core.process_input("this statement is false")
 
     nodes = core.tca.topology.nodes
     paradox_id = next(n for n in result["pass_nodes"] if n.startswith("BS-"))
@@ -931,7 +931,7 @@ def test_const_id_stays_absent_when_nothing_spans(tmp_path):
     CONST-ID line at all."""
     from src.aurea_core import AureaCore
 
-    result = AureaCore().process_input("Water is wet.", source="test")
+    result = AureaCore().process_input("Water is wet.")
     assert not [l for l in result["render_trace"] if "const_id" in l]
     assert result["pass_nodes"], "nodes were still recorded - absence of the "\
                                  "FLAG is not absence of the RECORD"
@@ -962,7 +962,7 @@ def test_one_placed_node_in_one_constellation_is_not_dissonance(tmp_path):
     from src.aurea_core import AureaCore
 
     core = AureaCore()
-    result = core.process_input("Water is wet.", source="test")
+    result = core.process_input("Water is wet.")
 
     nodes = core.tca.topology.nodes
     placed = {nodes[n].position.constellation_id for n in result["pass_nodes"]
@@ -1008,7 +1008,7 @@ def test_a_scar_forming_pass_records_the_scar_node(tmp_path):
     than paradox-specific."""
     from src.aurea_core import AureaCore
 
-    result = AureaCore().process_input("Honesty is pointless.", source="test")
+    result = AureaCore().process_input("Honesty is pointless.")
     scar = result.get("scar_formed")
     if scar is None:
         pytest.skip("this claim did not scar in this configuration")
@@ -1028,7 +1028,7 @@ def test_a_scar_forming_pass_records_the_scar_node(tmp_path):
 
 def _spoken(claim="Doctrine-0 is true."):
     from src.aurea_core import AureaCore
-    result = AureaCore().process_input(claim, source="test")
+    result = AureaCore().process_input(claim)
     assert result["output_blocked"] is False, "precondition: a SPEAKING path"
     return result
 
@@ -1063,7 +1063,7 @@ def test_nominal_scar_refs_stay_in_unresolved(tmp_path):
     core.codex.doctrines["D-Nominal"] = Doctrine(
         id="D-Nominal", name="Nominal Bearer", description="names a missing scar",
         scar_links=["Δ-does-not-exist"])
-    result = core.process_input("D-Nominal is true.", source="test")
+    result = core.process_input("D-Nominal is true.")
     packet = result["truth_packet"]
 
     assert "nominal_scar_ref:Δ-does-not-exist" in packet.unresolved
@@ -1133,7 +1133,7 @@ def test_blocked_paths_stay_byte_identical(tmp_path):
     from src.aurea_core import AureaCore
     from src.output.truth_packet import ExpressionVerdict
 
-    result = AureaCore().process_input("this statement is false", source="test")
+    result = AureaCore().process_input("this statement is false")
     assert result["output_blocked"] is True
     assert result["expression_verdict"] is ExpressionVerdict.SUSPEND
     assert result["output"] == (

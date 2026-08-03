@@ -32,7 +32,7 @@ class AureaTest:
         print("-" * 40)
         
         # Process input
-        result = self.aurea.process_input(input_text, source=f"test_{category}")
+        result = self.aurea.process_input(input_text)
         
         # Record for analysis
         test_record = {

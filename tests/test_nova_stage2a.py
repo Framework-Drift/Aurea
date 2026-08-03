@@ -41,7 +41,7 @@ def _aurea_with_real_scar():
     'Honesty is pointless.' input from the RIL pipeline test), so
     _evolve_doctrine has a genuine scar to signal from."""
     aurea = AureaCore()
-    result = aurea.process_input("Honesty is pointless.", source="test")
+    result = aurea.process_input("Honesty is pointless.")
     assert result["collapse_result"].verdict is EchoVerdict.SCARRED
     assert result["scar_formed"] is not None
     return aurea, result

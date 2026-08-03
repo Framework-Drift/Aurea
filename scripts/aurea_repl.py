@@ -85,7 +85,7 @@ class AureaREPL:
         print()  # Add spacing for clarity
         
         # Process through pipeline
-        result = self.aurea.process_input(text, source="user")
+        result = self.aurea.process_input(text)
         
         # Enhanced output formatting
         if self.verbose or result['pressure_generated'] > 0.3:

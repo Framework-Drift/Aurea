@@ -551,7 +551,7 @@ def test_no_identity_thread_entry_is_ever_an_embedded_record_object():
     from src.aurea_core import AureaCore
 
     aurea = AureaCore()
-    aurea.process_input("Honesty is pointless.", source="test")
+    aurea.process_input("Honesty is pointless.")
 
     for thread, entries in aurea.ril.threads.items():
         for entry in entries:

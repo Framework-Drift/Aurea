@@ -413,8 +413,8 @@ def test_the_echo_carries_exactly_the_claim_id_of_its_own_ledger_line() -> None:
     """
     core = AureaCore()
 
-    first = core.process_input("Water is wet.", source="test")
-    second = core.process_input("The sky is green.", source="test")
+    first = core.process_input("Water is wet.")
+    second = core.process_input("The sky is green.")
 
     assert first["echo"].claim_id == first["claim_id"] == "CLM-0001"
     assert second["echo"].claim_id == second["claim_id"] == "CLM-0002"
@@ -425,7 +425,7 @@ def test_the_echo_carries_exactly_the_claim_id_of_its_own_ledger_line() -> None:
 def test_the_linkage_survives_the_echo_store_round_trip(tmp_path) -> None:
     """A join key that does not persist is not a join key."""
     core = AureaCore()
-    result = core.process_input("Water is wet.", source="test")
+    result = core.process_input("Water is wet.")
 
     path = tmp_path / "echo_roundtrip.jsonl"
     EchoMemory(filepath=str(path)).add_echo(result["echo"])
@@ -441,8 +441,30 @@ def test_a_legacy_persisted_echo_without_the_key_loads_as_none() -> None:
     NO BACKFILL of stored echoes - moving persisted bytes is Ruling 58's own
     bar, and a synthesized id would be a fabricated origin link, which is the
     exact defect this docket exists to close.
+
+    MIGRATED 2026-08-02 BY RULING 68 (Ruling-14 form) - THE ASSERTION IS
+    UNCHANGED; the fixture lost one key, and the reason is a FINDING worth
+    recording at the site.
+
+    The legacy dict read:
+
+        legacy = {"id": "Echo-legacy", "content": "x", "source": "user",
+                  "resonance_score": 1.0, "created_at": "2020-01-01T00:00:00"}
+
+    Ruling 68 DELETED `Echo.source`, so `Echo(**legacy)` with that key now
+    raises `TypeError`. **THAT IS A REAL CONSEQUENCE, NOT A TEST ARTIFACT:**
+    `EchoMemory._load` reconstructs with exactly this `Echo(**data)` form, so a
+    RUNTIME echo store written by any earlier build cannot be loaded by this
+    one. It ships nothing broken - the tracked seed `data/echoes.jsonl` is EMPTY
+    (0 bytes) and `EchoMemory` is UNWIRED (`aurea_core` never persists an echo,
+    the carried finding) - and `echo_memory.py` is EXPLICITLY out of Ruling 68's
+    scope, its schema belonging to the EchoMemory wiring ruling.
+
+    So it is REPORTED rather than fixed here, and deliberately NOT pinned as
+    desired behaviour: pinning "loading a legacy echo raises" would enshrine a
+    defect as intent. The wiring ruling owns it.
     """
-    legacy = {"id": "Echo-legacy", "content": "x", "source": "user",
+    legacy = {"id": "Echo-legacy", "content": "x",
               "resonance_score": 1.0, "created_at": "2020-01-01T00:00:00"}
 
     assert Echo(**legacy).claim_id is None
@@ -473,7 +495,7 @@ def test_result_gains_no_new_key() -> None:
     """`result['claim_id']` is Ruling 58's key and remains the only one. The
     linkage rides on the ECHO, not on a second surface."""
     core = AureaCore()
-    result = core.process_input("Water is wet.", source="test")
+    result = core.process_input("Water is wet.")
 
     assert "claim_id" in result
     assert "genealogy" not in result and "source_genealogy" not in result

@@ -56,7 +56,7 @@ FRACTURING_AND_SPOKEN = "Honesty is pointless. Fracture Carried is false."
 
 def _spoken(claim: str):
     """One fresh pipeline pass, asserted to have reached a SPEAKING exit."""
-    result = AureaCore().process_input(claim, source="test")
+    result = AureaCore().process_input(claim)
     assert result["output_blocked"] is False, "precondition: this exit speaks"
     assert result["expression_verdict"] is ExpressionVerdict.SPEAK
     return result
@@ -252,8 +252,7 @@ def test_a_nominal_scar_id_is_never_lineage() -> None:
     from src.utils.models import Echo
 
     net = EchoNet(doctrine_spine=DoctrineSpine(codex=Codex()))   # no scar_core
-    collapse = net.filter_claim(Echo(id="E", content="Fracture Carried is false.",
-                                     source="t", resonance_score=0.0,
+    collapse = net.filter_claim(Echo(id="E", content="Fracture Carried is false.", resonance_score=0.0,
                                      created_at=datetime.now()))
     finding = collapse.overlay.fractures[0]
     assert finding.unconfirmed_scarline == finding.scarline, "precondition: none confirmable"
@@ -305,7 +304,7 @@ def test_a_blocked_path_renders_byte_identical_text(claim, verdict) -> None:
     mode, the content and now the evidence are not in its scope. This asserts
     the consequence rather than the mechanism.
     """
-    result = AureaCore().process_input(claim, source="test")
+    result = AureaCore().process_input(claim)
     assert result["output_blocked"] is True
     assert result["expression_verdict"] is verdict
     assert result["output"] == SILENT_TEXT[verdict]
@@ -318,7 +317,7 @@ def test_a_blocked_packet_may_be_full_while_its_render_stays_empty() -> None:
     This is Ruling 33's one-way authority doing work rather than being described
     - the packet is full, the render is a fixed string, and the two never meet.
     """
-    result = AureaCore().process_input("everyone always lies", source="test")
+    result = AureaCore().process_input("everyone always lies")
     packet = result["truth_packet"]
 
     assert packet.evidence_refs, "precondition: this path supplies evidence"
@@ -363,13 +362,13 @@ def test_every_silent_path_retains_a_traceable_collapse_signature() -> None:
     core = AureaCore()
     silent = []
     for claim in ("this statement is false", "everyone always lies"):
-        result = core.process_input(claim, source="test")
+        result = core.process_input(claim)
         assert result["expression_verdict"] in SILENT_VERDICTS
         silent.append(result)
 
     core.processing_suspended = True
     core.suspension_reason = "signature witness"
-    silent.append(core.process_input("anything", source="test"))
+    silent.append(core.process_input("anything"))
 
     for result in silent:
         packet = result["truth_packet"]
@@ -389,7 +388,7 @@ def test_the_suspended_gate_records_no_collapse_verdict_and_that_is_honest() -> 
     core = AureaCore()
     core.processing_suspended = True
     core.suspension_reason = "witness"
-    packet = core.process_input("anything", source="test")["truth_packet"]
+    packet = core.process_input("anything")["truth_packet"]
 
     assert packet.collapse_verdict is None
     assert packet.evidence_refs == ()
@@ -475,8 +474,7 @@ def test_both_refused_modes_still_refuse_legibly() -> None:
     MIRROR - and neither invents one."""
     from src.output.hail import HAIL
 
-    packet = AureaCore().process_input("the kettle boiled quietly",
-                                       source="test")["truth_packet"]
+    packet = AureaCore().process_input("the kettle boiled quietly")["truth_packet"]
     for mode, needle in ((Mode.BRIDGE, "collapse-trace layer (CTL)"),
                          (Mode.MIRROR, "PSI thread integrity")):
         rendered = HAIL.render(packet, mode)
@@ -566,7 +564,7 @@ def test_const_id_is_absent_when_the_pass_does_not_span() -> None:
     """A TRACE FLAG, absent unless the recorded fact holds. One node, or several
     in one constellation, is the ordinary case - a flag that appeared every pass
     would report nothing."""
-    result = AureaCore().process_input("the kettle boiled quietly", source="test")
+    result = AureaCore().process_input("the kettle boiled quietly")
     assert [t for t in result["render_trace"] if t.startswith("topology.")] == []
 
 
@@ -587,7 +585,7 @@ def test_const_id_is_present_when_the_pass_spans_two_constellations() -> None:
     decision about what a pass records, not an implementation detail.
     """
     core = AureaCore()
-    result = core.process_input("Honesty is pointless.", source="test")
+    result = core.process_input("Honesty is pointless.")
     echo, scar = result["echo"], result["scar_formed"]
     assert scar is not None, "precondition: this pass placed two nodes"
 
@@ -624,7 +622,7 @@ def test_the_const_id_trace_actually_reaches_the_result() -> None:
     core = AureaCore()
     core._const_id_trace = lambda result: ("topology.const_id=<sentinel>",)
 
-    result = core.process_input("the kettle boiled quietly", source="test")
+    result = core.process_input("the kettle boiled quietly")
 
     assert "topology.const_id=<sentinel>" in result["render_trace"]
     assert any(t.startswith("dispatch=") for t in result["render_trace"]), (

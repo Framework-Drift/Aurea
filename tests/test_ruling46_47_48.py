@@ -632,7 +632,7 @@ def _drive_until_mutation_attempt(core):
     """Real passes through `process_input` until the mutation is attempted."""
     results = []
     for _ in range(SUSTAIN_CYCLES + 3):
-        results.append(core.process_input("Honesty is pointless.", source="test"))
+        results.append(core.process_input("Honesty is pointless."))
         if results[-1].get("structural_violation"):
             break
     return results

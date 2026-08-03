@@ -354,7 +354,7 @@ def test_evolve_doctrine_wiring_derives_echo_origin_at_the_call_site():
     surface; the gate behavior itself is already pinned above via dee.cycle.
     """
     aurea = AureaCore()
-    result = aurea.process_input("Honesty is pointless.", source="test")
+    result = aurea.process_input("Honesty is pointless.")
     assert result["scar_formed"] is not None, "a real scar drives the signals"
 
     echo, _ = _ferment_to_mutated(aurea)

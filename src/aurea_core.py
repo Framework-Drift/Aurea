@@ -578,15 +578,14 @@ class AureaCore:
             )
             self.codex.seed(doctrine)
     
-    def process_input(self, raw_input: str, source: str = "user", *,
+    def process_input(self, raw_input: str, *,
                       origin: Optional[OriginDeclaration] = None) -> Dict[str, Any]:
         """
         Process input through the complete AUREA pipeline.
 
         Args:
-            raw_input: Raw text input
-            source: LEGACY display string (Ruling 58 - see below). Retained
-                unchanged; it is not the origin record.
+            raw_input: Raw text input. MUST be `str` (Ruling 68's type gate);
+                any other type is refused before anything is recorded.
             origin: What the ingress channel DECLARES about this claim's origin
                 (Ruling 58). `None` means the channel declared nothing, which is
                 recorded as UNDECLARED with five ABSENT fields - never as a
@@ -604,13 +603,38 @@ class AureaCore:
         without its origin recorded has lost that origin permanently, so the
         record is the legitimacy and not a receipt.
 
-        `source` IS DEMOTED, NOT MIGRATED. It kept a `"user"` DEFAULT that SPL
+        ~~`source` IS DEMOTED, NOT MIGRATED. It kept a `"user"` DEFAULT that SPL
         wrote into `Echo.source` - a durable store field - so every claim this
         system has ever processed was on record as originating from a human,
         including the ones that did not. That default is UNTOUCHED this pass
         (its bytes are already in stores, and moving them is not this ruling's
         remit); what changes is that it is no longer the origin fact. The ledger
-        is the single authoritative origin surface.
+        is the single authoritative origin surface.~~
+
+        SUPERSEDED 2026-08-02 BY RULING 68, kept above as the record of what was
+        true when written - and of the deferral this ruling discharges.
+
+        **`source` IS DELETED, AS SHAPE.** Ruling 58 demoted the field and swept
+        its readers, and explicitly deferred the default as "not this ruling's
+        remit". THIS IS THE RULING IT DEFERRED TO. Demotion is discipline, and
+        the manufacture continued underneath it: a claim could carry
+        `origin_kind=undeclared` with all five ancestry fields ABSENT while
+        SIMULTANEOUSLY reporting `Echo.source == 'user'` and tagging its
+        topology node `source:user`. The ledger said nobody said; the display
+        said a human did.
+
+        The parameter, the `Echo.source` field, and the `source:` node tag are
+        GONE (Ruling 61's form: deletion, not deprecation - a legacy display
+        parameter that exists but is unread is a loaded gun for the next caller
+        who defaults it). **The origin path is the one Ruling 58 already ruled
+        single: the ancestry record, reached from any node via
+        `node_id = echo.id -> echo.claim_id -> ledger`.** A topology tag copying
+        an origin field is L3's redundant-storage class, and this one was
+        FABRICATED besides.
+
+        LEGACY BYTES ARE UNTOUCHED: every `source="user"` already in a store
+        stays exactly where Ruling 58 left it. Forensic record - no migration,
+        no reader-side reinterpretation.
         """
         result = {
             'input': raw_input,
@@ -704,6 +728,61 @@ class AureaCore:
             )
 
         # =============================================================
+        # RULING 68 (2026-08-02) - THE TYPE GATE. AN ARRIVAL THAT IS NOT A
+        # CLAIM IS NOT PERCEIVED, AND IS NOT RECORDED AS ONE.
+        # =============================================================
+        # A claim-ancestry record is a record OF A CLAIM. Minting a `CLM-` id
+        # for a `bytearray` fabricates a claim that never existed - the
+        # fabrication class at the mint, and the same class Ruling 66 closed one
+        # layer out at the writers.
+        #
+        # WITNESSED AT `99414e9`, NOT ARGUED: `process_input(None)` - and every
+        # other non-`str` shape, `int`, `list`, `dict`, bare `object` - wrote a
+        # PERMANENT ledger line, then raised inside the `try:` below where
+        # SPL's `raw_input.strip()` lives, degraded into `result['errors']`, and
+        # returned normally. No echo, no node, no linkage, no structural
+        # violation: an ancestry record for a claim that was never perceived.
+        #
+        # THE DECIDING DATUM IS THE MINT SITE'S OWN COMMENT, twenty lines below:
+        # it justifies its position as keeping ledger lines "in ONE-TO-ONE
+        # correspondence with claims actually PERCEIVED". The PERCEIVED
+        # semantics were never merely assumed by the docstrings and pins - they
+        # are ASSERTED in the defect's own justification, and the orphan
+        # falsified the comment's own stated property. So the fork is decided as
+        # CLAIM-PERCEIVED: the property is made TRUE rather than the claim being
+        # made CAREFUL.
+        #
+        # POSITION IS RULED, NOT CHOSEN: BETWEEN the suspension gate above and
+        # the mint below. The suspended surface is byte-identical to before -
+        # a suspended AUREA still refuses at the door and records nothing - and
+        # Rider R2's principle extends in the mint comment's own grammar:
+        # **a mind that is not running does not perceive claims, and an arrival
+        # that is not a claim is not perceived either.**
+        #
+        # AN ORDINARY REJECTION, NOT A STRUCTURAL VIOLATION (Docket N's form).
+        # Nothing here is one of AUREA's own guards firing; a caller passed the
+        # wrong type. `OutputPath.ORDINARY_ERROR` is EXISTING vocabulary and is
+        # exactly the path a malformed input already took - what changes is that
+        # it is now reached BEFORE a permanent record is written rather than
+        # after. NO new `OutputPath` member, no new enum, nothing coined.
+        #
+        # EMPTY AND WHITESPACE `str` REMAIN PERCEIVED. They strip cleanly, build
+        # an echo, and their ledger lines are honest - the sixty-second entry
+        # established that the orphan's cause was the TYPE, never emptiness, and
+        # that control keeps its pin.
+        if not isinstance(raw_input, str):
+            result['errors'].append(
+                f"input must be str, got {type(raw_input).__name__}")
+            return self._emit(
+                result, OutputPath.ORDINARY_ERROR,
+                content=(f"[ERROR: input must be str, got "
+                         f"{type(raw_input).__name__}]"),
+                # No verdict: nothing was filtered. Coining one for a path where
+                # EchoNet never ran would fabricate truth content (Ruling 33).
+                collapse_verdict=None,
+            )
+
+        # =============================================================
         # RULING 58 (2026-08-01) - PERCEPTION BEGINS WITH THE RECORD
         # =============================================================
         # The claim's origin is recorded ONCE, as fact, before anything else
@@ -768,7 +847,11 @@ class AureaCore:
             # mint above (Ruling 55's shape - a recorded fact, never derived).
             # It cannot be None here: the mint gates perception, so reaching
             # this line at all means the record exists.
-            echo = self.spl.process_input(raw_input, source,
+            # RULING 68: `source` no longer exists on either signature. Nothing
+            # is passed positionally after `raw_input` - SPL's second positional
+            # is `doctrine_link`, so a leftover positional argument here would
+            # have bound a display string to a doctrine reference.
+            echo = self.spl.process_input(raw_input,
                                           claim_id=result['claim_id'])
             result['echo'] = echo
             self.stats['echoes_processed'] += 1
@@ -782,7 +865,11 @@ class AureaCore:
                 position=echo_position,
                 mass=1.0
             )
-            echo_node.tags.add(f"source:{source}")
+            # RULING 68 (2026-08-02): the `source:{source}` tag is DELETED.
+            # It copied a FABRICATED origin onto the node - a claim whose
+            # ancestry record said UNDECLARED was tagged `source:user` here.
+            # Origin is reached from this node the way Ruling 58 ruled it
+            # single: `node_id == echo.id -> echo.claim_id -> the ledger`.
             result['pass_nodes'] += (echo_node.id,)      # Ruling 55
             
             # Step 2: Collapse testing with pressure generation
@@ -1103,7 +1190,7 @@ class AureaCore:
             # the record, and the record is the point. Fail toward legible
             # refusal - never toward silent corruption, never toward a fluent
             # answer.
-            self._record_structural_violation(result, violation, raw_input, source)
+            self._record_structural_violation(result, violation, raw_input)
         except Exception as e:
             # ORDINARY failure: malformed input, an unexpected None. Graceful
             # degradation is correct here and is unchanged. Ordered AFTER the
@@ -1438,13 +1525,29 @@ class AureaCore:
 
     def _record_structural_violation(self, result: Dict[str, Any],
                                      violation: BaseException,
-                                     raw_input: str, source: str) -> None:
+                                     raw_input: str) -> None:
         """Ruling 25: the loud field, the suppressed output, the durable record."""
         entry = {
             'type': type(violation).__name__,
             'message': str(violation),
             'input': raw_input,
-            'source': source,
+            # RULING 68 (2026-08-02) - A FORCED CONSUMER, AND A JUDGMENT CALL ON
+            # THE RECORD.
+            #
+            # This read `'source': source`, so every structural-violation record
+            # ever written carried the manufactured `"user"` - the same
+            # fabrication as the echo field and the node tag, in the durable
+            # forensic log. Deleting the parameter forces this site to change.
+            #
+            # REPLACED WITH `claim_id` RATHER THAN DROPPED, deliberately: the
+            # ruling's own resolution is that the ancestry record IS the single
+            # origin surface, and `claim_id` is the ruled JOIN KEY to it
+            # (Ruling 60). Dropping the field outright would leave a forensic
+            # record that cannot be tied back to the claim that produced it,
+            # which is a weaker record than the one being replaced - and this
+            # log is consulted precisely when memory is gone. Nothing is coined:
+            # `claim_id` is Ruling 58's existing field, already on `result`.
+            'claim_id': result.get('claim_id'),
             'timestamp': datetime.now().isoformat(),
         }
         result['structural_violation'] = entry
@@ -1650,10 +1753,10 @@ class AureaCore:
                 probe = Echo(
                     id=f"nova-collapse-{echo.id}",
                     content=content,
-                    source="nova",
-                    # Inert: EchoNet's verdict is content-driven and never
-                    # reads this field (SPL sets the same documented
-                    # placeholder). No magnitude enters the truth path here.
+                    # RULING 68: `source="nova"` DELETED with the field. This
+                    # site's own comment already recorded that EchoNet's verdict
+                    # is content-driven and never reads it - the field was inert
+                    # here before it was deleted everywhere.
                     resonance_score=1.0,
                     created_at=datetime.now(),
                     doctrine_link=doctrine.id,

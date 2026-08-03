@@ -52,7 +52,7 @@ from tests.invariants import _ast as H
 # =========================================================================
 
 def _echo(content: str) -> Echo:
-    return Echo(id="echo-h", content=content, source="test",
+    return Echo(id="echo-h", content=content,
                 resonance_score=0.0, created_at=datetime.now())
 
 

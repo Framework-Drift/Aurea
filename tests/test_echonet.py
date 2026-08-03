@@ -53,7 +53,7 @@ from src.utils.models import Echo
 
 
 def _echo(content: str) -> Echo:
-    return Echo(id="E-test", content=content, source="test",
+    return Echo(id="E-test", content=content,
                 resonance_score=0.0, created_at=datetime.now())
 
 

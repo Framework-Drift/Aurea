@@ -63,7 +63,7 @@ def test_a_bare_process_input_records_undeclared_and_five_absent(tmp_path) -> No
     default committed into a durable store on every claim ever processed.
     """
     core = AureaCore()
-    result = core.process_input("Water is wet.", source="test")
+    result = core.process_input("Water is wet.")
 
     lines = _lines(core.ancestry)
     assert len(lines) == 1, "exactly one line per perceived claim"
@@ -90,7 +90,7 @@ def test_a_declared_ingress_persists_verbatim(tmp_path) -> None:
         connecting_assumptions=declared_none(),
         defeaters=provided(["contradicted by Δ17"]),
     )
-    result = core.process_input("The sky is green at noon.", source="test",
+    result = core.process_input("The sky is green at noon.",
                                 origin=declaration)
 
     entry = _lines(core.ancestry)[0]
@@ -162,7 +162,7 @@ def test_a_failed_ancestry_write_stops_the_claim_dead(tmp_path, monkeypatch) -> 
     count, and the ledger line count.
     """
     core = AureaCore()
-    core.process_input("Water is wet.", source="test")       # a healthy claim
+    core.process_input("Water is wet.")       # a healthy claim
 
     echoes_before = core.stats["echoes_processed"]
     nodes_before = len(core.tca.topology.nodes)
@@ -179,7 +179,7 @@ def test_a_failed_ancestry_write_stops_the_claim_dead(tmp_path, monkeypatch) -> 
     monkeypatch.setattr(builtins, "open", failing_open)
 
     with pytest.raises(OSError):
-        core.process_input("This claim must not be perceived.", source="test")
+        core.process_input("This claim must not be perceived.")
 
     monkeypatch.undo()
 
@@ -228,7 +228,7 @@ def test_a_suspended_pass_perceives_nothing_and_records_nothing(tmp_path) -> Non
     core.processing_suspended = True
     core.suspension_reason = "test suspension"
 
-    result = core.process_input("Nothing should be recorded.", source="test")
+    result = core.process_input("Nothing should be recorded.")
 
     assert result["claim_id"] is None
     assert _lines(core.ancestry) == []
@@ -518,46 +518,82 @@ def test_the_record_round_trips_through_the_ledger(tmp_path) -> None:
 # E. THE DEMOTED FIELD
 # =====================================================================
 
-def test_echo_source_has_exactly_the_swept_consumer_set() -> None:
-    """PIN 7 - THE CONSUMER-SET PIN, over exactly what the mandated sweep found.
+def test_echo_has_no_source_field_at_all() -> None:
+    """~~PIN 7 - THE CONSUMER-SET PIN~~ -> SUPERSEDED 2026-08-02 BY RULING 68.
 
-    RULING 50'S SHAPE: not "is there a consumer" (a question with one permanent
-    answer once any appears) but "is the consumer set exactly the swept one".
+    THE OLD PIN AND ITS REASONING, KEPT VERBATIM because it is the record of
+    why demotion was not enough:
 
-    THE SWEEP FOUND ZERO READERS IN `src/`. The three `.source` reads in the
-    suspension stores are `SuspensionEntry.source` - a DIFFERENT class - and
-    `aurea_core`'s `source:{source}` node tag reads the PARAMETER, not the echo
-    field. The only reader anywhere in the repo is a display line in
-    `scripts/aurea_diagnostic.py`, which is precisely what "legacy display
-    string" means.
+        PIN 7 - THE CONSUMER-SET PIN, over exactly what the mandated sweep
+        found. RULING 50'S SHAPE: not "is there a consumer" (a question with one
+        permanent answer once any appears) but "is the consumer set exactly the
+        swept one". THE SWEEP FOUND ZERO READERS IN `src/`. ... The only reader
+        anywhere in the repo is a display line in `scripts/aurea_diagnostic.py`,
+        which is precisely what "legacy display string" means. A NEW READER
+        FAILS HERE ...
 
-    A NEW READER FAILS HERE, and that is the point: the ledger is the single
-    authoritative origin surface, and a consumer reading the demoted field for
-    verdict-affecting logic must be adjudicated, not absorbed.
+        readers = [] for path in Path("src").rglob("*.py") ... if
+        node.attr == "source" and node.value.id in ("echo", "e") ...
+        assert readers == [], f"{readers} read the DEMOTED `Echo.source`."
+
+    **RULING 68 DELETED THE FIELD, so a pin asking who reads it now asks about
+    something that does not exist.** The successor is STRICTLY STRONGER and
+    needs no sweep: there is no field to read. Ruling 61's form - the wrong
+    path's ABSENCE is the enforcement, because a legacy display field that
+    exists but is unread is a loaded gun for the next caller who defaults it.
+
+    The old pin was ALSO the instrument that proved the deletion safe: its
+    sweep, re-run tree-wide as Ruling 68's mandated precondition, found exactly
+    one `.source` read on an echo anywhere - a `print` in
+    `scripts/aurea_diagnostic.py`, a DISPLAY read and not a logic read, deleted
+    with the field.
     """
-    readers = []
-    for path in Path("src").rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if (isinstance(node, ast.Attribute) and node.attr == "source"
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id in ("echo", "e")):
-                readers.append(f"{path.as_posix()}:{node.lineno}")
-    assert readers == [], (
-        f"{readers} read the DEMOTED `Echo.source`. It is a legacy display "
-        f"string; origin is the claim-ancestry ledger (Ruling 58).")
+    from dataclasses import fields
+
+    from src.utils.models import Echo
+
+    names = {f.name for f in fields(Echo)}
+    assert "source" not in names, (
+        f"`Echo.source` is back. Ruling 68 deleted it: origin is the "
+        f"claim-ancestry ledger, reached from `claim_id`. Fields: {sorted(names)}")
+    assert "claim_id" in names, "the join key to the real origin surface must remain"
 
 
-def test_the_source_default_is_untouched_this_pass() -> None:
-    """DEMOTED, NOT MIGRATED. The `"user"` default stays: its bytes are already
-    in persisted stores, and rewriting them is not this ruling's remit. What
-    changed is that it is no longer the origin fact."""
+def test_neither_process_input_accepts_a_source_argument() -> None:
+    """~~test_the_source_default_is_untouched_this_pass~~ -> SUPERSEDED
+    2026-08-02 BY RULING 68, and this pin now asserts the OPPOSITE of what it
+    asserted - which is the whole of Ruling 68 res.3.
+
+    THE OLD PIN, KEPT VERBATIM:
+
+        DEMOTED, NOT MIGRATED. The `"user"` default stays: its bytes are already
+        in persisted stores, and rewriting them is not this ruling's remit. What
+        changed is that it is no longer the origin fact.
+
+        assert inspect.signature(SPL.process_input).parameters["source"].default == "user"
+        assert inspect.signature(AureaCore.process_input).parameters["source"].default == "user"
+
+    **RULING 58's DOCSTRING EXPLICITLY DEFERRED THIS DEFAULT AS "not this
+    ruling's remit". RULING 68 IS THE RULING IT DEFERRED TO.** Demotion is
+    discipline, and the manufacture continued underneath it: a claim could carry
+    `origin_kind=undeclared` with all five fields ABSENT while simultaneously
+    reporting `Echo.source == 'user'` and tagging its node `source:user`.
+
+    LEGACY BYTES REMAIN UNTOUCHED - that half of the old pin's reasoning still
+    stands and is res.4. What is deleted is the SIGNATURE that keeps minting new
+    ones.
+    """
     import inspect
 
     from src.perception.spl import SPL
 
-    assert inspect.signature(SPL.process_input).parameters["source"].default == "user"
-    assert inspect.signature(AureaCore.process_input).parameters["source"].default == "user"
+    for owner, func in (("SPL", SPL.process_input),
+                        ("AureaCore", AureaCore.process_input)):
+        params = inspect.signature(func).parameters
+        assert "source" not in params, (
+            f"{owner}.process_input still accepts `source`; Ruling 68 deletes "
+            f"the parameter, not merely its documentation. Params: "
+            f"{list(params)}")
 
 
 def test_the_origin_parameter_is_keyword_only() -> None:
