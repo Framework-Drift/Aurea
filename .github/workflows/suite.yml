@@ -52,16 +52,21 @@ jobs:
           expected_doctrines=80ff8579112da113dd82fb89f8c64b0d40e95c66
           expected_scars=99891f58c36934cbf1a0cb51b8ecab4be5d1848f
           expected_echoes=e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+          # Ruling 72 (Docket Q item Q1): the goal roots. A TRACKED seed with
+          # no writer, so it joins the set this step holds byte-for-byte.
+          expected_goal_roots=67e6f9012090319bfe9cbca302d83b575e5c58b3
 
           actual_doctrines=$(git hash-object data/doctrines.json)
           actual_scars=$(git hash-object data/scars.json)
           actual_echoes=$(git hash-object data/echoes.jsonl)
+          actual_goal_roots=$(git hash-object data/goal_roots.json)
 
           fail=0
           for pair in \
             "doctrines.json $expected_doctrines $actual_doctrines" \
             "scars.json     $expected_scars     $actual_scars" \
-            "echoes.jsonl   $expected_echoes    $actual_echoes"
+            "echoes.jsonl   $expected_echoes    $actual_echoes" \
+            "goal_roots.json $expected_goal_roots $actual_goal_roots"
           do
             set -- $pair
             if [ "$2" != "$3" ]; then

@@ -33,6 +33,8 @@ from src.external.claim_ancestry import (AncestryLedgerUnreadable,
 from src.external.prediction_ledger import (PredictionLedger,
                                             PredictionLedgerUnreadable,
                                             provided)
+from src.goals.goal_ledger import (GoalKind, GoalLedger, GoalLedgerUnreadable,
+                                   GoalLevel, GoalProvenance)
 from src.utils.ledger_mint import (derive_max_ordinal, mint_lock,
                                    ordinal_pattern)
 
@@ -50,6 +52,23 @@ LEDGERS = [
      lambda L: L.commit(expected_result="x",
                         success_criteria=provided("s")).prediction_id,
      "PRD-", "PRD-0001", PredictionLedgerUnreadable),
+    # RULING 72 MIGRATION (2026-08-03), Ruling-14 form. NO ASSERTION MOVED -
+    # one row added, so every parametrized claim in this file now also binds
+    # the goal ledger. It is the shared mint's SECOND consumer (Ruling 69
+    # res.5), so the interleave, the absent counter, the typed refusal and the
+    # torn-line property are its properties too, inherited rather than
+    # re-argued at a new prefix.
+    #
+    # `ensure_genesis` is deliberately NOT called here: genesis is a separate
+    # act, and these rows measure the MINT. A constructor that seeded would
+    # have made this row impossible to write, which is one of the reasons
+    # genesis is not in `__init__`.
+    ("goal", lambda p: GoalLedger(ledger_path=str(p)),
+     lambda L: L.commit(desired_state="x", kind=GoalKind.RESEARCH,
+                        level=GoalLevel.PROJECT,
+                        provenance=GoalProvenance.EXTERNAL_PROPOSAL,
+                        asserter="tester").goal_id,
+     "GLC-", "GLC-0001", GoalLedgerUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -227,8 +246,21 @@ def test_the_lock_is_keyed_by_resolved_path_not_by_object():
 # (c) `_seq` ABSENT AS SHAPE
 # =====================================================================
 
+# RULING 72 MIGRATION (2026-08-03), Ruling-14 form.
+#
+#     OLD: ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
+#           "src/external/prediction_ledger.py")
+#     NEW: the same three, plus "src/goals/goal_ledger.py".
+#
+# **NO ASSERTION MOVED.** This list backs a claim quantified over EVERY ledger
+# ("no ledger carries a `_seq` attribute"), so a ledger absent from it makes the
+# claim TRUE BY OMISSION - the completeness-claim defect this house has named
+# repeatedly. Ruling 72's goal ledger is the shared mint's second consumer and
+# inherits Ruling 69's whole property set, so it belongs to every claim this
+# file makes about ledgers.
 _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
-                   "src/external/prediction_ledger.py")
+                   "src/external/prediction_ledger.py",
+                   "src/goals/goal_ledger.py")
 
 
 def _seq_assignments(tree) -> list:

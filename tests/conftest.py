@@ -86,6 +86,7 @@ from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
 from src.external.claim_ancestry import ClaimAncestryLedger
 from src.external.prediction_ledger import PredictionLedger
+from src.goals.goal_ledger import GoalLedger
 from src.expansion.sae import SAE
 from src.identity.ril import RIL
 from src.reflex.racm import RACM
@@ -207,6 +208,18 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # here in the SAME COMMIT as the store, per Ruling 31's rule, rather
         # than waiting for a consumer that would make it urgent.
         (PredictionLedger, "ledger_path", "prediction_ledger.jsonl"),
+        # Ruling 72 (Docket Q item Q1): the goal commitment ledger. Append-only
+        # forensics recording what AUREA committed to pursue BEFORE pursuing it.
+        # NOTHING in the pipeline constructs one - the ledger is substrate and
+        # is deliberately unwired this pass - so like the prediction ledger this
+        # redirect protects tests that build one DIRECTLY, and it lands in the
+        # SAME COMMIT as the store per Ruling 31's rule.
+        #
+        # `seed_path` is DELIBERATELY NOT REDIRECTED, exactly as the three seed
+        # paths are not: it is READ-ONLY INPUT with no writer (Ruling 32), and
+        # redirecting it would hand every test an empty roots document and
+        # quietly stop genesis from being measured against the real seed.
+        (GoalLedger, "ledger_path", "goal_ledger.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

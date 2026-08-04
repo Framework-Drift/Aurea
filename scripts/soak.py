@@ -110,6 +110,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.tether.session_governor import TetherProtocol
     from src.external.claim_ancestry import ClaimAncestryLedger
     from src.external.prediction_ledger import PredictionLedger
+    from src.goals.goal_ledger import GoalLedger
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -142,6 +143,13 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # anyway, because the coverage self-audit re-derives the injectable set
         # from `src/` and REFUSES a run whose table has fallen behind.
         (PredictionLedger, "ledger_path", "logs/prediction_ledger.jsonl"),
+        # Ruling 72. The goal ledger is SUBSTRATE and is deliberately unwired -
+        # nothing in the pipeline constructs one, so the soak must show ZERO
+        # goal lines. The path is redirected anyway, for the same reason the
+        # prediction ledger's is: the coverage self-audit re-derives the
+        # injectable set from `src/` and REFUSES a run whose table has fallen
+        # behind. `seed_path` is excluded by ruling (read-only input).
+        (GoalLedger, "ledger_path", "logs/goal_ledger.jsonl"),
         (DMW, "runtime_path", "dmw_queue.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (SAE, "runtime_path", "sae_epoch.json"),
