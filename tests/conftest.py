@@ -86,6 +86,7 @@ from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
 from src.external.claim_ancestry import ClaimAncestryLedger
 from src.external.prediction_ledger import PredictionLedger
+from src.goals.goal_arbitration import GoalArbiter
 from src.goals.goal_ledger import GoalLedger
 from src.expansion.sae import SAE
 from src.identity.ril import RIL
@@ -220,6 +221,11 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # redirecting it would hand every test an empty roots document and
         # quietly stop genesis from being measured against the real seed.
         (GoalLedger, "ledger_path", "goal_ledger.jsonl"),
+        # Ruling 73 (Docket Q item Q2): the examination log. The arbiter is
+        # unwired this pass - nothing in `src/` consumes it - so like the two
+        # ledgers above this redirect protects tests that build one DIRECTLY,
+        # and it lands in the SAME COMMIT as the store per Ruling 31's rule.
+        (GoalArbiter, "log_path", "goal_examinations.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

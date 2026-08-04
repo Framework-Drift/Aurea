@@ -110,6 +110,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.tether.session_governor import TetherProtocol
     from src.external.claim_ancestry import ClaimAncestryLedger
     from src.external.prediction_ledger import PredictionLedger
+    from src.goals.goal_arbitration import GoalArbiter
     from src.goals.goal_ledger import GoalLedger
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
@@ -150,6 +151,12 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # injectable set from `src/` and REFUSES a run whose table has fallen
         # behind. `seed_path` is excluded by ruling (read-only input).
         (GoalLedger, "ledger_path", "logs/goal_ledger.jsonl"),
+        # Ruling 73. The arbiter is unwired too, so the soak must show ZERO
+        # examination lines - the property that would be the finding if it
+        # moved. Redirected anyway, because the coverage self-audit re-derives
+        # the injectable set from `src/` and REFUSES a run that has fallen
+        # behind.
+        (GoalArbiter, "log_path", "logs/goal_examinations.jsonl"),
         (DMW, "runtime_path", "dmw_queue.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (SAE, "runtime_path", "sae_epoch.json"),

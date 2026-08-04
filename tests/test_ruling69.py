@@ -33,12 +33,29 @@ from src.external.claim_ancestry import (AncestryLedgerUnreadable,
 from src.external.prediction_ledger import (PredictionLedger,
                                             PredictionLedgerUnreadable,
                                             provided)
+from src.goals.goal_arbitration import ExaminationLogUnreadable, GoalArbiter
 from src.goals.goal_ledger import (GoalKind, GoalLedger, GoalLedgerUnreadable,
                                    GoalLevel, GoalProvenance)
 from src.utils.ledger_mint import (derive_max_ordinal, mint_lock,
                                    ordinal_pattern)
 
 REPO = Path(__file__).resolve().parents[1]
+
+
+def _arbiter_over(log_path):
+    """A `GoalArbiter` with one standing commitment, so a selection exists.
+
+    RULING 73's row needs a populated ledger the way the other rows need only a
+    path - selection is a read over another store. The ledger is placed beside
+    the log under a derived name so the two never collide.
+    """
+    ledger = GoalLedger(ledger_path=str(Path(log_path).with_suffix(".goals")))
+    ledger.commit(desired_state="x", kind=GoalKind.RESEARCH,
+                  level=GoalLevel.PROJECT,
+                  provenance=GoalProvenance.EXTERNAL_PROPOSAL,
+                  asserter="tester")
+    return GoalArbiter(ledger, log_path=str(log_path))
+
 
 # One row per ledger: build, mint-one, prefix, first id, typed refusal.
 LEDGERS = [
@@ -69,6 +86,18 @@ LEDGERS = [
                         provenance=GoalProvenance.EXTERNAL_PROPOSAL,
                         asserter="tester").goal_id,
      "GLC-", "GLC-0001", GoalLedgerUnreadable),
+    # RULING 73 MIGRATION (2026-08-03), Ruling-14 form. NO ASSERTION MOVED -
+    # one row added, so every parametrized claim in this file now also binds
+    # the examination log, the shared mint's THIRD consumer.
+    #
+    # The arbiter needs a LEDGER to select from, so its builder constructs one
+    # beside the log and seeds a single commitment - the minimum state in which
+    # a selection exists at all. The ledger lives at a DERIVED sibling path so
+    # the two stores never share a file (which would make the mint pins
+    # measure the wrong interleave).
+    ("examination", lambda p: _arbiter_over(p),
+     lambda A: A.examine().examination_id,
+     "EXM-", "EXM-0001", ExaminationLogUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -258,9 +287,21 @@ def test_the_lock_is_keyed_by_resolved_path_not_by_object():
 # repeatedly. Ruling 72's goal ledger is the shared mint's second consumer and
 # inherits Ruling 69's whole property set, so it belongs to every claim this
 # file makes about ledgers.
+# RULING 73 MIGRATION (2026-08-03), Ruling-14 form - the SECOND time this list
+# has grown, and for the same reason both times.
+#
+#     OLD: the four above (cae, claim_ancestry, prediction_ledger, goal_ledger)
+#     NEW: the same four, plus "src/goals/goal_arbitration.py".
+#
+# **NO ASSERTION MOVED.** The claim is quantified over EVERY append-only store
+# that mints through the shared helper, so one absent from the list makes the
+# claim TRUE BY OMISSION - the completeness-claim defect. Ruling 73's
+# examination log is the shared mint's THIRD consumer and inherits Ruling 69's
+# whole property set at the `EXM-` prefix.
 _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
                    "src/external/prediction_ledger.py",
-                   "src/goals/goal_ledger.py")
+                   "src/goals/goal_ledger.py",
+                   "src/goals/goal_arbitration.py")
 
 
 def _seq_assignments(tree) -> list:

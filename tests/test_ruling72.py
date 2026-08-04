@@ -800,13 +800,30 @@ def test_h_the_import_scanner_actually_fires():
     assert not (tokens_of(benign) & FORBIDDEN_IMPORT_TOKENS)
 
 
-def test_h_nothing_in_src_imports_the_goal_ledger_this_pass():
-    """PIN (h). **The ledger participates in NOTHING this pass.**
+def test_h_the_goal_ledgers_consumer_set_is_exactly_the_ruled_one():
+    """PIN (h). **THE LEDGER'S CONSUMERS ARE ENUMERATED, AND EACH IS RULED.**
 
-    It is substrate: Q2 owns selection, Q3 owns motion. This pin goes RED the
-    day something wires it - which is exactly when that wiring needs its own
-    ruling rather than arriving as a convenience.
+    RULING 73 MIGRATION (2026-08-03), Ruling-14 form.
+
+        OLD: `assert consumers == []`  ("the ledger participates in NOTHING
+             this pass"), with the docstring promising the pin "goes RED the
+             day something wires it - which is exactly when that wiring needs
+             its own ruling rather than arriving as a convenience."
+        NEW: `assert consumers == [the arbiter]`.
+
+    **THE PIN FIRED EXACTLY AS DESIGNED AND THE PROMISE WAS KEPT.** Ruling 73
+    wired the first consumer, and it arrived WITH its ruling rather than as a
+    convenience: `src/goals/goal_arbitration.py` reads the ledger through an
+    injected instance to select a standing commitment, and writes nothing to
+    it (Ruling 73 res.1/res.2, pinned in `tests/test_ruling73.py`).
+
+    **NO ASSERTION WAS WEAKENED - IT WAS NARROWED.** The claim is still that
+    the consumer set is exactly the ruled one; what changed is that the ruled
+    set now has one member instead of none. An unruled second consumer still
+    reddens this pin, which is the property worth keeping.
     """
+    RULED_CONSUMERS = ["src/goals/goal_arbitration.py"]
+
     consumers = []
     for path in sorted((REPO / "src").rglob("*.py")):
         if "__pycache__" in path.parts or path.name == "goal_ledger.py":
@@ -815,9 +832,9 @@ def test_h_nothing_in_src_imports_the_goal_ledger_this_pass():
             if isinstance(node, ast.ImportFrom) and node.module:
                 if "goal_ledger" in node.module or "goals" in node.module.split("."):
                     consumers.append(path.relative_to(REPO).as_posix())
-    assert consumers == [], (
-        f"the goal ledger acquired a consumer at {consumers}. Wiring it is "
-        f"Q2/Q3 work and takes a ruling.")
+    assert sorted(set(consumers)) == RULED_CONSUMERS, (
+        f"the goal ledger's consumer set is {sorted(set(consumers))}, not the "
+        f"ruled {RULED_CONSUMERS}. Wiring it is Q2/Q3 work and takes a ruling.")
 
 
 def test_h_the_ledger_never_calls_commit_on_itself():
