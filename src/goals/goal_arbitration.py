@@ -46,7 +46,7 @@ shape - Rulings 63/64's unproducible-member form applied to a sort key: the
 vocabulary is closed now and the substrate lifts by ruling, rather than the
 ladder quietly becoming a different ladder than the one that was ruled.
 
-**REPORTED DIVERGENCE - READ THIS BEFORE CHANGING A RUNG.** Rung 2 keys on the
+~~**REPORTED DIVERGENCE - READ THIS BEFORE CHANGING A RUNG.** Rung 2 keys on the
 GLC ordinal, which is UNIQUE per commitment, so with two or more candidates it
 always yields a unique leader. Rungs 3, 4 and 5 are therefore UNREACHABLE
 today - not vacuous-by-substrate like rungs 1 and 3, but unreachable by rung 2's
@@ -56,7 +56,47 @@ what "oldest unresolved" keys on, which is a semantic decision this pass does
 not own. **The consequence is that a standing goal is selected persistently
 rather than in rotation** - which is precisely the condition `focus_persistence`
 below exists to measure, and which QL5's `no-progress` stop condition is the
-registered consumer of.
+registered consumer of.~~
+
+**SUPERSEDED 2026-08-03 BY RULING 73-A, kept above VERBATIM as the record of
+what was measured and of the order that produced it.** The struck paragraph is
+history, not an error to delete: it is the finding that forced this rider, and
+the strict-xfail witness it left behind is what MEASURED the correction rather
+than asserting it.
+
+    THE OLD ORDER, recorded so the change is legible:
+        UNMET_DEPENDENCY -> OLDEST_UNRESOLVED -> REVIEW_HORIZON
+        -> LEAST_RECENTLY_EXAMINED -> STABLE_IDENTIFIER
+
+**RULING 73-A: THE LADDER REORDERS. `LEAST_RECENTLY_EXAMINED` MOVES AHEAD OF
+`OLDEST_UNRESOLVED`.** The board ruled the fork NOT GENUINE: with two
+STRUCTURALLY UNRESOLVABLE roots, persistent focus starves RG-2 permanently, and
+it does so **on MINT ORDER - adjudication by list order, the exact class
+Ruling 64 res.5 refused.** Three pieces of intent converge against it: pin (f)
+ruled alternation, the liveness derivation exists to surface sustained focus
+WITHOUT progress, and two unresolvable roots make persistence permanent rather
+than temporary.
+
+**RECENCY ROTATION IS THE WORKING ALLOCATOR** among standing commitments;
+**OLDEST_UNRESOLVED IS THE DETERMINISTIC BREAKER** among equally-recently-
+examined candidates - including the all-never-examined GENESIS case, where it
+decides the FIRST selection. So the recorded bases are now honest: the genesis
+selection records OLDEST_UNRESOLVED, and every rotation afterwards records
+LEAST_RECENTLY_EXAMINED.
+
+`DecidingBasis`'s MEMBER SET IS UNCHANGED - only `LADDER`'s order moved.
+
+**THE VACUOUS RUNGS KEEP THEIR REGISTERED RELATIVE ORDER, AND THEIR POSITIONS
+CARRY A STATED CONDITION:** each future field ruling (the dependency field; the
+review-horizon field) RE-CONFIRMS OR MOVES ITS OWN RUNG when the substrate
+arrives. A rung that ties through today has never been tested in competition,
+so its position is provisional in a way a deciding rung's is not.
+
+**RUNG 4 IS TOTAL BY CONSTRUCTION, SO RUNG 5 IS A DECLARED BACKSTOP** -
+unreachable while GLC ordinals parse and remain unique. Its remedy class
+DIFFERS from the vacuous rungs': they await a missing FIELD, while rung 5
+guards a future ID MALFORMATION. It is pinned as DECLARED-UNREACHABLE and is
+never falsely pinned as deciding cases.
 
 DECLARED OUT, each owned
 -------------------------------------------------------------------------------
@@ -239,7 +279,7 @@ class FocusPersistence:
 
 def _rung_unmet_dependency(commitment: GoalCommitment,
                            context: "_LadderContext") -> Any:
-    """RUNG 1 - VACUOUS BY SUBSTRATE, and present as SHAPE.
+    """RUNG 1 (unmoved by Ruling 73-A) - VACUOUS BY SUBSTRATE, present as SHAPE.
 
     **NO DEPENDENCY FIELD EXISTS ON ANY RECORD**, so this rung TIES ALL
     CANDIDATES - deterministically, which is what makes tying honest rather than
@@ -248,74 +288,102 @@ def _rung_unmet_dependency(commitment: GoalCommitment,
     ruled one's name.
 
     REOPENING CONDITION: a ruled dependency field on `GoalCommitment`. On that
-    day this body reads it and the rung starts discriminating; nothing else
-    about the ladder changes.
+    day this body reads it and the rung starts discriminating. **THAT RULING
+    ALSO RE-CONFIRMS OR MOVES THIS RUNG'S POSITION** (Ruling 73-A) - a rung
+    that has only ever tied through has never been tested in competition.
     """
     return 0
 
 
 def _rung_oldest_unresolved(commitment: GoalCommitment,
                             context: "_LadderContext") -> Any:
-    """RUNG 2 - the GLC ordinal, ascending. File-derived and wall-clock-free.
+    """RUNG 4 (Ruling 73-A; was rung 2) - the GLC ordinal, ascending.
+    File-derived and wall-clock-free.
 
     Parsed with Ruling 64's ANCHORED-PATTERN discipline rather than by slicing:
     `GLC-00010` must not read as `GLC-0001`, and a bare `\\b` is insufficient
     because `-` is itself a non-word character.
 
-    **THIS RUNG IS TOTAL, AND THAT IS THE REPORTED DIVERGENCE.** GLC ordinals
-    are unique per commitment, so among two or more candidates this always
-    yields a unique leader and rungs 3-5 are never reached. See the module
-    docstring.
+    **THE DETERMINISTIC BREAKER among equally-recently-examined candidates.**
+    Its most important case is GENESIS: every candidate is never-examined, so
+    rung 3 ties them all and this rung decides the FIRST selection.
+
+    **THIS RUNG IS TOTAL, AND THAT IS NOW LOAD-BEARING RATHER THAN A DEFECT.**
+    GLC ordinals are unique per commitment, so this always yields a unique
+    leader - which is exactly what makes rung 5 a DECLARED BACKSTOP rather than
+    a rung that decides cases. At rung 2 that totality made the ladder's whole
+    tail unreachable; at rung 4 it is the guarantee that the ladder terminates.
     """
     return context.ordinal_of(commitment.goal_id)
 
 
 def _rung_review_horizon(commitment: GoalCommitment,
                          context: "_LadderContext") -> Any:
-    """RUNG 3 - VACUOUS BY SUBSTRATE, same form as rung 1.
+    """RUNG 2 (Ruling 73-A; was rung 3) - VACUOUS BY SUBSTRATE, as rung 1.
 
     **NO REVIEW-HORIZON FIELD EXISTS.** Ties all candidates.
 
     REOPENING CONDITION: a ruled horizon field, adjacent to Ruling 61's horizon
     vocabulary - which deliberately refuses to interpret a horizon's FORMAT
     (a date, a cycle count, an observed condition), so the field's arrival has
-    to decide that too.
+    to decide that too. **THAT RULING ALSO RE-CONFIRMS OR MOVES THIS RUNG'S
+    POSITION** (Ruling 73-A): a rung that has only ever tied through has never
+    been tested in competition, so where it sits is provisional in a way a
+    deciding rung's position is not.
     """
     return 0
 
 
 def _rung_least_recently_examined(commitment: GoalCommitment,
                                   context: "_LadderContext") -> Any:
-    """RUNG 4 - the goal's most recent EXM ordinal, ascending.
+    """RUNG 3 (Ruling 73-A; was rung 4) - the goal's most recent EXM ordinal,
+    ascending. **THE WORKING ALLOCATOR.**
 
     **A NEVER-EXAMINED GOAL SORTS FIRST**, because the least recently examined
     thing is the thing never examined. Wall-clock-free by construction: it
     compares mint ordinals, not timestamps.
 
-    Substrate EXISTS for this rung (Q2 builds it), unlike rungs 1 and 3 - but it
-    is unreachable today behind rung 2's totality. That distinction is stated
-    because the two conditions have different remedies.
+    This is the rung that ROTATES attention among standing commitments, and
+    Ruling 73-A moved it here for that reason: behind `OLDEST_UNRESOLVED` it
+    was unreachable, and the consequence was permanent starvation of every
+    commitment but the lowest-minted one - **starvation decided by MINT ORDER,
+    which is adjudication by list order** (Ruling 64 res.5's refused class).
+
+    It TIES at genesis, when every candidate is never-examined; rung 4 then
+    breaks that tie deterministically.
     """
     return context.last_examination_ordinal.get(commitment.goal_id, -1)
 
 
 def _rung_stable_identifier(commitment: GoalCommitment,
                             context: "_LadderContext") -> Any:
-    """RUNG 5 - the GLC id string, ascending. The TOTAL-ORDER BACKSTOP.
+    """RUNG 5 (unmoved) - the GLC id string, ascending. **A DECLARED BACKSTOP.**
 
     Ids are unique, so this rung can never tie. It is what guarantees the ladder
     always selects rather than failing to decide - a selector that could return
     "no decision" would hand the question back to whoever called it, which is
     where nondeterminism gets in.
+
+    **DECLARED UNREACHABLE, AND PINNED AS SUCH RATHER THAN AS A DECIDER**
+    (Ruling 73-A). Rung 4 is TOTAL while GLC ordinals parse and remain unique,
+    so nothing reaches here today. **Its remedy class DIFFERS from the vacuous
+    rungs':** they await a missing FIELD, while this one guards a future ID
+    MALFORMATION - an id `ordinal_of` cannot parse sorts to a shared sentinel,
+    and if two such ids ever tied at rung 4 this rung would order them. Pinning
+    it as a decider would mean constructing an id the mint cannot produce, so
+    the pin asserts UNREACHABILITY instead of faking a case.
     """
     return commitment.goal_id
 
 
+# RULING 73-A (2026-08-03): LEAST_RECENTLY_EXAMINED MOVED AHEAD OF
+# OLDEST_UNRESOLVED. See the module docstring for the ruling and the old order.
+# The two vacuous rungs keep their registered relative order.
 LADDER: Tuple[Tuple[DecidingBasis, Callable[..., Any]], ...] = (
     (DecidingBasis.UNMET_DEPENDENCY, _rung_unmet_dependency),
-    (DecidingBasis.OLDEST_UNRESOLVED, _rung_oldest_unresolved),
     (DecidingBasis.REVIEW_HORIZON, _rung_review_horizon),
     (DecidingBasis.LEAST_RECENTLY_EXAMINED, _rung_least_recently_examined),
+    (DecidingBasis.OLDEST_UNRESOLVED, _rung_oldest_unresolved),
     (DecidingBasis.STABLE_IDENTIFIER, _rung_stable_identifier),
 )
 

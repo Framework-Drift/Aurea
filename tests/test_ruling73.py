@@ -13,39 +13,44 @@ situation Rulings 61, 63, 70 and 72 each recorded for their own new modules.
 **The mutation slate carries this pass's verification weight.**
 
 =====================================================================
-A REPORTED DIVERGENCE, MEASURED RATHER THAN ARGUED - READ THIS FIRST
+THE DIVERGENCE THIS FILE MEASURED IS NOW CLOSED - RULING 73-A
 =====================================================================
-The ruling's res.5 keys rung 2 (OLDEST_UNRESOLVED) on the GLC ordinal. **GLC
-ordinals are UNIQUE per commitment**, so with two or more candidates rung 2
-always yields a unique leader, and rungs 3, 4 and 5 are UNREACHABLE through
-`select()`.
+**THE FINDING, kept because it is the history that forced the rider.** Ruling
+73 res.5 keyed rung 2 (OLDEST_UNRESOLVED) on the GLC ordinal, which is UNIQUE
+per commitment, so rung 2 was a TOTAL ORDER and rungs 3, 4 and 5 were
+UNREACHABLE through `select()`. That contradicted the ruling's own pin (b)
+("cases decided at rungs 4 and 5") and pin (f) (two-root ALTERNATION).
+Witnessed, not argued: six consecutive examinations against the two seed roots
+all returned `GLC-0001` at basis `oldest_unresolved`, with rung keys measured
+directly as `[0,0]` / `[1,2]` / `[0,0]` / `[-1,-1]` /
+`['GLC-0001','GLC-0002']`.
 
-That contradicts two of the ruling's own pins:
+The Ruling 73 pass refused to improvise a repair - choosing what "oldest
+unresolved" keys on is a semantic decision §7 bars a build lane from making -
+and instead pinned the rungs' own rules at unit level, pinned the
+unreachability as the measured finding, and left pin (f) as **the suite's ONE
+strict-xfail witness.**
 
-  * PIN (b) asks for "cases decided at rungs 2, 4, and 5". Only rung 2 (and
-    SOLE_CANDIDATE) is reachable, so cases at rungs 4 and 5 cannot be
-    constructed through the public surface.
-  * PIN (f) asks for ALTERNATION between two roots via least-recently-examined.
-    With rung 2 total, `GLC-0001` is selected every time, forever.
+**RULING 73-A (2026-08-03) RULED THE FORK NOT GENUINE AND REORDERED THE
+LADDER:** with two STRUCTURALLY UNRESOLVABLE roots, persistence starves RG-2
+permanently and does so on MINT ORDER - adjudication by list order, the class
+Ruling 64 res.5 refused. New order:
 
-**WITNESSED, NOT ARGUED:** six consecutive examinations against the two seed
-roots all returned `GLC-0001` at basis `oldest_unresolved`; rung keys measured
-directly are `[0,0]` / `[1,2]` / `[0,0]` / `[-1,-1]` / `['GLC-0001','GLC-0002']`
-- rung 2 discriminating is what closes the ladder early.
+    UNMET_DEPENDENCY -> REVIEW_HORIZON -> LEAST_RECENTLY_EXAMINED
+    -> OLDEST_UNRESOLVED -> STABLE_IDENTIFIER
 
-**NOTHING IS IMPROVISED TO PAPER OVER IT.** Repairing it means deciding what
-"oldest unresolved" keys on, which is a semantic decision this pass does not
-own (§7: the corpus does not specify it and inventing it is barred). So:
+**THE WITNESS TURNED GREEN, AND THAT IS THE MEASUREMENT OF THE CORRECTION.**
+`test_f_two_roots_alternate_across_examinations` kept its assertion body
+BYTE-UNCHANGED and simply lost its marker - the tripwire written against the
+defect is what fired when the defect died. §4's mechanism, completing.
 
-  * the rungs' OWN RULES are pinned at UNIT level, where they are correct and
-    testable - the never-examined-first rule and the stable-identifier backstop
-    both work exactly as ruled;
-  * the UNREACHABILITY is pinned as the measured finding, so it cannot be
-    forgotten and so the pin reddens the day rung 2's semantics are ruled on;
-  * pin (f)'s alternation stands as ONE strict-xfail WITNESS, which is this
-    house's own mechanism for a measured, reported, unrepaired defect awaiting
-    a named ruling (CLAUDE.md §4). **It turns green the day the ladder is
-    corrected, and the suite will say so.**
+WHAT MOVED IN THIS FILE, all Ruling-14 form with old/new recorded at each site:
+the ladder-order pin; the unreachability pin (rungs {3,4,5} -> rung {5} alone,
+now a DECLARED BACKSTOP whose remedy class is id malformation, not a missing
+field); the persistence pin, whose assertion INVERTED because it recorded a
+defect rather than a guarantee; and two fixture-only migrations (HOLD and the
+liveness tally), where a consecutive run now needs a single-candidate field
+because rotation genuinely works.
 
 COINS NOTHING beyond the ruling's own `DecidingBasis` vocabulary and the EXM
 prefix: no threshold, no weight, no score anywhere in this module.
@@ -182,11 +187,22 @@ def test_b_the_ladder_order_is_declared_data_in_the_ruled_order():
     its order is inspectable - a reordering is then a visible edit to a literal
     rather than a subtle rearrangement of control flow.
     """
+    # RULING 73-A MIGRATION (2026-08-03), Ruling-14 form.
+    #
+    #     OLD: UNMET_DEPENDENCY, OLDEST_UNRESOLVED, REVIEW_HORIZON,
+    #          LEAST_RECENTLY_EXAMINED, STABLE_IDENTIFIER
+    #     NEW: UNMET_DEPENDENCY, REVIEW_HORIZON, LEAST_RECENTLY_EXAMINED,
+    #          OLDEST_UNRESOLVED, STABLE_IDENTIFIER
+    #
+    # **THE ASSERTION'S SUBJECT IS UNCHANGED** - it still pins the ladder's
+    # order as declared data in the RULED order. What moved is the ruling:
+    # 73-A reordered the ladder because rung 2's totality starved every
+    # commitment but the lowest-minted one.
     assert [basis for basis, _ in LADDER] == [
         DecidingBasis.UNMET_DEPENDENCY,
-        DecidingBasis.OLDEST_UNRESOLVED,
         DecidingBasis.REVIEW_HORIZON,
         DecidingBasis.LEAST_RECENTLY_EXAMINED,
+        DecidingBasis.OLDEST_UNRESOLVED,
         DecidingBasis.STABLE_IDENTIFIER,
     ]
 
@@ -207,13 +223,18 @@ def test_b_the_ladder_order_is_declared_data_in_the_ruled_order():
             for element in node.value.elts:
                 source_order.append(element.elts[0].attr)
     assert source_order, "the LADDER literal was not found - the scan is blind"
-    assert source_order == ["UNMET_DEPENDENCY", "OLDEST_UNRESOLVED",
-                            "REVIEW_HORIZON", "LEAST_RECENTLY_EXAMINED",
+    assert source_order == ["UNMET_DEPENDENCY", "REVIEW_HORIZON",
+                            "LEAST_RECENTLY_EXAMINED", "OLDEST_UNRESOLVED",
                             "STABLE_IDENTIFIER"]
 
 
-def test_b_rungs_one_and_three_tie_through_by_substrate(tmp_path):
+def test_b_rungs_one_and_two_tie_through_by_substrate(tmp_path):
     """PIN (b), the TIE-THROUGH half. **VACUOUS BY SUBSTRATE, and honest.**
+
+    RULING 73-A: these are rungs 1 and 2 now (they were 1 and 3). The two
+    vacuous rungs kept their registered RELATIVE order; what moved past them
+    was `LEAST_RECENTLY_EXAMINED`. Their positions are provisional and each
+    future field ruling re-confirms or moves its own rung.
 
     No dependency field and no review-horizon field exist on any record, so
     these rungs tie ALL candidates - deterministically, which is what makes
@@ -240,12 +261,43 @@ def test_b_rungs_one_and_three_tie_through_by_substrate(tmp_path):
     assert not any("horizon" in f for f in fields)
 
 
-def test_b_rung_two_decides_and_prefers_the_lowest_ordinal(tmp_path):
-    """PIN (b), a case decided at RUNG 2 - the reachable rung."""
+def test_b_rung_four_decides_genesis_and_prefers_the_lowest_ordinal(tmp_path):
+    """PIN (b), **A CASE DECIDED AT RUNG 4** (Ruling 73-A; it was rung 2).
+
+    THE GENESIS CASE, and it is rung 4's most important one: every candidate is
+    never-examined, so rung 3 ties them all and OLDEST_UNRESOLVED breaks the
+    tie deterministically. This is why the first recorded basis is
+    `oldest_unresolved` and every rotation afterwards is
+    `least_recently_examined`.
+    """
     ledger, arbiter = _seeded(tmp_path)
+    context = _ctx(arbiter)
+
+    # Rung 3 genuinely ties here - that is what hands the decision to rung 4.
+    recency = {_rung_least_recently_examined(c, context)
+               for c in arbiter.candidates()}
+    assert recency == {-1}, "genesis candidates must all be never-examined"
+
     selection = arbiter.select()
     assert selection.deciding_basis is DecidingBasis.OLDEST_UNRESOLVED
     assert selection.selected_goal_id == "GLC-0001"
+
+
+def test_b_rung_three_decides_every_selection_after_genesis(tmp_path):
+    """PIN (b), **A CASE DECIDED AT RUNG 3** - the working allocator.
+
+    Once anything has been examined, recency discriminates and rung 3 decides.
+    This is the rung Ruling 73-A moved forward, and this pin is the direct
+    evidence that it now does its work.
+    """
+    _, arbiter = _seeded(tmp_path)
+    first = arbiter.examine()
+    assert first.deciding_basis is DecidingBasis.OLDEST_UNRESOLVED
+
+    for _ in range(5):
+        later = arbiter.examine()
+        assert later.deciding_basis is DecidingBasis.LEAST_RECENTLY_EXAMINED, (
+            "after genesis, recency must be the deciding rung")
 
 
 def test_b_rung_two_parses_ordinals_with_the_anchored_pattern(tmp_path):
@@ -269,12 +321,16 @@ def test_b_rung_two_parses_ordinals_with_the_anchored_pattern(tmp_path):
     assert (_rung_oldest_unresolved(_Fake("GLC-0007"), context) == 7)
 
 
-def test_b_rung_four_sorts_a_never_examined_goal_first(tmp_path):
-    """PIN (b) / PIN (f)'s RULE, at unit level - **where it is reachable.**
+def test_b_rung_three_sorts_a_never_examined_goal_first(tmp_path):
+    """PIN (b) / PIN (f)'s RULE. **RULING 73-A: this is rung 3 now, and it is
+    REACHABLE** - the sentence below no longer needs a caveat.
 
-    *The least recently examined thing is the thing never examined.* The rung's
-    own rule is correct and is pinned here; that `select()` cannot currently
-    reach it is the reported divergence, pinned separately below.
+    *The least recently examined thing is the thing never examined.*
+
+    The rule itself is unchanged and was always correct; what changed is that
+    `select()` can now reach it. The Ruling 73 pass pinned it at unit level
+    precisely because the ladder could not, and that pin is what made the
+    correction checkable.
     """
     ledger, arbiter = _seeded(tmp_path)
     arbiter.examine()                      # GLC-0001 becomes examined
@@ -324,17 +380,24 @@ def test_b_the_recorded_basis_is_the_rung_that_made_the_leader_unique(tmp_path):
 # THE REPORTED DIVERGENCE, PINNED AS THE MEASURED FINDING
 # =====================================================================
 
-def test_divergence_rung_two_is_total_so_rungs_three_to_five_are_unreachable(
-        tmp_path):
-    """**THE REPORTED DIVERGENCE, PINNED SO IT CANNOT BE FORGOTTEN.**
+def test_rung_five_is_a_declared_unreachable_backstop(tmp_path):
+    """**RULING 73-A MIGRATION (2026-08-03), Ruling-14 form.**
 
-    Rung 2 keys on the GLC ordinal, which is unique per commitment, so among
-    two or more candidates it always yields a unique leader. Rungs 3, 4 and 5
-    are therefore unreachable through `select()` - a DIFFERENT condition from
-    rungs 1 and 3's vacancy-by-substrate, and one with a different remedy.
+        OLD: `test_divergence_rung_two_is_total_so_rungs_three_to_five_are_
+             unreachable` - "rung 2 keys on the GLC ordinal ... rungs 3, 4 and
+             5 are therefore unreachable through `select()`", asserting
+             `bases == {OLDEST_UNRESOLVED}` over six examinations.
+        NEW: this pin - rung 4 is total, so RUNG 5 ALONE is unreachable.
 
-    **THIS PIN REDDENS THE DAY RUNG 2'S SEMANTICS ARE RULED ON**, which is
-    exactly when someone needs to notice that the reachable basis set changed.
+    **THE OLD PIN WAS CORRECT WHEN WRITTEN AND ITS FINDING IS WHAT FORCED
+    RULING 73-A.** The measured defect is preserved in the module docstring
+    verbatim; what changed is the ladder, so the unreachable set shrank from
+    {3,4,5} to {5}. Rungs 3 and 4 now DECIDE and are pinned as deciders below.
+
+    **RUNG 5'S REMEDY CLASS DIFFERS FROM THE VACUOUS RUNGS'** - they await a
+    missing FIELD, this one guards a future ID MALFORMATION. It is pinned as
+    DECLARED-UNREACHABLE rather than falsely pinned as deciding cases, because
+    constructing a case would mean minting an id the mint cannot produce.
     """
     ledger, arbiter = _seeded(tmp_path)
     for index in range(4):
@@ -344,46 +407,74 @@ def test_divergence_rung_two_is_total_so_rungs_three_to_five_are_unreachable(
     candidates = arbiter.candidates()
     assert len(candidates) == 6
 
+    # Rung 4 is TOTAL: distinct ordinals for distinct commitments. That is what
+    # makes rung 5 unreachable, and it is the property to watch.
     keys = [_rung_oldest_unresolved(c, context) for c in candidates]
     assert len(set(keys)) == len(keys), (
-        "rung 2 no longer discriminates every candidate - the ladder's "
-        "reachability has changed and this ruling's divergence may be resolved")
+        "rung 4 no longer discriminates every candidate - rung 5 may have "
+        "become reachable and this pin's premise has changed")
 
-    # Every multi-candidate selection therefore lands on rung 2.
-    bases = set()
-    for _ in range(6):
-        bases.add(arbiter.examine().deciding_basis)
-    assert bases == {DecidingBasis.OLDEST_UNRESOLVED}
+    # So no selection can ever record STABLE_IDENTIFIER today.
+    bases = {arbiter.examine().deciding_basis for _ in range(12)}
+    assert DecidingBasis.STABLE_IDENTIFIER not in bases, (
+        "rung 5 decided a case; it is a declared backstop, so its premise "
+        "(unique parseable ordinals at rung 4) must have broken")
 
 
-def test_divergence_a_standing_goal_holds_focus_rather_than_rotating(tmp_path):
-    """**THE CONSEQUENCE, WITNESSED.** Persistent focus, not rotation.
+def test_a_standing_goal_rotates_rather_than_holding_focus(tmp_path):
+    """**RULING 73-A MIGRATION (2026-08-03), Ruling-14 form. THE CORRECTION,
+    WITNESSED - and the assertion is INVERTED because the RULING moved.**
 
-    Six examinations against the two seed roots all select `GLC-0001`. This is
-    what the ladder as ruled produces, and it is recorded here as the measured
-    behaviour rather than described as intended behaviour - the liveness
-    derivation below is what makes it visible to a future consumer.
+        OLD: `test_divergence_a_standing_goal_holds_focus_rather_than_rotating`
+             - "Six examinations against the two seed roots all select
+             `GLC-0001`", asserting `selected == ["GLC-0001"] * 6` and
+             `examinations_for("GLC-0002") == ()`.
+        NEW: this pin - the same six examinations ROTATE.
+
+    **THE OLD ASSERTION RECORDED A DEFECT, NOT A GUARANTEE.** It was written as
+    a measured finding precisely so that correcting the ladder would force it
+    to be revisited rather than leaving a stale claim green. Ruling 73-A ruled
+    the persistence a starvation of RG-2 decided by MINT ORDER - adjudication
+    by list order, Ruling 64 res.5's refused class - and reordered the ladder.
+
+    **RG-2 NOW RECEIVES ATTENTION**, which is the whole point of the rider.
     """
     ledger, arbiter = _seeded(tmp_path)
     selected = [arbiter.examine().selected_goal_id for _ in range(6)]
 
-    assert selected == ["GLC-0001"] * 6
-    assert arbiter.examinations_for("GLC-0002") == ()
+    assert selected == ["GLC-0001", "GLC-0002"] * 3, (
+        "the ladder no longer rotates; the starvation Ruling 73-A corrected "
+        "has returned")
+    assert len(arbiter.examinations_for("GLC-0002")) == 3, (
+        "the preservation root is starved again - it must not be")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "RULING 73 PIN (f), UNWRITABLE AS SPECIFIED - the ONE strict-xfail witness "
-    "this pass lands. res.5 keys rung 2 on the unique GLC ordinal, so rung 4 "
-    "(least-recently-examined) is unreachable and two roots never alternate. "
-    "MEASURED, REPORTED, UNREPAIRED, awaiting a ruling on rung 2's semantics "
-    "(CLAUDE.md §4's standing for a witness). It turns GREEN the day the "
-    "ladder is corrected, and the suite will say so."))
 def test_f_two_roots_alternate_across_examinations(tmp_path):
-    """PIN (f) AS THE RULING SPECIFIES IT - the witness.
+    """PIN (f) AS THE RULING SPECIFIES IT - **THE RETIRED WITNESS.**
 
     A fresh ledger with two roots selects deterministically; the second
     examination selects the OTHER root (least-recently-examined doing its
     work); the third returns to the first. Alternation.
+
+    **THIS TEST CARRIED THE SUITE'S ONE STRICT-XFAIL MARKER AND NOW PASSES.**
+    Landed 2026-08-03 by the Ruling 73 pass as a witness that pin (f) was
+    UNWRITABLE under the ladder it was handed; retired 2026-08-03 by Ruling
+    73-A, which reordered the ladder. The marker it carried, verbatim:
+
+        @pytest.mark.xfail(strict=True, reason=(
+            "RULING 73 PIN (f), UNWRITABLE AS SPECIFIED - the ONE strict-xfail
+            witness this pass lands. res.5 keys rung 2 on the unique GLC
+            ordinal, so rung 4 (least-recently-examined) is unreachable and two
+            roots never alternate. MEASURED, REPORTED, UNREPAIRED, awaiting a
+            ruling on rung 2's semantics (CLAUDE.md §4's standing for a
+            witness). It turns GREEN the day the ladder is corrected, and the
+            suite will say so."))
+
+    **THE ASSERTION BODY IS BYTE-UNCHANGED** - only the marker was removed.
+    That is what makes this a MEASUREMENT of the correction rather than a claim
+    about it: the tripwire written against the defect is the thing that fired
+    when the defect died. §4's mechanism, completing exactly as designed, and
+    the fourth time this suite has retired a witness that way.
     """
     _, arbiter = _seeded(tmp_path)
     first = arbiter.examine().selected_goal_id
@@ -668,15 +759,46 @@ def test_f_a_fresh_state_selects_deterministically(tmp_path):
 def test_f_hold_is_derivable_across_consecutive_records(tmp_path):
     """res.6: HOLD is re-selection, DERIVABLE by comparing records, never
     stored. There is no HOLD member and no stored flag - the comparison is the
-    whole mechanism."""
-    _, arbiter = _seeded(tmp_path)
-    for _ in range(3):
-        arbiter.examine()
+    whole mechanism.
 
-    records = arbiter.examinations()
+    **RULING 73-A MIGRATION (2026-08-03), Ruling-14 form - THE FIXTURE MOVED,
+    THE ASSERTION DID NOT.**
+
+        OLD: three examinations over the two seed roots, asserting
+             `held == [True, True]`.
+        NEW: three examinations over a SINGLE candidate, asserting the same
+             `held == [True, True]`, plus the rotating case asserting HOLD is
+             correctly derived as absent.
+
+    The old fixture produced consecutive re-selection only because the ladder
+    was starving one root; now that rotation works, a two-root field alternates
+    and HOLD does not occur there. **The property being pinned - that HOLD is
+    derivable from the records and stored nowhere - is unchanged**; what
+    changed is which configuration exhibits it. Pinning both directions is
+    strictly stronger than the old single case.
+    """
+    # A single standing commitment: every examination re-selects it, so HOLD is
+    # the correct derivation.
+    ledger = GoalLedger(ledger_path=str(tmp_path / "solo.jsonl"))
+    _project(ledger, "the only one")
+    solo = GoalArbiter(ledger, log_path=str(tmp_path / "solo_exm.jsonl"))
+    for _ in range(3):
+        solo.examine()
+
+    records = solo.examinations()
     held = [b.selected_goal_id == a.selected_goal_id
             for a, b in zip(records, records[1:])]
     assert held == [True, True]
+
+    # And the rotating case: HOLD is derived as ABSENT, from the same
+    # comparison and with no stored flag consulted either way.
+    _, rotating = _seeded(tmp_path, "rot")
+    for _ in range(3):
+        rotating.examine()
+    turns = rotating.examinations()
+    assert [b.selected_goal_id == a.selected_goal_id
+            for a, b in zip(turns, turns[1:])] == [False, False]
+
     assert not any("hold" in m.name.lower() for m in DecidingBasis)
 
 
@@ -799,19 +921,37 @@ def test_g_an_empty_field_selects_nothing_and_records_nothing(tmp_path):
 
 def test_h_the_tally_is_correct_on_a_constructed_sequence(tmp_path):
     """PIN (h). Three consecutive selections, no evidence -> count 3, progress
-    False; append evidence -> progress True."""
-    ledger, arbiter = _seeded(tmp_path)
+    False; append evidence -> progress True.
+
+    **RULING 73-A MIGRATION (2026-08-03), Ruling-14 form - THE FIXTURE MOVED,
+    THE ASSERTIONS DID NOT.**
+
+        OLD: three examinations over the two seed roots (which, under the old
+             ladder, all selected `GLC-0001`), asserting count 3.
+        NEW: three examinations over a SINGLE candidate - the configuration
+             that genuinely produces a consecutive run now that rotation works.
+             Every assertion is character-for-character the same.
+
+    The old fixture produced a run of three only because the ladder starved one
+    root. **A sustained run is now a real condition rather than an artefact**,
+    which is exactly what makes this measurement worth having: it is the signal
+    QL5's `no-progress` stop consumes, and it should be produced by a goal
+    genuinely holding attention.
+    """
+    ledger = GoalLedger(ledger_path=str(tmp_path / "solo.jsonl"))
+    goal = _project(ledger, "the only one")
+    arbiter = GoalArbiter(ledger, log_path=str(tmp_path / "solo_exm.jsonl"))
     for _ in range(3):
         arbiter.examine()
 
-    measured = arbiter.focus_persistence("GLC-0001")
+    measured = arbiter.focus_persistence(goal.goal_id)
     assert isinstance(measured, FocusPersistence)
     assert measured.consecutive_selections == 3
     assert measured.progress_recorded is False
 
-    ledger.record_evidence("GLC-0001", ["CLM-0001"], "something moved")
-    assert arbiter.focus_persistence("GLC-0001").progress_recorded is True
-    assert arbiter.focus_persistence("GLC-0001").consecutive_selections == 3
+    ledger.record_evidence(goal.goal_id, ["CLM-0001"], "something moved")
+    assert arbiter.focus_persistence(goal.goal_id).progress_recorded is True
+    assert arbiter.focus_persistence(goal.goal_id).consecutive_selections == 3
 
 
 def test_h_a_never_selected_goal_reports_zero(tmp_path):
