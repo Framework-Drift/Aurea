@@ -110,6 +110,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.tether.session_governor import TetherProtocol
     from src.external.claim_ancestry import ClaimAncestryLedger
     from src.external.prediction_ledger import PredictionLedger
+    from src.goals.goal_activation import ActivationLayer
     from src.goals.goal_arbitration import GoalArbiter
     from src.goals.goal_ledger import GoalLedger
     from src.filtration.scar_logic_core import ScarLogicCore
@@ -157,6 +158,14 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # the injectable set from `src/` and REFUSES a run that has fallen
         # behind.
         (GoalArbiter, "log_path", "logs/goal_examinations.jsonl"),
+        # Ruling 74 (Docket Q item Q3). **THE FIRST GOAL STORE THE CORE
+        # ACTUALLY COMPOSES** - `AureaCore.__init__` builds all three now. That
+        # makes this redirect load-bearing in a way the two above are not: an
+        # unredirected path would be constructed on every soak cycle against
+        # the real `data/runtime/`. It still must show ZERO activation lines,
+        # because composing a layer is not invoking one and every activation
+        # verb is a door opened from outside.
+        (ActivationLayer, "log_path", "logs/goal_activations.jsonl"),
         (DMW, "runtime_path", "dmw_queue.json"),
         (NovaEngine, "runtime_path", "nova_record.json"),
         (SAE, "runtime_path", "sae_epoch.json"),

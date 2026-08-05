@@ -128,11 +128,31 @@ class GoalProvenance(str, Enum):
     lose the distinction between WHERE a proposal came from and WHO made it.
 
     INTERNAL_DRIVE HAS NO LEGITIMATE PRODUCER TODAY EITHER, and that is stated
-    rather than enforced: nothing internal proposes goals yet, so its first
-    producer is Q3's drive wiring. It is deliberately NOT hard-barred like the
-    QL3 kinds - the barrier there is a LAW about world agency, whereas this is
-    simply a mechanism that does not exist yet. **Any INTERNAL_DRIVE record
-    appearing in the ledger before Q3 is a FINDING**, not a permitted state.
+    rather than enforced: nothing internal proposes goals yet. It is
+    deliberately NOT hard-barred like the QL3 kinds - the barrier there is a LAW
+    about world agency, whereas this is simply a mechanism that does not exist
+    yet. **Any INTERNAL_DRIVE record appearing in the ledger is a FINDING**, not
+    a permitted state.
+
+        ~~so its first producer is Q3's drive wiring~~ ... ~~Any INTERNAL_DRIVE
+        record appearing in the ledger BEFORE Q3 is a FINDING~~
+
+    **SUPERSEDED 2026-08-05 BY RULING 74 (Q3), old text kept above verbatim.**
+    Q3 LANDED AND THE PRODUCER WAS STILL NOT BUILT - deliberately. The
+    finding-condition therefore loses its expiry date rather than its force:
+    "before Q3" would now read as satisfied and quietly license the very record
+    it was written to flag.
+
+    **REOPENING IS A CONJUNCTION, and neither half is optional** (Ruling 62's
+    form, worked out at `src/goals/goal_activation.py`'s closing note):
+
+        the activation layer exists          -- SATISFIED (Ruling 74)
+        AND a ruled content source exists    -- NOT SATISFIED
+
+    A drive at this era has nothing honest to produce: deriving a
+    `desired_state` from templates would FABRICATE INTENTION, and generative
+    content machinery is unruled. Until both halves hold, this member stays
+    producer-less and any record wearing it is a finding.
     """
 
     EXTERNAL_PROPOSAL = "external_proposal"

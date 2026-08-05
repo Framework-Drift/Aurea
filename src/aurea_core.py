@@ -46,6 +46,10 @@ from src.suspension.veiled_thread import VeiledThread
 from src.suspension.black_sphere import BlackSphere
 from src.topology.tca_integration import TCAIntegration
 from src.topology.tcaml import TCAML, LockReleaseViolation, StaleLockRelease
+from src.goals.goal_ledger import GoalLedger
+from src.goals.goal_arbitration import GoalArbiter, GoalExamination
+from src.goals.goal_activation import (ActivationLayer, BoundKind,
+                                       GoalActivation, StopCondition)
 from src.utils.atomic_write import atomic_write_json
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
@@ -541,6 +545,32 @@ class AureaCore:
         # source. Do not add a fallback to make this look tidier.
         for entry in self.black_sphere.entries.values():
             self.tca.place_paradox(entry)
+
+        # ---- THE GOAL LAYER (Ruling 74 res.6) --------------------------------
+        #
+        # DOCKET Q's three stores, composed here and reachable through the three
+        # doors below. **NOTHING IN THIS CONSTRUCTOR, AND NOTHING ANYWHERE IN
+        # `src/`, CALLS ANY OF THEM.** They are `process_input`'s SIBLINGS -
+        # doors, opened only from outside - and that is pinned as SHAPE (no
+        # internal call site, by AST) and as BEHAVIOR (a 200-cycle soak writes
+        # ZERO examination lines and ZERO activation lines).
+        #
+        # NO SCHEDULER, NO LOOP, NO TIMER, NO BACKGROUND ANYTHING. A core that
+        # examined its own goals on a tick would be pursuing, and pursuit that
+        # starts itself is the compulsion shape QL5 refuses. Quiescence here is
+        # correct behaviour, not an unfinished wire.
+        #
+        # **GENESIS IS NOT CALLED, AND ITS ABSENCE IS DELIBERATE** (Ruling 72's
+        # own reasoning, which this composition is the first real test of). No
+        # store in this codebase writes from a constructor, and one that did
+        # would turn every incidental `AureaCore()` - a test fixture, a
+        # diagnostic script, a soak cycle - into two permanent root records.
+        # Founding is a deliberate act; a caller reaches `core.goal_ledger`
+        # directly for it, because reads and attribute access are free
+        # (Ruling 1) and a fourth door is not this ruling's to add.
+        self.goal_ledger = GoalLedger()
+        self.goal_arbiter = GoalArbiter(self.goal_ledger)
+        self.goal_activation = ActivationLayer(self.goal_arbiter)
 
     def _create_seed_doctrines(self):
         """Create foundational doctrines.
@@ -2055,6 +2085,56 @@ class AureaCore:
                 self.stats['doctrines_fermenting'] += 1
 
         return report
+
+    # =================================================================
+    # THE GOAL DOORS (Ruling 74 res.6) - `process_input`'s SIBLINGS
+    # =================================================================
+    #
+    # Three public verbs, every one EXTERNALLY INVOKED. There is no internal
+    # caller anywhere in `src/` and no scheduler that could become one; that
+    # absence is the whole of QL5's "nothing loops" at the wiring layer, and it
+    # is pinned rather than promised.
+    #
+    # Each is a THIN DELEGATION. The core composes the three stores and hands
+    # the call on; it adds no policy, no default bound, no retry and no
+    # decision. A door that decided anything would be a fourth authority nobody
+    # ruled on.
+
+    def examine_goals(self) -> GoalExamination:
+        """Select ONE standing commitment for attention, and record it.
+
+        Delegates to the arbiter (Ruling 73 / 73-A): deterministic, ladder-
+        ordered, permutation-invariant, and it grants nothing. RAISES when
+        nothing stands - a legitimate state, and an examination record carries a
+        selection, so there is no honest examination of an empty field.
+        """
+        return self.goal_arbiter.examine()
+
+    def open_goal_activation(self, examination: GoalExamination,
+                             bound_kind: BoundKind,
+                             bound_magnitude: int) -> GoalActivation:
+        """Open a BOUNDED episode of attention against an examined goal.
+
+        The examination is the AUTHORIZATION (Ruling 74 res.5) - there is no
+        path here or below that opens on a bare goal id, and the core does not
+        add one. **The bound is the CALLER'S declaration**: this door supplies
+        no default, because a default bound would be a magnitude AUREA coined
+        for herself at the exact place attention gets its limit.
+        """
+        return self.goal_activation.open_activation(
+            examination, bound_kind, bound_magnitude)
+
+    def close_goal_activation(self, activation_id: str,
+                              stop_condition: StopCondition,
+                              closing_basis_ids: Any = ()):
+        """End an episode, naming a member of QL5's closed stop set.
+
+        A SEPARATE APPEND - the open line is never rewritten. Nothing closes an
+        episode automatically, here or below: `bound_met` reports, and a caller
+        decides.
+        """
+        return self.goal_activation.close_activation(
+            activation_id, stop_condition, closing_basis_ids)
 
     def get_system_status(self) -> Dict[str, Any]:
         """Get comprehensive system status."""

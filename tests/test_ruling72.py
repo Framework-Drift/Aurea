@@ -821,8 +821,28 @@ def test_h_the_goal_ledgers_consumer_set_is_exactly_the_ruled_one():
     the consumer set is exactly the ruled one; what changed is that the ruled
     set now has one member instead of none. An unruled second consumer still
     reddens this pin, which is the property worth keeping.
+
+    RULING 74 MIGRATION (2026-08-05), Ruling-14 form. SECOND migration, same
+    shape, same reason - **the pin fired again, and again the wiring arrived
+    WITH its ruling.**
+
+        OLD: `RULED_CONSUMERS = ["src/goals/goal_arbitration.py"]`
+        NEW: `["src/aurea_core.py", "src/goals/goal_activation.py",
+              "src/goals/goal_arbitration.py"]`
+
+    Ruling 74 res.6 composes ledger + arbiter + activation layer in
+    `AureaCore.__init__` and exposes three externally-invoked doors, so the core
+    is now a legitimate consumer; `goal_activation.py` reaches the goals package
+    for the `GoalExamination` type that IS its authorization gate (res.5).
+    **`src/aurea_core.py` IS THE ONE TO WATCH** - it is the first consumer that
+    is not itself part of Docket Q, which is exactly why it took a ruling.
+
+    NO ASSERTION MOVED: still an exact-set equality, still red on an unruled
+    consumer, and the set is sorted so a fourth entry cannot hide in ordering.
     """
-    RULED_CONSUMERS = ["src/goals/goal_arbitration.py"]
+    RULED_CONSUMERS = ["src/aurea_core.py",
+                       "src/goals/goal_activation.py",
+                       "src/goals/goal_arbitration.py"]
 
     consumers = []
     for path in sorted((REPO / "src").rglob("*.py")):

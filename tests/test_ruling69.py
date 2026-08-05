@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import queue
 import threading
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from src.external.claim_ancestry import (AncestryLedgerUnreadable,
 from src.external.prediction_ledger import (PredictionLedger,
                                             PredictionLedgerUnreadable,
                                             provided)
+from src.goals.goal_activation import (ActivationLayer, ActivationLogUnreadable,
+                                       BoundKind)
 from src.goals.goal_arbitration import ExaminationLogUnreadable, GoalArbiter
 from src.goals.goal_ledger import (GoalKind, GoalLedger, GoalLedgerUnreadable,
                                    GoalLevel, GoalProvenance)
@@ -55,6 +58,79 @@ def _arbiter_over(log_path):
                   provenance=GoalProvenance.EXTERNAL_PROPOSAL,
                   asserter="tester")
     return GoalArbiter(ledger, log_path=str(log_path))
+
+
+# The heaviest case in this battery mints twelve ids, and Ruling 74's serial-
+# attention guard permits ONE open activation PER GOAL - so the fixture needs at
+# least that many standing commitments, each with its own examination. **A
+# HARNESS SIZE, not a magnitude:** nothing in `src/` reads it, and it comes from
+# `range(6) * 2` in the interleave test rather than from anything about AUREA.
+_ACTIVATION_FIXTURE_DEPTH = 16
+
+# One queue of pre-recorded examinations PER LOG PATH, so the two instances the
+# interleave and mutex tests build share it and can never be handed the same
+# examination. See `_activation_over`.
+_ACTIVATION_EXAMINATIONS: dict = {}
+
+
+def _activation_over(log_path):
+    """An `ActivationLayer` over an arbiter with sixteen standing commitments
+    and sixteen examinations already recorded.
+
+    RULING 74's row needs the DEEPEST fixture of the five, and that is res.5
+    showing through rather than harness clumsiness: an activation is authorized
+    by an EXAMINATION, which needs a standing COMMITMENT. There is no shallower
+    way to mint one, because there is no path that opens on a bare goal id.
+
+    **SIXTEEN GOALS RATHER THAN ONE, AND THE REASON IS THE RULING.** Attention
+    is SERIAL PER GOAL, so a single-commitment fixture mints exactly one
+    activation and then refuses - correctly. Ruling 73-A's recency rotation then
+    hands each successive examination a never-examined goal, so N examinations
+    select N distinct goals and N opens are all legal.
+
+    **THE EXAMINATIONS ARE PRE-RECORDED AND HANDED OUT THROUGH A `Queue`, AND
+    THAT IS NOT FIXTURE FUSSINESS - IT KEEPS THIS BATTERY MEASURING ITS OWN
+    SUBJECT.** `GoalArbiter.examine()` runs `select()` OUTSIDE its mint lock, so
+    two threads calling it concurrently can both select the same goal (both get
+    distinct EXM ids; both name one goal). The second `open_activation` then
+    refuses on serial attention - **the Ruling 74 guard working exactly as
+    ruled**, but it would turn Ruling 69's MUTEX test into a test of the
+    arbiter's selection atomicity instead of the ACT mint's. Pre-recording
+    sequentially and dealing one examination per mint leaves the ACT mint as the
+    only contended resource, which is what res.3 is about.
+
+        **REPORTED, NOT FIXED HERE:** that `select()`-outside-the-lock window is
+        a real observation about `GoalArbiter.examine()`. It is Ruling 73's file
+        and its own ruling's to close, and it is benign under the declared
+        one-process topology with external invocation.
+
+    SEEDED TO A COUNT rather than unconditionally, because `build` is called
+    TWICE in both tests and both instances share these paths - committing
+    unconditionally would make the fixture's size depend on how many instances a
+    test happens to construct.
+
+    Each store sits at a DERIVED sibling path so the three never share a file,
+    which would make the mint pins measure the wrong interleave.
+    """
+    ledger = GoalLedger(ledger_path=str(Path(log_path).with_suffix(".goals")))
+    while len(ledger.commitments()) < _ACTIVATION_FIXTURE_DEPTH:
+        ledger.commit(desired_state="x", kind=GoalKind.RESEARCH,
+                      level=GoalLevel.PROJECT,
+                      provenance=GoalProvenance.EXTERNAL_PROPOSAL,
+                      asserter="tester")
+    arbiter = GoalArbiter(ledger,
+                          log_path=str(Path(log_path).with_suffix(".exm")))
+
+    key = str(Path(log_path).resolve())
+    pending = _ACTIVATION_EXAMINATIONS.get(key)
+    if pending is None:
+        pending = _ACTIVATION_EXAMINATIONS[key] = queue.Queue()
+        for _ in range(_ACTIVATION_FIXTURE_DEPTH):
+            pending.put(arbiter.examine())
+
+    layer = ActivationLayer(arbiter, log_path=str(log_path))
+    layer.pending_examinations = pending      # harness-only, never read by src/
+    return layer
 
 
 # One row per ledger: build, mint-one, prefix, first id, typed refusal.
@@ -98,6 +174,21 @@ LEDGERS = [
     ("examination", lambda p: _arbiter_over(p),
      lambda A: A.examine().examination_id,
      "EXM-", "EXM-0001", ExaminationLogUnreadable),
+    # RULING 74 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED -
+    # one row added, so every parametrized claim in this file now also binds
+    # the activation log, the shared mint's FOURTH consumer.
+    #
+    # Its builder needs the DEEPEST fixture of the five, and that is res.5
+    # showing through rather than harness clumsiness: an activation cannot be
+    # opened without an EXAMINATION, which cannot be recorded without a
+    # standing COMMITMENT. **There is no shallower way to mint one, because
+    # there is no path that opens on a bare goal id** - so this row exercises
+    # the whole authorization chain every time the battery runs.
+    ("activation", lambda p: _activation_over(p),
+     lambda X: X.open_activation(X.pending_examinations.get_nowait(),
+                                 BoundKind.EXAMINATION_BOUND,
+                                 1).activation_id,
+     "ACT-", "ACT-0001", ActivationLogUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -298,10 +389,15 @@ def test_the_lock_is_keyed_by_resolved_path_not_by_object():
 # claim TRUE BY OMISSION - the completeness-claim defect. Ruling 73's
 # examination log is the shared mint's THIRD consumer and inherits Ruling 69's
 # whole property set at the `EXM-` prefix.
+# RULING 74 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED - one
+# module added, for the same reason the two before it were: the activation log
+# is the shared mint's FOURTH consumer and inherits Ruling 69's whole property
+# set at the `ACT-` prefix.
 _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
                    "src/external/prediction_ledger.py",
                    "src/goals/goal_ledger.py",
-                   "src/goals/goal_arbitration.py")
+                   "src/goals/goal_arbitration.py",
+                   "src/goals/goal_activation.py")
 
 
 def _seq_assignments(tree) -> list:

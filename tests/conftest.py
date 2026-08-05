@@ -28,9 +28,27 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-TWO PATHS: five resolved from class attributes,
-seventeen from `__init__` defaults. If you add a twenty-third and do not add it
+THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class attributes,
+twenty from `__init__` defaults. If you add a twenty-sixth and do not add it
 here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS TWENTY-TWO PATHS: five resolved from class
+    attributes, seventeen from `__init__` defaults.~~
+
+**CORRECTED 2026-08-05 (Ruling 74), old text kept above verbatim - AND THE
+STALENESS IS THE FINDING, NOT THE TYPO.** The count read TWENTY-TWO while the
+tree carried TWENTY-FOUR: Ruling 72 added the goal ledger's path and Ruling 73
+the examination log's, and neither pass updated this number. Ruling 74 adds the
+activation log's, bringing it to twenty-five.
+
+That is this docstring's own mechanism half-working, and it is worth saying
+plainly. The count replaced a completeness BOAST at Ruling 34 precisely because
+"a count goes visibly stale and a boast does not" - and it did go visibly stale,
+exactly as designed. What the design cannot do is make anyone LOOK. **A number
+that drifts for two passes is still better than a claim that never drifts at
+all**, because it can be checked mechanically against the tables below in a way
+"every durable store" never could; but it is not self-enforcing, and reading it
+as if it were is how the completeness defect gets in through the remedy.
 
 A CORRECTION, AND IT IS THE POINT OF THIS PARAGRAPH (Ruling 34 res.7, 2026-07-27).
 This docstring previously read "AS OF RULING 32 THIS FIXTURE COVERS EVERY
@@ -86,6 +104,7 @@ from src.doctrine.dee import DMW
 from src.expansion.nova import NovaEngine
 from src.external.claim_ancestry import ClaimAncestryLedger
 from src.external.prediction_ledger import PredictionLedger
+from src.goals.goal_activation import ActivationLayer
 from src.goals.goal_arbitration import GoalArbiter
 from src.goals.goal_ledger import GoalLedger
 from src.expansion.sae import SAE
@@ -226,6 +245,21 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # ledgers above this redirect protects tests that build one DIRECTLY,
         # and it lands in the SAME COMMIT as the store per Ruling 31's rule.
         (GoalArbiter, "log_path", "goal_examinations.jsonl"),
+        # Ruling 74 (Docket Q item Q3): the activation log - bounded episodes of
+        # directed attention, opened and closed as SEPARATE appends.
+        #
+        # **THIS ONE IS DIFFERENT FROM THE TWO ABOVE, AND THE DIFFERENCE IS WHY
+        # IT MATTERS MOST.** Ruling 74 res.6 composes all three goal stores in
+        # `AureaCore.__init__`, so from this commit onward EVERY test that
+        # builds a core constructs an `ActivationLayer` - the ancestry ledger's
+        # situation rather than the prediction ledger's. Without this redirect a
+        # bare `AureaCore()` would point at the real `data/runtime/` log.
+        #
+        # Composing a layer is NOT invoking one: no verb here has an internal
+        # caller, so a core that is merely constructed writes nothing. The
+        # redirect protects against the day that stops being true, and against
+        # tests that build a layer DIRECTLY.
+        (ActivationLayer, "log_path", "goal_activations.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

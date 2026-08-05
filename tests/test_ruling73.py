@@ -1109,13 +1109,36 @@ def test_i_persisted_lines_carry_no_numbers(tmp_path):
         assert numbers(json.loads(line)) == []
 
 
-def test_i_nothing_in_src_consumes_the_arbiter():
-    """res.: **the module is unwired and stays unwired this pass.**
+def test_i_the_arbiters_consumer_set_is_exactly_the_ruled_one():
+    """res.: the arbiter's consumers are ENUMERATED, and each is ruled.
 
-    Q3's drive wiring is the consumer, and it is its own ruling. This pin
-    reddens the day something imports the arbiter - which is exactly when that
-    wiring needs a ruling rather than arriving as a convenience.
+    RULING 74 MIGRATION (2026-08-05), Ruling-14 form.
+
+        OLD: `assert consumers == []`, under the name
+             `test_i_nothing_in_src_consumes_the_arbiter`, with the docstring
+             promising the pin "reddens the day something imports the arbiter -
+             which is exactly when that wiring needs a ruling rather than
+             arriving as a convenience."
+        NEW: `assert sorted(set(consumers)) == RULED_CONSUMERS`, two members.
+
+    **THE PIN FIRED EXACTLY AS DESIGNED AND THE PROMISE WAS KEPT.** Q3 is that
+    wiring and it arrived WITH its ruling: `goal_activation.py` takes a
+    `GoalExamination` as its authorization gate (Ruling 74 res.5 - there is no
+    path that opens on a bare goal id, and the type IS the enforcement), and
+    `aurea_core.py` composes the arbiter and exposes `examine_goals` as one of
+    three externally-invoked doors (res.6).
+
+    **NO ASSERTION WAS WEAKENED - IT WAS NARROWED**, exactly as Ruling 73 did to
+    Ruling 72's twin. The claim is still exact-set equality; the ruled set has
+    two members instead of none, and an unruled third still reddens it.
+
+    THE TEST WAS RENAMED because its old name asserted the very thing that
+    stopped being true - a name reading "nothing consumes the arbiter" over a
+    body listing two consumers is false documentation in executable form
+    (Docket E's class), and this file is read by whoever wires the next one.
     """
+    RULED_CONSUMERS = ["src/aurea_core.py", "src/goals/goal_activation.py"]
+
     consumers = []
     for path in sorted((REPO / "src").rglob("*.py")):
         if "__pycache__" in path.parts or path.name == "goal_arbitration.py":
@@ -1124,7 +1147,9 @@ def test_i_nothing_in_src_consumes_the_arbiter():
             if isinstance(node, ast.ImportFrom) and node.module:
                 if "goal_arbitration" in node.module:
                     consumers.append(path.relative_to(REPO).as_posix())
-    assert consumers == [], f"the arbiter acquired a consumer at {consumers}"
+    assert sorted(set(consumers)) == RULED_CONSUMERS, (
+        f"the arbiter's consumer set is {sorted(set(consumers))}, not the "
+        f"ruled {RULED_CONSUMERS}. Wiring it takes a ruling.")
 
 
 # =====================================================================
