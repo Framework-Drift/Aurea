@@ -55,18 +55,25 @@ jobs:
           # Ruling 72 (Docket Q item Q1): the goal roots. A TRACKED seed with
           # no writer, so it joins the set this step holds byte-for-byte.
           expected_goal_roots=67e6f9012090319bfe9cbca302d83b575e5c58b3
+          # Ruling 77 (Docket R): the evaluation corpus. Also a TRACKED seed
+          # with no writer - nothing in `src/` reads it and no process appends
+          # to it, so a change here is a HUMAN CURATION EVENT (EL4/EL6) and
+          # must be visible as one rather than arriving silently.
+          expected_eval_cases=828292ff93ce593e5065ec3412b864a4937231aa
 
           actual_doctrines=$(git hash-object data/doctrines.json)
           actual_scars=$(git hash-object data/scars.json)
           actual_echoes=$(git hash-object data/echoes.jsonl)
           actual_goal_roots=$(git hash-object data/goal_roots.json)
+          actual_eval_cases=$(git hash-object data/eval/seed_cases.jsonl)
 
           fail=0
           for pair in \
             "doctrines.json $expected_doctrines $actual_doctrines" \
             "scars.json     $expected_scars     $actual_scars" \
             "echoes.jsonl   $expected_echoes    $actual_echoes" \
-            "goal_roots.json $expected_goal_roots $actual_goal_roots"
+            "goal_roots.json $expected_goal_roots $actual_goal_roots" \
+            "eval/seed_cases.jsonl $expected_eval_cases $actual_eval_cases"
           do
             set -- $pair
             if [ "$2" != "$3" ]; then

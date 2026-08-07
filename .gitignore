@@ -33,3 +33,14 @@ data/collapse_logs/*.jsonl
 # lands here instead, under one glob-ignorable prefix that cannot collide with
 # a seed path.
 data/runtime/
+
+# Ruling 77 (2026-08-06) - DOCKET R: EVALUATION REPORTS ARE INSTRUMENT OUTPUT.
+# A report is ABOUT her, not HERS - which is why it lands outside `data/` at
+# all. It is machine-written, per-run, and carries a wall-clock name; a
+# committed copy would be a merge conflict and, worse, a stored result in a
+# docket whose first law is that results carry no authority (EL1).
+#
+# The CORPUS is the opposite and stays TRACKED (`data/eval/seed_cases.jsonl`):
+# it is read-only input with no writer, and CI holds its blob hash
+# byte-for-byte beside the four identity seeds.
+reports/
