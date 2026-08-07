@@ -609,11 +609,18 @@ def test_neither_process_input_accepts_a_source_argument() -> None:
 
     from src.perception.spl import SPL
 
-    for owner, func in (("SPL", SPL.process_input),
-                        ("AureaCore", AureaCore.process_input)):
+    # RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED.
+    #     OLD: `("SPL", SPL.process_input)`
+    #     NEW: `("SPL.normalize", SPL.normalize)`
+    # Ruling 75 deleted `SPL.process_input` - the layer stopped minting, and so
+    # stopped constructing an Echo at all. The `source` claim is unchanged and
+    # now rests on a stronger structural fact than a signature: there is no
+    # record built in that module for a `source` to be written onto.
+    for owner, func in (("SPL.normalize", SPL.normalize),
+                        ("AureaCore.process_input", AureaCore.process_input)):
         params = inspect.signature(func).parameters
         assert "source" not in params, (
-            f"{owner}.process_input still accepts `source`; Ruling 68 deletes "
+            f"{owner} still accepts `source`; Ruling 68 deletes "
             f"the parameter, not merely its documentation. Params: "
             f"{list(params)}")
 

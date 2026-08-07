@@ -423,16 +423,35 @@ def test_the_echo_carries_exactly_the_claim_id_of_its_own_ledger_line() -> None:
 
 
 def test_the_linkage_survives_the_echo_store_round_trip(tmp_path) -> None:
-    """A join key that does not persist is not a join key."""
+    """A join key that does not persist is not a join key.
+
+    RULING 75 MIGRATION (2026-08-05), Ruling-14 form - and the pin is STRICTLY
+    STRONGER, because the thing it asserts finally happens on the real path.
+
+        OLD:  core.process_input(...) ; then, in the TEST,
+              `EchoMemory(filepath=...).add_echo(result["echo"])`
+              `reloaded = EchoMemory(filepath=...).echoes`
+        NEW:  `core.process_input(...)` persists BY ITSELF; the round trip is
+              read back from the core's own store through `read_all()`.
+
+    **THE OLD PIN HAD TO PERFORM THE PERSISTENCE ITSELF, and that was the
+    finding hiding in it:** nothing in `src/` persisted an echo, so the test
+    hand-carried the record into a store the pipeline never used, and what it
+    proved was that `Echo` round-trips - not that AUREA remembers. Ruling 75
+    wires the store, so the claim is now measured end to end: the core
+    perceives, the core persists, and a SEPARATE reader over the same path
+    recovers the join key.
+    """
     core = AureaCore()
     result = core.process_input("Water is wet.")
 
-    path = tmp_path / "echo_roundtrip.jsonl"
-    EchoMemory(filepath=str(path)).add_echo(result["echo"])
-    reloaded = EchoMemory(filepath=str(path)).echoes
+    # A fresh reader over the core's own path - the restart case in miniature.
+    reloaded = EchoMemory(
+        filepath=str(core.echo_memory.runtime_path)).read_all()
 
     assert len(reloaded) == 1
     assert reloaded[0].claim_id == result["claim_id"]
+    assert reloaded[0].id == result["echo"].id
 
 
 def test_a_legacy_persisted_echo_without_the_key_loads_as_none() -> None:
@@ -451,18 +470,35 @@ def test_a_legacy_persisted_echo_without_the_key_loads_as_none() -> None:
         legacy = {"id": "Echo-legacy", "content": "x", "source": "user",
                   "resonance_score": 1.0, "created_at": "2020-01-01T00:00:00"}
 
-    Ruling 68 DELETED `Echo.source`, so `Echo(**legacy)` with that key now
+    ~~Ruling 68 DELETED `Echo.source`, so `Echo(**legacy)` with that key now
     raises `TypeError`. **THAT IS A REAL CONSEQUENCE, NOT A TEST ARTIFACT:**
     `EchoMemory._load` reconstructs with exactly this `Echo(**data)` form, so a
     RUNTIME echo store written by any earlier build cannot be loaded by this
     one. It ships nothing broken - the tracked seed `data/echoes.jsonl` is EMPTY
     (0 bytes) and `EchoMemory` is UNWIRED (`aurea_core` never persists an echo,
     the carried finding) - and `echo_memory.py` is EXPLICITLY out of Ruling 68's
-    scope, its schema belonging to the EchoMemory wiring ruling.
+    scope, its schema belonging to the EchoMemory wiring ruling.~~
 
-    So it is REPORTED rather than fixed here, and deliberately NOT pinned as
+    ~~So it is REPORTED rather than fixed here, and deliberately NOT pinned as
     desired behaviour: pinning "loading a legacy echo raises" would enshrine a
-    defect as intent. The wiring ruling owns it.
+    defect as intent. The wiring ruling owns it.~~
+
+    **THE CARRIED FINDING IS DISCHARGED 2026-08-05 BY RULING 75**, old text kept
+    verbatim - it named the owner correctly and the owner has ruled.
+
+    `Echo(**legacy)` with a `source` key still raises, and that is CORRECT: the
+    field is deleted from the dataclass and nothing should resurrect it. What
+    changed is that **`EchoMemory` no longer reconstructs with the raw
+    `Echo(**data)` form** (`_load` itself is gone). Ruling 75 res.2 rules
+    TOLERANT CONSTRUCTION: an unknown key is dropped AT OBJECT CONSTRUCTION and
+    never from the file, so a legacy runtime store loads clean while its BYTES
+    stay untouched forever (Ruling 68's own forensic law, cited at the site).
+
+    The resolution is pinned in `tests/test_ruling75.py`
+    (`test_d_a_legacy_line_loads_clean_and_its_bytes_are_untouched`), driving a
+    real legacy line with `source` AND an old wall-clock id. **This test keeps
+    its original assertion unchanged** - it is about the DATACLASS, which is
+    exactly as strict as it was.
     """
     legacy = {"id": "Echo-legacy", "content": "x",
               "resonance_score": 1.0, "created_at": "2020-01-01T00:00:00"}
@@ -470,24 +506,45 @@ def test_a_legacy_persisted_echo_without_the_key_loads_as_none() -> None:
     assert Echo(**legacy).claim_id is None
 
 
-def test_spl_called_standalone_defaults_to_none() -> None:
-    """A standalone call mints no record, so it has no id to carry - and does
-    not invent one."""
-    assert SPL().process_input("hello").claim_id is None
+def test_a_standalone_record_defaults_to_none(tmp_path) -> None:
+    """A standalone call mints no ancestry record, so it has no id to carry -
+    and does not invent one.
+
+    RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED - the
+    same claim, at the construction site it moved to.
+        OLD: `assert SPL().process_input("hello").claim_id is None`
+        NEW: `assert EchoMemory(...).record("hello").claim_id is None`
+    SPL no longer constructs an Echo (it stopped minting), so `EchoMemory.record`
+    is where an echo is built and therefore where "never synthesized" binds.
+    """
+    memory = EchoMemory(filepath=str(tmp_path / "echoes.jsonl"))
+    assert memory.record("hello").claim_id is None
 
 
-def test_the_claim_id_is_set_at_construction_and_is_keyword_only() -> None:
+def test_the_claim_id_is_set_at_construction_and_is_keyword_only(tmp_path) -> None:
     """No post-hoc mutation: an echo that acquired its linkage after the fact
     would have existed, however briefly, unattributable.
 
     KEYWORD-ONLY mirrors Ruling 58's `origin`, and it is what stops the id
     being passed positionally into `doctrine_link` by a caller counting
     arguments.
-    """
-    with pytest.raises(TypeError):
-        SPL().process_input("hello", "user", None, "CLM-0001")
 
-    echo = SPL().process_input("hello", claim_id="CLM-0007")
+    RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED.
+        OLD: `SPL().process_input("hello", "user", None, "CLM-0001")` raises;
+             `SPL().process_input("hello", claim_id="CLM-0007")` carries it.
+        NEW: the same two claims against `EchoMemory.record`.
+    **Ruling 60's law did not change - its construction site did**, and the law
+    moved with it. `record`'s signature is `(content, *, claim_id=None,
+    doctrine_link=None, resonance_score=1.0)`, so EVERY field but the content
+    is keyword-only: the positional-collision hazard this pin was written
+    against is now structurally impossible rather than merely refused.
+    """
+    memory = EchoMemory(filepath=str(tmp_path / "echoes.jsonl"))
+
+    with pytest.raises(TypeError):
+        memory.record("hello", None, "CLM-0001")
+
+    echo = memory.record("hello", claim_id="CLM-0007")
     assert echo.claim_id == "CLM-0007"
 
 

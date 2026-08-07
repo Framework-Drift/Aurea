@@ -119,11 +119,20 @@ def test_neither_process_input_declares_a_source_parameter():
     next caller who defaults it - which is exactly how `"user"` reached a
     durable store field for every claim AUREA ever processed.
     """
-    for owner, func in (("AureaCore", AureaCore.process_input),
-                        ("SPL", SPL.process_input)):
+    # RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED -
+    # the same claim, over the method that replaced the one it named.
+    #     OLD: `("SPL", SPL.process_input)`
+    #     NEW: `("SPL", SPL.normalize)`
+    # Ruling 75 DELETED `SPL.process_input` outright: SPL stopped minting, so it
+    # stopped constructing an Echo at all, and `normalize` is what remains of
+    # this layer's perception verb. **The `source` claim survives the rename
+    # intact** - and it is now enforced by something stronger than a signature
+    # scan, since SPL no longer builds the record a `source` could land on.
+    for owner, func in (("AureaCore.process_input", AureaCore.process_input),
+                        ("SPL.normalize", SPL.normalize)):
         params = inspect.signature(func).parameters
         assert "source" not in params, (
-            f"{owner}.process_input accepts `source` again: {list(params)}")
+            f"{owner} accepts `source` again: {list(params)}")
 
 
 def test_the_echo_dataclass_has_no_source_field():

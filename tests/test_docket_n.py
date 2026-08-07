@@ -638,7 +638,18 @@ def test_an_ordinary_exception_still_degrades_gracefully():
         # stands in for - `source` was DELETED from `SPL.process_input`.
         # A double whose signature has drifted from the real thing tests the
         # double (Ruling 60's finding, same file). No assertion moved.
-        def process_input(self, raw_input, *, claim_id=None):
+        #
+        # RULING 75 MIGRATION (2026-08-05), the THIRD time this double has
+        # followed its collaborator and the same reason each time.
+        #     OLD:  def process_input(self, raw_input, *, claim_id=None):
+        #     NEW:  def normalize(self, raw_input):
+        # SPL stopped minting, so `process_input` is gone from that layer
+        # entirely and `normalize` is the verb the core calls. The double now
+        # raises from where the real SPL would - and this is STILL the right
+        # place to raise, because `normalize` is the first collaborator call
+        # inside `process_input`'s `try:`. No assertion moved; all four are
+        # byte-identical.
+        def normalize(self, raw_input):
             raise ValueError("ordinary malformed-input hiccup")
 
     aurea.spl = _Boom()

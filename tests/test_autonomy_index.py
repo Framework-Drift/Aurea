@@ -45,15 +45,28 @@ def make_scar(id_, decay_state="active"):
     return Scar(id=id_, name=id_, origin="test", decay_state=decay_state)
 
 
-def make_echo(id_, doctrine_link=None):
-    from datetime import datetime
-    return Echo(
-        id=id_,
-        content="test content",
-        resonance_score=0.5,
-        created_at=datetime.now(),
-        doctrine_link=doctrine_link,
-    )
+# RULING 75 MIGRATION (2026-08-05), Ruling-14 form. **NO ASSERTION MOVED** -
+# every assertion in this file is character-for-character unchanged; only how
+# an echo GETS INTO the store did.
+#
+#     OLD: `echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))`
+#     NEW: `echo_memory.record("test content", doctrine_link="Doctrine-0")`
+#
+#     ~~def make_echo(id_, doctrine_link=None):
+#           from datetime import datetime
+#           return Echo(id=id_, content="test content", resonance_score=0.5,
+#                       created_at=datetime.now(), doctrine_link=doctrine_link)~~
+#
+# The helper is DELETED because it existed to MINT AN ID (`E0`, `E1`, ...), and
+# Ruling 75 makes the writer the only minter: `add_echo` - the caller-minted
+# door - is gone as shape, so there is no longer any way to hand this store an
+# identity from outside. The ids these tests used were never load-bearing; every
+# assertion here is about `doctrine_link` presence and the ratio derived from
+# it, which is exactly why the migration moves no assertion.
+#
+# `resonance_score` drops from 0.5 to `record`'s default 1.0 and nothing here
+# reads it - `_compute_echo_fermentation` counts `doctrine_link` and nothing
+# else. Stated rather than silently absorbed.
 
 
 # ---------- Empty state ----------
@@ -131,7 +144,7 @@ def test_only_locked_scars_scores_none(scar_core, engine):
 
 def test_echo_fermentation_none_linked_scores_zero(echo_memory, engine):
     for i in range(3):
-        echo_memory.add_echo(make_echo(f"E{i}", doctrine_link=None))
+        echo_memory.record("test content", doctrine_link=None)
     result = engine.compute()
     assert result.echo_fermentation == 0.0
     assert result.echoes_fermented == 0
@@ -139,17 +152,17 @@ def test_echo_fermentation_none_linked_scores_zero(echo_memory, engine):
 
 def test_echo_fermentation_all_linked_scores_hundred(echo_memory, engine):
     for i in range(3):
-        echo_memory.add_echo(make_echo(f"E{i}", doctrine_link=f"Doctrine-{i}"))
+        echo_memory.record("test content", doctrine_link=f"Doctrine-{i}")
     result = engine.compute()
     assert result.echo_fermentation == 100.0
     assert result.echoes_fermented == 3
 
 
 def test_echo_fermentation_mixed_ratio(echo_memory, engine):
-    echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))
-    echo_memory.add_echo(make_echo("E1", doctrine_link=None))
-    echo_memory.add_echo(make_echo("E2", doctrine_link=None))
-    echo_memory.add_echo(make_echo("E3", doctrine_link=None))
+    echo_memory.record("test content", doctrine_link="Doctrine-0")
+    echo_memory.record("test content", doctrine_link=None)
+    echo_memory.record("test content", doctrine_link=None)
+    echo_memory.record("test content", doctrine_link=None)
     result = engine.compute()
     assert result.echo_fermentation == 25.0
 
@@ -159,7 +172,7 @@ def test_echo_fermentation_mixed_ratio(echo_memory, engine):
 def test_index_is_weighted_sum_excluding_compass(scar_core, echo_memory, engine):
     # Fully matured scars, fully fermented echoes -> both components 100
     scar_core.add_scar(make_scar("S0", decay_state="retired"))
-    echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))
+    echo_memory.record("test content", doctrine_link="Doctrine-0")
 
     result = engine.compute()
 
@@ -174,7 +187,7 @@ def test_index_is_weighted_sum_excluding_compass(scar_core, echo_memory, engine)
 
 def test_compass_stability_always_none_and_warned(scar_core, echo_memory, engine):
     scar_core.add_scar(make_scar("S0", decay_state="retired"))
-    echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))
+    echo_memory.record("test content", doctrine_link="Doctrine-0")
     result = engine.compute()
     assert result.compass_stability is None
     assert any("compass_stability" in w for w in result.warnings)
@@ -185,7 +198,7 @@ def test_index_never_exceeds_capped_ceiling_even_at_perfect_inputs(
 ):
     for i in range(10):
         scar_core.add_scar(make_scar(f"S{i}", decay_state="fossil"))
-        echo_memory.add_echo(make_echo(f"E{i}", doctrine_link=f"Doctrine-{i}"))
+        echo_memory.record("test content", doctrine_link=f"Doctrine-{i}")
     result = engine.compute()
     ceiling = (SCAR_MATURITY_WEIGHT + ECHO_FERMENTATION_WEIGHT) * 100
     assert result.index == pytest.approx(ceiling, abs=0.01)
@@ -196,7 +209,7 @@ def test_index_never_exceeds_capped_ceiling_even_at_perfect_inputs(
 
 def test_meets_threshold_true_when_index_at_or_above(scar_core, echo_memory, engine):
     scar_core.add_scar(make_scar("S0", decay_state="retired"))
-    echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))
+    echo_memory.record("test content", doctrine_link="Doctrine-0")
     result = engine.compute()
     # index will be 65.0 given full scar+echo maturity, 0 compass
     assert result.meets_threshold(5) is True
@@ -205,7 +218,7 @@ def test_meets_threshold_true_when_index_at_or_above(scar_core, echo_memory, eng
 
 def test_meets_threshold_false_when_below(scar_core, echo_memory, engine):
     scar_core.add_scar(make_scar("S0", decay_state="active"))
-    echo_memory.add_echo(make_echo("E0", doctrine_link=None))
+    echo_memory.record("test content", doctrine_link=None)
     result = engine.compute()
     assert result.index == 0.0
     assert result.meets_threshold(5) is False
@@ -220,6 +233,6 @@ def test_meets_threshold_respects_seed_example_value(scar_core, echo_memory, eng
     """
     scar_core.add_scar(make_scar("S0", decay_state="retired"))
     scar_core.add_scar(make_scar("S1", decay_state="active"))
-    echo_memory.add_echo(make_echo("E0", doctrine_link="Doctrine-0"))
+    echo_memory.record("test content", doctrine_link="Doctrine-0")
     result = engine.compute()
     assert result.meets_threshold(5) is True

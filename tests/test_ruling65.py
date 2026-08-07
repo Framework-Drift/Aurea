@@ -255,16 +255,44 @@ def test_a_persisted_paradox_is_rebuilt_with_no_topology_file_present():
 # (d) THE ECHO DROP - both directions
 # =====================================================================
 
-def test_an_echo_node_is_dropped_from_live_state_but_kept_in_the_snapshot():
-    """RES.4, BOTH HALVES, and they are the two halves of one decision.
+def test_an_echo_node_is_rebuilt_from_its_record_and_kept_in_the_snapshot():
+    """RES.4 - **SUPERSEDED 2026-08-05 BY RULING 75, WHICH THIS RULING NAMED IN
+    ADVANCE AS ITS OWN REOPENING CONDITION.**
 
-    DROPPED: an Echo record persists NOWHERE (`EchoMemory` is unwired), so a
-    restored echo node would assert a holding no store holds. Dropping it is a
-    CORRECTION, not a loss - the record it shadowed was already gone.
+        ~~test_an_echo_node_is_dropped_from_live_state_but_kept_in_the_snapshot~~
 
-    KEPT IN THE SNAPSHOT: write-only means the diagnostic retains what live
-    state discards. That asymmetry IS res.3 - a forensic surface that only ever
-    showed what the next boot would reload would be a cache, not a record.
+        THE OLD PIN, KEPT VERBATIM, because its reasoning is exactly why it
+        could not survive its own premise changing:
+
+            RES.4, BOTH HALVES, and they are the two halves of one decision.
+
+            DROPPED: an Echo record persists NOWHERE (`EchoMemory` is unwired),
+            so a restored echo node would assert a holding no store holds.
+            Dropping it is a CORRECTION, not a loss - the record it shadowed was
+            already gone.
+
+            KEPT IN THE SNAPSHOT: write-only means the diagnostic retains what
+            live state discards. That asymmetry IS res.3 - a forensic surface
+            that only ever showed what the next boot would reload would be a
+            cache, not a record.
+
+            resumed = AureaCore()
+            for nid in echo_nodes:
+                assert nid not in resumed.tca.topology.nodes, (
+                    f"{nid} came back into live state; res.4 excludes ECHO from
+                    the rebuild because its record persists nowhere")
+
+    **THE EXCLUSION WAS NEVER ABOUT ECHOES - IT WAS ABOUT PERSISTENCE**, and
+    the old docstring says so in its own words: *"a restored echo node would
+    assert a holding no store holds."* Ruling 75 wires `EchoMemory`, so a store
+    DOES hold it, and the identical reasoning now requires the opposite
+    behaviour. **This is not a weakened pin; it is the same principle read
+    against a changed fact** - and the fact changed by ruling, in the ruling
+    that Ruling 65 res.4 named as its reopening condition in writing.
+
+    THE SNAPSHOT HALF IS UNTOUCHED AND ITS ASSERTIONS ARE BYTE-IDENTICAL: the
+    write-only diagnostic still retains the node, which was always res.3's
+    property rather than res.4's.
     """
     core = AureaCore()
     result = core.process_input("An ordinary claim.")
@@ -281,9 +309,15 @@ def test_an_echo_node_is_dropped_from_live_state_but_kept_in_the_snapshot():
 
     resumed = AureaCore()
     for nid in echo_nodes:
-        assert nid not in resumed.tca.topology.nodes, (
-            f"{nid} came back into live state; res.4 excludes ECHO from the "
-            f"rebuild because its record persists nowhere")
+        assert nid in resumed.tca.topology.nodes, (
+            f"{nid} did not come back into live state; Ruling 75 makes echoes "
+            f"the FOURTH SOURCE, so a persisted echo is rebuilt like every "
+            f"other persisted record")
+        assert resumed.tca.topology.nodes[nid].node_type is NodeType.ECHO
+
+    # AND THE REBUILD IS FROM THE RECORD, NOT FROM THE SNAPSHOT: the map is
+    # still a pure derivation over the stores (res.1/res.3 untouched).
+    assert [e.id for e in resumed.echo_memory.read_all()] == echo_nodes
 
 
 # =====================================================================

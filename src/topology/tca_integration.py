@@ -203,6 +203,38 @@ class TCAIntegration:
         
         return node
     
+    def place_echo(self, echo: Echo) -> ConstellationNode:
+        """
+        Place an echo in topological space. RULING 75 res.5 - THE FOURTH SOURCE.
+
+        **ONE PLACEMENT PATH, AND THAT IS WHY THIS METHOD EXISTS.** Until this
+        ruling the live pipeline placed echo nodes inline in `process_input`,
+        and the rebuild placed none at all (Ruling 65 res.4 excluded them,
+        because an Echo record persisted nowhere). Now that echoes persist, both
+        the live path and the rebuild place them - and Ruling 65 res.5's own
+        lesson governs: **there is ONE placement path rather than two that have
+        to be kept in agreement.** That ruling deleted `_create_seed_doctrines`'
+        placement for exactly this reason after genesis double-placed.
+
+        THE BODY IS THE PRE-EXISTING LIVE PATH, MOVED - not rewritten. Position
+        comes from `calculate_collapse_location`, type is ECHO, mass is 1.0;
+        every one of those is what `aurea_core` did inline before this ruling.
+        **NOTHING NEW IS COINED and no edge is created**, because the inline
+        path created none: an echo's `doctrine_link` did NOT produce an edge
+        before, and producing one here would be a topology change this ruling
+        declares out of scope.
+
+        The echo->paradox edge is written by the PARADOX_SUSPENDED branch of
+        `process_input`, at suspension time, and stays there - it is a fact
+        about what happened to a claim, not about placing a node.
+        """
+        return self.topology.add_node(
+            node_id=echo.id,
+            node_type=NodeType.ECHO,
+            position=self.calculate_collapse_location(echo),
+            mass=1.0,
+        )
+
     def calculate_collapse_location(self, echo: Echo) -> SymbolicPosition:
         """
         Determine where in topological space a collapse would occur.

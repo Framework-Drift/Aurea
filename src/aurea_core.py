@@ -51,6 +51,7 @@ from src.goals.goal_arbitration import GoalArbiter, GoalExamination
 from src.goals.goal_activation import (ActivationLayer, BoundKind,
                                        GoalActivation, StopCondition)
 from src.utils.atomic_write import atomic_write_json
+from src.utils.echo_memory import EchoLogUnreadable, EchoMemory
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -275,6 +276,17 @@ class AureaCore:
 
         # Initialize core modules
         self.spl = SPL()
+        # RULING 75 (2026-08-05): THE ECHO BECOMES A RECORD.
+        #
+        # `EchoMemory` has been canonical and UNWIRED since it was written -
+        # "complete input lineage" in its own docstring, constructed by nothing
+        # in the pipeline. Five separate rulings hit that seam and each deferred
+        # to the wiring ruling; this is it. The store is path-injectable
+        # (Ruling 31 shape, already registered in `conftest.py` and
+        # `scripts/soak.py`), and `process_input` persists every PERCEIVED echo
+        # through it - one ECH line per claim cycle, the pair to Ruling 68's
+        # one-CLM-per-cycle guarantee.
+        self.echo_memory = EchoMemory()
         self.scar_core = ScarLogicCore()
 
         # Doctrine layer (Ruling 5): Codex owns the store, SAE is the sole executor,
@@ -519,32 +531,86 @@ class AureaCore:
         # rather than another derivation. Scars, doctrines and paradoxes are the
         # three persisted sources; the map is a pure derivation over them.
         #
-        # ECHO NODES ARE DELIBERATELY EXCLUDED (res.4), and this is the whole of
-        # the reason: an Echo record persists NOWHERE. `EchoMemory` is canonical
-        # ("complete input lineage") and UNWIRED - `aurea_core` never persists an
-        # echo. So a restored echo node asserts a holding no store holds, and
-        # dropping it at restart is a CORRECTION, not a loss: the record it
-        # shadowed was already gone at process exit.
+        # ~~ECHO NODES ARE DELIBERATELY EXCLUDED (res.4), and this is the whole
+        # of the reason: an Echo record persists NOWHERE. `EchoMemory` is
+        # canonical ("complete input lineage") and UNWIRED - `aurea_core` never
+        # persists an echo. So a restored echo node asserts a holding no store
+        # holds, and dropping it at restart is a CORRECTION, not a loss: the
+        # record it shadowed was already gone at process exit.~~
         #
-        # REOPENING CONDITION, stated here because this is the site that would
+        # ~~REOPENING CONDITION, stated here because this is the site that would
         # change: the day the EchoMemory wiring ruling lands, echoes become the
         # FOURTH source and an echo loop joins this sequence. Until then, adding
-        # one would place nodes for records that do not exist.
+        # one would place nodes for records that do not exist.~~
         #
-        # A MEASURED CONSEQUENCE OF RES.4, RECORDED SO IT IS NOT "FIXED" LATER:
-        # after a restart `paradox_void` has NO gravity center. A paradox node's
-        # only edge is the echo->paradox edge written at suspension time, and
-        # echoes are not rebuilt - so every rebuilt paradox node carries zero
-        # edges, `_recalculate_center` scores `mass * len(edges)` = 0, and its
-        # strict `>` correctly selects nothing.
+        # **SUPERSEDED 2026-08-05 BY RULING 75 - THE REOPENING CONDITION FIRED
+        # EXACTLY AS WRITTEN.** Old text kept verbatim above because it named
+        # this ruling in advance and its premise is what changed: `EchoMemory`
+        # is now wired, `process_input` persists every perceived echo, and an
+        # echo node at rebuild therefore asserts a holding a store DOES hold.
+        # Echoes are the FOURTH SOURCE.
         #
-        # THAT IS RULING 57 res.3 WORKING, NOT A GAP: a constellation whose
-        # members all carry zero edges honestly has no anchor, and a fallback
-        # (first member, heaviest, centroid) would COIN one at the exact point
-        # placement is decided. It resolves itself when echoes become the fourth
-        # source. Do not add a fallback to make this look tidier.
+        # ORDER: scars -> doctrines -> paradoxes -> ECHOES. Echoes go LAST
+        # because every referent must exist before the thing that refers to it,
+        # which is Ruling 57's mechanism extended by one loop rather than a new
+        # rule. Placement is `place_echo`, the SAME method the live path calls.
+        #
+        # ~~A MEASURED CONSEQUENCE OF RES.4, RECORDED SO IT IS NOT "FIXED"
+        # LATER: after a restart `paradox_void` has NO gravity center. A paradox
+        # node's only edge is the echo->paradox edge written at suspension time,
+        # and echoes are not rebuilt - so every rebuilt paradox node carries
+        # zero edges, `_recalculate_center` scores `mass * len(edges)` = 0, and
+        # its strict `>` correctly selects nothing.~~
+        #
+        # **THE PREDICTION WAS MEASURED AT THIS RULING AND IT DID NOT HOLD.**
+        # Measured, not reasoned: eight claims through a live core, save,
+        # restart. `paradox_void`'s center is `BS-2026…` live and **None**
+        # restarted. The centerlessness SURVIVES the fourth source.
+        #
+        # THE REASON IS THAT REBUILDING NODES WAS NEVER THE SAME THING AS
+        # REBUILDING EDGES. Echo nodes come back; the edges written at RUNTIME
+        # do not, because `place_echo` creates none - deliberately, since the
+        # inline path it replaced created none either. There are TWO such
+        # runtime edge sites, and the measurement found the second one that
+        # this comment's first draft had missed:
+        #
+        #     echo -> paradox   `create_edge(echo.id, bs_entry.id)`  (:1055)
+        #     echo -> scar      `create_edge(...)`                   (:1113)
+        #
+        # Both are facts about what HAPPENED TO A CLAIM - it suspended into the
+        # Black Sphere; it formed a scar - rather than facts about where a node
+        # belongs. Neither is recoverable from the echo record alone, which is
+        # exactly why reconstructing them here would be inventing relationships
+        # rather than restoring them. Measured loss at restart, verbatim:
+        # `[(BS-…, ECH-0001), (ECH-0001, BS-…), (ECH-0005, Scar-Δ12),
+        # (Scar-Δ12, ECH-0005)]`.
+        #
+        # **IMPROVISING EDGE RECREATION HERE IS FORBIDDEN BY THE RULING THAT
+        # MEASURED THIS** (Ruling 75 res.5): a failed prediction is a BOARD
+        # FINDING, not a pass repair. Ruling 57 res.3 still governs the
+        # underlying behaviour - a constellation whose members all carry zero
+        # edges honestly has no anchor, and a fallback (first member, heaviest,
+        # centroid) would COIN one at the exact point placement is decided.
+        # **Do not add a fallback, and do not reconstruct either runtime edge
+        # from the rebuild, to make this look tidier.**
         for entry in self.black_sphere.entries.values():
             self.tca.place_paradox(entry)
+
+        # RULING 75 res.5 - THE FOURTH SOURCE. Echoes persist now, so the map
+        # rebuilds them like every other persisted record.
+        #
+        # READS THROUGH `read_all()`, the owner's own file-backed surface - the
+        # store spans processes and its in-memory mirror does not, so asking the
+        # mirror here would rebuild only what THIS process happened to append,
+        # which on a fresh boot is nothing.
+        #
+        # AN UNREADABLE LOG IS NOT SWALLOWED. `read_all` raises typed; letting
+        # that propagate at construction is correct - a core that silently
+        # booted with an unreadable perception lineage would present a map that
+        # looks complete and is not, which is the fail-silent class this house
+        # refuses everywhere else.
+        for echo in self.echo_memory.read_all():
+            self.tca.place_echo(echo)
 
         # ---- THE GOAL LAYER (Ruling 74 res.6) --------------------------------
         #
@@ -881,20 +947,38 @@ class AureaCore:
             # is passed positionally after `raw_input` - SPL's second positional
             # is `doctrine_link`, so a leftover positional argument here would
             # have bound a display string to a doctrine reference.
-            echo = self.spl.process_input(raw_input,
-                                          claim_id=result['claim_id'])
+            # RULING 75 (2026-08-05): SPL NORMALIZES, THE LEDGER RECORDS.
+            #
+            # The mint moved off SPL, which owned no store and stamped a
+            # wall-clock id on every perception AUREA has ever had. `record()`
+            # derives its ordinal from the file at the moment of minting
+            # (Ruling 69), constructs the echo with `claim_id` SET AT
+            # CONSTRUCTION (Ruling 60's law, moved with its construction site),
+            # appends, and returns it.
+            #
+            # **PERSISTENCE IS AT THE HANDOVER, WHICH MAKES THE PAIR EXACT:**
+            # one ECH line per claim cycle, beside Ruling 68's one CLM line.
+            # Both sit after the suspension gate and after the type gate, so a
+            # suspended pass and a non-`str` arrival write NEITHER - a mind that
+            # is not running does not perceive, and an arrival that is not a
+            # claim is not perceived either.
+            #
+            # RAISES on write failure, and the echo does not exist: an echo the
+            # pipeline holds but no file records is the un-persisted perception
+            # this ruling exists to end.
+            echo = self.echo_memory.record(
+                self.spl.normalize(raw_input),
+                claim_id=result['claim_id'])
             result['echo'] = echo
             self.stats['echoes_processed'] += 1
             
             # Step 1.5: Map echo to topological space
-            echo_position = self.tca.calculate_collapse_location(echo)
-            from src.topology.tca_core import NodeType
-            echo_node = self.tca.topology.add_node(
-                node_id=echo.id,
-                node_type=NodeType.ECHO,
-                position=echo_position,
-                mass=1.0
-            )
+            # RULING 75 res.5: through `place_echo`, which the REBUILD also
+            # calls - ONE placement path rather than two kept in agreement
+            # (Ruling 65 res.5's lesson, which that ruling learned when genesis
+            # double-placed every seed doctrine). The body is this site's own
+            # previous code, moved to the owner and not rewritten.
+            echo_node = self.tca.place_echo(echo)
             # RULING 68 (2026-08-02): the `source:{source}` tag is DELETED.
             # It copied a FABRICATED origin onto the node - a claim whose
             # ancestry record said UNDECLARED was tagged `source:user` here.
@@ -1780,6 +1864,21 @@ class AureaCore:
                 content = (doctrine.description or doctrine.name) if doctrine else ""
                 if not content:
                     continue                   # nothing real to filter; no fabricated probe
+                # RULING 75 res.4: **A PROBE IS NOT A PERCEPTION.**
+                #
+                # This echo is constructed DIRECTLY rather than through
+                # `self.echo_memory.record(...)`, and that is deliberate: it
+                # neither persists nor mints an `ECH-` id. Nothing perceived a
+                # claim here - the pipeline is re-filtering a doctrine's own
+                # text to see whether Nova's strain survives collapse, which is
+                # an internal question asked of material already on record.
+                #
+                # Persisting it would put a line in the perception lineage for
+                # something nobody said, and would break the one-ECH-per-claim-
+                # cycle pair with Ruling 68's one-CLM guarantee - a pair whose
+                # whole value is that the two counts match. Its `claim_id` is
+                # `None` for the same reason and always was: no ancestry record
+                # backs it, because no claim arrived.
                 probe = Echo(
                     id=f"nova-collapse-{echo.id}",
                     content=content,

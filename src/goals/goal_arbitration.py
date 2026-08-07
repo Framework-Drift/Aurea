@@ -615,14 +615,30 @@ class GoalArbiter:
         learns it by exception rather than holding a record of a choice that
         was never made.
         """
-        selection = self.select()
-        if selection is None:
-            raise ValueError(
-                "no commitment stands: every goal in the ledger is resolved, "
-                "superseded, or the ledger is empty. There is nothing to "
-                "examine, and an examination record carries a selection.")
-
         with mint_lock(self.log_path):
+            # RULING 75 res.7 - THE SELECTION MOVED INSIDE THE HOLD.
+            #
+            # `select()` used to run OUTSIDE this lock, so two concurrent
+            # `examine()` calls could each compute a selection before either
+            # appended - and both would select the SAME goal, because neither
+            # could see the other's examination yet. Reported as an observation
+            # at Ruling 74 (its mutex fixture had to deal pre-recorded
+            # examinations to keep measuring the ACT mint rather than this
+            # race); closed here, in its own file, as the ordered housekeeping.
+            #
+            # **DERIVE THROUGH APPEND UNDER ONE HOLD** is Ruling 69's own
+            # discipline: the selection IS a derivation over this log, exactly
+            # as the ordinal is, so it belongs inside the same hold rather than
+            # beside it. `select()` stays PURE and publicly callable - what
+            # moved is where `examine` calls it, not what it does.
+            selection = self.select()
+            if selection is None:
+                raise ValueError(
+                    "no commitment stands: every goal in the ledger is "
+                    "resolved, superseded, or the ledger is empty. There is "
+                    "nothing to examine, and an examination record carries a "
+                    "selection.")
+
             examination = GoalExamination(
                 examination_id=self._next_id(),
                 selected_goal_id=selection.selected_goal_id,
@@ -643,11 +659,37 @@ class GoalArbiter:
         Reads the FILE rather than `self.entries`: the log spans processes and
         the in-memory mirror does not. A line that will not parse, or that
         carries a basis outside the closed vocabulary, contributes NOTHING.
+
+        **AN UNREADABLE EXISTING LOG RAISES TYPED** - Ruling 75 res.7, the
+        ordered housekeeping, applying Ruling 74's own finding to the file that
+        finding was reported against. The activation layer hit this first: its
+        guards read the log BEFORE the mint, so an unreadable log surfaced a
+        bare `OSError` one frame above the only place that knew how to name it.
+        **This method had the identical latent shape**, and its inherited
+        battery row passed only because a single-commitment fixture returns at
+        `SOLE_CANDIDATE` before `_context()` ever reads the log - with two or
+        more candidates it raised bare.
+
+        Returning `()` would be worse than the `OSError`: an unreadable log
+        would read as "no goal has ever been examined", which makes every
+        never-examined rung tie and silently re-decides the ladder.
+
+        A MISSING log stays a legitimate empty history - absence is a first run,
+        not a fault, which is `derive_max_ordinal`'s own distinction.
         """
         if not self.log_path.exists():
             return ()
         out: List[GoalExamination] = []
-        with open(self.log_path, "r", encoding="utf-8") as handle:
+        try:
+            handle = open(self.log_path, "r", encoding="utf-8")
+        except OSError as failure:
+            raise ExaminationLogUnreadable(
+                f"the examination log at '{self.log_path}' exists and cannot "
+                f"be read, so no fact about any selection can be derived from "
+                f"it - not which goal was last examined, not how long one has "
+                f"held focus. Answering from an empty read would report that "
+                f"nothing has ever been examined.") from failure
+        with handle:
             for line in handle:
                 line = line.strip()
                 if not line:

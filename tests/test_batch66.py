@@ -180,14 +180,29 @@ def _writer_calls():
                 yield rel, node.lineno, name, kwargs
 
 
-# EchoMemory is Ruling 66's NAMED FUTURE CONSUMER, declared OUT of this batch.
+# ~~EchoMemory is Ruling 66's NAMED FUTURE CONSUMER, declared OUT of this batch.
 # The exemption is NOT a convenience: the batch's sweep tried removing
 # `default=str` there and the suite answered at once - it is the ONE store in
 # `src/` where it is LOAD-BEARING, because `add_echo` serializes `echo.__dict__`
 # RAW and `created_at` arrives as a live `datetime`. Every other store converts
 # through its own `_to_dict`/`.isoformat()` first. Removing it there is a real
-# migration with a schema decision in it, which is the wiring ruling's to make.
-_DECLARED_OUT = {("src/utils/echo_memory.py", "json.dumps")}
+# migration with a schema decision in it, which is the wiring ruling's to make.~~
+#
+#     ~~_DECLARED_OUT = {("src/utils/echo_memory.py", "json.dumps")}~~
+#
+# **THE EXEMPTION IS DISCHARGED 2026-08-05 BY RULING 75**, old text kept
+# verbatim because it is the record of what was reserved and to whom. Batch 66
+# named the wiring ruling as the one that would make the schema decision; that
+# ruling landed and made it: `EchoMemory` now serializes EXPLICITLY, field by
+# field, with `created_at` converted through `.isoformat()` - so `default=str`
+# has nothing left to do and is GONE.
+#
+# **THE SET IS NOW EMPTY, AND THAT MATTERS MORE THAN THE ONE ENTRY LEAVING IT.**
+# An exemption that outlives the condition it was granted for makes the scan
+# TRUE BY OMISSION for that file - the completeness-claim defect, in the one
+# instrument built to sweep every writer in `src/`. With the set empty the sweep
+# genuinely covers all of them, which is what it always claimed to do.
+_DECLARED_OUT: set = set()
 
 
 def test_no_store_writer_carries_a_default_escape_hatch():

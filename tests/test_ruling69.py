@@ -39,6 +39,7 @@ from src.goals.goal_activation import (ActivationLayer, ActivationLogUnreadable,
 from src.goals.goal_arbitration import ExaminationLogUnreadable, GoalArbiter
 from src.goals.goal_ledger import (GoalKind, GoalLedger, GoalLedgerUnreadable,
                                    GoalLevel, GoalProvenance)
+from src.utils.echo_memory import EchoLogUnreadable, EchoMemory
 from src.utils.ledger_mint import (derive_max_ordinal, mint_lock,
                                    ordinal_pattern)
 
@@ -189,6 +190,18 @@ LEDGERS = [
                                  BoundKind.EXAMINATION_BOUND,
                                  1).activation_id,
      "ACT-", "ACT-0001", ActivationLogUnreadable),
+    # RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED -
+    # one row added, so every parametrized claim in this file now also binds
+    # the echo store, the shared mint's FIFTH consumer.
+    #
+    # **THIS ROW IS THE SHALLOWEST OF THE FIVE, AND THAT IS THE RULING SHOWING
+    # THROUGH TOO:** an echo is a PERCEPTION, so it depends on nothing - no
+    # commitment, no examination, no prior record. Ruling 75's whole point is
+    # that it was the only ledger-shaped store with no mint at all, because
+    # `spl.py` handed it a wall-clock id from outside.
+    ("echo", lambda p: EchoMemory(filepath=str(p)),
+     lambda M: M.record("a perceived claim").id,
+     "ECH-", "ECH-0001", EchoLogUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -397,7 +410,12 @@ _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
                    "src/external/prediction_ledger.py",
                    "src/goals/goal_ledger.py",
                    "src/goals/goal_arbitration.py",
-                   "src/goals/goal_activation.py")
+                   "src/goals/goal_activation.py",
+                   # RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO
+                   # ASSERTION MOVED - the echo store is the shared mint's
+                   # FIFTH consumer and inherits Ruling 69's whole property
+                   # set at the `ECH-` prefix.
+                   "src/utils/echo_memory.py")
 
 
 def _seq_assignments(tree) -> list:

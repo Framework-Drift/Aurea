@@ -53,8 +53,16 @@ def _mutate_and_save(store):
         store.scars.clear()
         store.save_to_file()
     else:
-        store.add_echo(Echo(id="E-test", content="runtime only", resonance_score=0.0,
-                            created_at=datetime(2026, 7, 26)))
+        # RULING 75 MIGRATION (2026-08-05), Ruling-14 form. NO ASSERTION MOVED.
+        #     OLD: `store.add_echo(Echo(id="E-test", content="runtime only",
+        #                               resonance_score=0.0,
+        #                               created_at=datetime(2026, 7, 26)))`
+        #     NEW: `store.record("runtime only")`
+        # `add_echo` is deleted as shape - the writer owns the mint - so the
+        # store's real write path is now reached through `record`. What this
+        # helper exists to do is unchanged: DRIVE THE REAL WRITE PATH under
+        # default construction, which is what makes the seed pin meaningful.
+        store.record("runtime only")
 
 
 # =====================================================================
@@ -186,6 +194,17 @@ def test_echo_memory_does_not_touch_the_seed_into_existence(tmp_path):
 
     assert not absent_runtime.exists(), "the loader created its runtime source"
     assert not absent_seed.exists(), "the loader created its SEED source"
+    # RULING 75 MIGRATION (2026-08-05), Ruling-14 form - and it is STRICTLY
+    # STRONGER rather than merely adjusted.
+    #     OLD: `assert memory.echoes == []`
+    #     NEW: `assert memory.read_all() == ()` (the old line KEPT below).
+    # `self.echoes` is now the declared WRITE-ONLY per-process mirror, so
+    # asserting it is empty at construction became trivially true the moment
+    # `_load()` was deleted - a pin passing for a reason unrelated to its
+    # subject. `read_all()` asks the FILE, which is the claim this test is
+    # actually making: neither absent source was created, and reading finds
+    # nothing because there is nothing rather than because nobody looked.
+    assert memory.read_all() == ()
     assert memory.echoes == []
     assert Path("data/echoes.jsonl").read_bytes() == real_seed_before
 
