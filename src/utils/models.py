@@ -29,6 +29,46 @@ class Scar:
     reflexes: List[str] = field(default_factory=list)
     tca_tags: List[str] = field(default_factory=list)
     is_seed: bool = False
+    # RULING 76 (2026-08-05) - THE RECORD CARRIES ITS ORIGIN.
+    #
+    # A JOIN KEY, NOT AN ORIGIN FACT - `Echo.claim_id`'s exact class, and
+    # Ruling 60's canonical key extended to the second record that a claim
+    # cycle produces. It points at the claim-ancestry ledger line minted for the
+    # claim whose collapse formed this scar; the LEDGER still stores origin ONCE
+    # (L3 clean).
+    #
+    # **WHY IT HAD TO EXIST: THE ECHO->SCAR EDGE WAS RUNTIME HISTORY NOTHING
+    # COULD DERIVE.** Ruling 75 measured both event edges vanishing at restart
+    # and reported it rather than repairing it, because rebuilding NODES is not
+    # rebuilding EDGES and no record carried the join. This is that join. With
+    # it the edge becomes a DERIVATION over records, which is how everything
+    # else in this house is rebuilt.
+    #
+    # SET AT CREATION, never by post-hoc mutation, and NEVER SYNTHESIZED.
+    # `None` honestly means "no ancestry record backs this scar" - a legacy scar
+    # written before this ruling, a seed scar that predates every claim, or one
+    # formed outside `process_input`. **There is no backfill and no inference:**
+    # matching a legacy scar to a claim by content would be the lexical-
+    # similarity defect class, and manufacturing a join is exactly the
+    # fabrication Rulings 58 and 70 spent themselves closing.
+    claim_id: Optional[str] = None
+    # RULING 76 res.2 - THE FORMATION PRESSURE, AS A FACT OF RECORD.
+    #
+    # The RAW `collapse_result.pressure_generated` at the moment this scar
+    # formed. `weight` above is a DERIVATION of it (`min(pressure * 2.0, 5.0)`)
+    # and is UNCHANGED - the two coexist, and neither rewrites the other
+    # (Ruling 63's recorded-basis form: a derived value and the fact it came
+    # from are different records of different things).
+    #
+    # **THE CLAMP IS WHY THIS FIELD IS NECESSARY RATHER THAN REDUNDANT.** Weight
+    # saturates at 5.0, so every collapse at pressure >= 2.5 stores the SAME
+    # weight and the raw pressure is UNRECOVERABLE from it. The echo->scar edge
+    # is created at that raw pressure, so without this fact the edge cannot be
+    # re-derived at all for a saturated scar - and "derive it from weight" would
+    # silently invent a different graph.
+    #
+    # Legacy scars carry `None`, honestly, and derive no edge.
+    origin_pressure: Optional[float] = None
 
 @dataclass
 class Doctrine:

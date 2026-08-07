@@ -55,7 +55,9 @@ class ScarLogicCore:
                   description: str = "", name: Optional[str] = None,
                   linked_doctrines: Optional[List[str]] = None,
                   reflexes: Optional[List[str]] = None,
-                  echo_proximity: Optional[List[str]] = None) -> Scar:
+                  echo_proximity: Optional[List[str]] = None,
+                  claim_id: Optional[str] = None,
+                  origin_pressure: Optional[float] = None) -> Scar:
         """Execute a scar REQUEST from a collapse-bearing module (Ruling 1).
 
         SBSRE, ELM, MSSL and the rest do not write the scar store - they ask. This is the
@@ -66,6 +68,13 @@ class ScarLogicCore:
         `hasattr(scar_core, "form_scar")`), which is worse than a crash: a collapse that
         left no scar is a contradiction AUREA survived and then forgot.
         """
+        # RULING 76 (2026-08-05): `claim_id` and `origin_pressure` are FACTS OF
+        # ORIGIN, recorded once, at the moment the owner mints the record - the
+        # only moment either is knowable. A requester supplies them; the owner
+        # still writes (Ruling 1 untouched). Both default to `None`, which is
+        # the honest answer for every caller that has no claim cycle behind it -
+        # a seed scar, a tether scar, a test double. **Nothing is inferred and
+        # nothing is backfilled.**
         scar = Scar(
             id=self._next_scar_id(),
             name=name or (description[:48] if description else origin),
@@ -76,6 +85,8 @@ class ScarLogicCore:
             linked_doctrines=list(linked_doctrines or []),
             reflexes=list(reflexes or []),
             echo_proximity=list(echo_proximity or []),
+            claim_id=claim_id,
+            origin_pressure=origin_pressure,
         )
         self.add_scar(scar)
         return scar

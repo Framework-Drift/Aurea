@@ -136,8 +136,24 @@ def test_neither_process_input_declares_a_source_parameter():
 
 
 def test_the_echo_dataclass_has_no_source_field():
-    """The field itself. `EchoMemory` serializes `__dict__` raw, so the absence
-    flows through structurally rather than by anyone remembering to strip it."""
+    """The field itself.
+
+    ~~`EchoMemory` serializes `__dict__` raw, so the absence flows through
+    structurally rather than by anyone remembering to strip it.~~
+
+    **THE ASSERTION IS UNCHANGED; ITS STATED MECHANISM WENT STALE AT RULING 75
+    AND IS CORRECTED HERE (found by Ruling 76's §3 enumeration scan).** That
+    ruling discharged Batch 66's reserved schema decision: `EchoMemory` no
+    longer serializes `__dict__` raw - `_to_dict` names its fields EXPLICITLY
+    and `_from_dict` filters to the dataclass's own field names.
+
+    So the absence still flows through structurally, by a DIFFERENT and
+    stronger route: an explicit serializer cannot emit a field it does not
+    name, and the tolerant loader drops a key the dataclass does not declare.
+    The Ruling 75 pass should have caught this sentence and did not - a
+    mechanism claim outliving its mechanism is Docket E's class, and it is
+    exactly what a scan over stale enumerations is for.
+    """
     names = {f.name for f in fields(Echo)}
     assert "source" not in names, f"Echo.source is back: {sorted(names)}"
     assert "claim_id" in names, (

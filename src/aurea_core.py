@@ -585,14 +585,31 @@ class AureaCore:
         # `[(BS-…, ECH-0001), (ECH-0001, BS-…), (ECH-0005, Scar-Δ12),
         # (Scar-Δ12, ECH-0005)]`.
         #
-        # **IMPROVISING EDGE RECREATION HERE IS FORBIDDEN BY THE RULING THAT
+        # ~~**IMPROVISING EDGE RECREATION HERE IS FORBIDDEN BY THE RULING THAT
         # MEASURED THIS** (Ruling 75 res.5): a failed prediction is a BOARD
-        # FINDING, not a pass repair. Ruling 57 res.3 still governs the
+        # FINDING, not a pass repair.~~ Ruling 57 res.3 still governs the
         # underlying behaviour - a constellation whose members all carry zero
         # edges honestly has no anchor, and a fallback (first member, heaviest,
         # centroid) would COIN one at the exact point placement is decided.
-        # **Do not add a fallback, and do not reconstruct either runtime edge
-        # from the rebuild, to make this look tidier.**
+        # ~~**Do not add a fallback, and do not reconstruct either runtime edge
+        # from the rebuild, to make this look tidier.**~~
+        #
+        # **SUPERSEDED 2026-08-05 BY RULING 76, and the distinction is the whole
+        # of that ruling.** Old text kept verbatim: it was right, and it is what
+        # forced the correct fix rather than a convenient one.
+        #
+        # Ruling 75 forbade IMPROVISING the edges - inventing relationships the
+        # records could not support. Ruling 76 does not improvise them: it adds
+        # the missing JOINS at the creation sites (`Scar.claim_id`,
+        # `SuspensionEntry.claim_id`, `Scar.origin_pressure`) so the edges
+        # become DERIVATIONS over records, which is how every other edge in this
+        # map is built. **The prohibition on inventing them stands; what changed
+        # is that they no longer have to be invented.**
+        #
+        # THE FALLBACK PROHIBITION IS UNTOUCHED AND STILL BINDING: no first
+        # member, no heaviest, no centroid. `paradox_void` regains its center
+        # because its node regains its EDGE from a recorded fact, not because
+        # anything selects an anchor in the absence of one.
         for entry in self.black_sphere.entries.values():
             self.tca.place_paradox(entry)
 
@@ -611,6 +628,52 @@ class AureaCore:
         # refuses everywhere else.
         for echo in self.echo_memory.read_all():
             self.tca.place_echo(echo)
+
+        # RULING 76 res.3 - THE FIFTH PHASE: THE EVENT EDGES BECOME DERIVATIONS.
+        #
+        # ORDER: scars -> doctrines -> paradoxes -> echoes -> EVENT EDGES. This
+        # runs LAST because an edge needs BOTH endpoints placed, and it is the
+        # only phase that creates no nodes at all.
+        #
+        # **THE TWO EDGE CLASSES, AND WHY ONLY ONE IS HERE.** The census this
+        # ruling opened with found four `create_edge` sites in exactly two
+        # classes. The PLACEMENT-DERIVED pair (`place_scar`/`place_doctrine`,
+        # from `linked_doctrines`/`scar_links`) already reform at rebuild and
+        # are untouched. The EVENT pair - echo->paradox at suspension, echo->scar
+        # at formation - are facts about what HAPPENED TO A CLAIM, and until this
+        # ruling no record carried the join that would let them be rebuilt.
+        #
+        # THE JOIN IS `claim_id`, AND ITS UNIQUENESS IS RULING 75'S GUARANTEE:
+        # one ECH line per claim cycle means one echo per claim id, so the join
+        # cannot be ambiguous. Built once, from the echo records already read
+        # above, rather than re-scanned per record.
+        #
+        # **A RECORD MISSING EITHER FACT DERIVES NO EDGE, AND THAT IS STATED
+        # RATHER THAN REPAIRED.** Legacy scars and suspensions written before
+        # this ruling carry `None`, as do seed scars and every tether
+        # suspension. There is NO backfill, NO content matching and NO
+        # inference: a graph is not improved by edges nobody recorded (Ruling
+        # 75's prohibition, which stands - see the paradox loop above).
+        #
+        # `origin_pressure` is required for the scar edge because the live site
+        # writes the edge at the RAW pressure, and `weight` clamps at 5.0 - so
+        # deriving the weight from `weight` would silently build a DIFFERENT
+        # graph for every saturated scar. Equality with the live sites is the
+        # pin; approximation would not be.
+        echo_by_claim = {e.claim_id: e for e in self.echo_memory.read_all()
+                         if e.claim_id}
+        for entry in self.black_sphere.entries.values():
+            source_echo = echo_by_claim.get(getattr(entry, "claim_id", None))
+            if source_echo is not None and entry.id in self.tca.topology.nodes:
+                self.tca.topology.create_edge(source_echo.id, entry.id,
+                                              weight=1.0)
+        for scar in self.scar_core.all_scars():
+            if scar.claim_id is None or scar.origin_pressure is None:
+                continue
+            source_echo = echo_by_claim.get(scar.claim_id)
+            if source_echo is not None and scar.id in self.tca.topology.nodes:
+                self.tca.topology.create_edge(source_echo.id, scar.id,
+                                              weight=scar.origin_pressure)
 
         # ---- THE GOAL LAYER (Ruling 74 res.6) --------------------------------
         #
@@ -1059,7 +1122,11 @@ class AureaCore:
                         source='pipeline',
                         pressure=collapse_result.pressure_generated,
                         reason=collapse_result.reason or 'Self-reference paradox',
-                        paradox_type='self_reference'
+                        paradox_type='self_reference',
+                        # RULING 76: the JOIN. Without it the edge created two
+                        # statements below is runtime history nothing can
+                        # rebuild - which is exactly what Ruling 75 measured.
+                        claim_id=echo.claim_id,
                     )
                     # Map paradox to topological space
                     paradox_node = self.tca.place_paradox(bs_entry)
@@ -1095,7 +1162,14 @@ class AureaCore:
                     compass_stability=reading.stability,
                     reflex_load=1.0 + len(self.reflex_grid.racm.deferred),
                     compass_drift=reading.drift,
+                    # RULING 76 (2026-08-05): `claim_id` joins `echo_id` here.
+                    # The chamber carries both into its scar REQUEST, so the
+                    # scar records the claim it descends from and the RAW
+                    # pressure that formed it - the two facts that make the
+                    # echo->scar edge a DERIVATION rather than runtime-only
+                    # history (Ruling 75's measured finding, closed).
                     context={'echo_id': echo.id,
+                             'claim_id': echo.claim_id,
                              'collapse_pressure': collapse_result.pressure_generated},
                 )
                 self.stats['contradictions_carried'] += 1

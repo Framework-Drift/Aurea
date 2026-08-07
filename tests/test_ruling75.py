@@ -603,25 +603,49 @@ def test_h_place_echo_creates_no_edges(tmp_path):
         "the inline path never created either")
 
 
-def test_h_the_paradox_void_prediction_is_measured_and_did_not_hold():
-    """PIN (h) / res.5. **THE MEASUREMENT, PINNED AS A FINDING RATHER THAN
-    REPAIRED.**
+def test_h_the_paradox_void_center_survives_restart():
+    """PIN (h) - **SUPERSEDED 2026-08-05 BY RULING 76. THE TRIPWIRE FIRED WHEN
+    THE DEFECT DIED, WHICH IS WHAT IT WAS FOR.**
 
-    Ruling 65's comment PREDICTED IN WRITING that `paradox_void` would regain a
-    gravity center once echoes became the fourth source, because a paradox
-    node's only edge is the echo->paradox edge. **The prediction DID NOT HOLD**,
-    and this pin records why: rebuilding the NODES was never the same thing as
-    rebuilding the EDGES. `place_echo` creates none - deliberately - so a
-    rebuilt paradox node still carries zero edges, `_recalculate_center` scores
-    `mass * len(edges)` = 0, and its strict `>` correctly selects nothing.
+        ~~test_h_the_paradox_void_prediction_is_measured_and_did_not_hold~~
 
-    **A FAILED PREDICTION IS A BOARD FINDING, NOT A PASS REPAIR** (res.5). This
-    pin exists so the finding is measured on every run rather than remembered,
-    and so that a later pass that "fixes" it has to come here and say why.
+        THE OLD PIN, KEPT VERBATIM - it demanded that a later pass come here
+        and say why, and this docstring is that saying:
 
-    Ruling 57 res.3 still governs: a constellation whose members all carry zero
-    edges honestly has no anchor, and a fallback would COIN one at the exact
-    point placement is decided.
+            PIN (h) / res.5. **THE MEASUREMENT, PINNED AS A FINDING RATHER
+            THAN REPAIRED.**
+
+            Ruling 65's comment PREDICTED IN WRITING that `paradox_void` would
+            regain a gravity center once echoes became the fourth source,
+            because a paradox node's only edge is the echo->paradox edge. **The
+            prediction DID NOT HOLD**, and this pin records why: rebuilding the
+            NODES was never the same thing as rebuilding the EDGES.
+            `place_echo` creates none - deliberately - so a rebuilt paradox
+            node still carries zero edges, `_recalculate_center` scores
+            `mass * len(edges)` = 0, and its strict `>` correctly selects
+            nothing.
+
+            **A FAILED PREDICTION IS A BOARD FINDING, NOT A PASS REPAIR**
+            (res.5). This pin exists so the finding is measured on every run
+            rather than remembered, and so that a later pass that "fixes" it
+            has to come here and say why.
+
+            assert all(not rebuilt.nodes[p].edges for p in paradoxes)
+            assert rebuilt.constellations["paradox_void"].gravity_center is None
+
+    **WHY IT IS NOW THE OPPOSITE, AND WHY THAT IS NOT A WEAKENING.** Ruling 75
+    forbade IMPROVISING these edges - inventing relationships the records could
+    not support - and that prohibition STANDS. Ruling 76 did not improvise
+    them: it added the missing JOINS at the creation sites
+    (`SuspensionEntry.claim_id`, `Scar.claim_id`, `Scar.origin_pressure`) so
+    the edge is DERIVED from recorded facts, exactly like every other edge in
+    this map. **The old pin's own reasoning is what forced the correct fix
+    rather than a convenient one.**
+
+    `place_echo` still creates NO edge (that pin above is untouched), and
+    Ruling 57 res.3's fallback prohibition is untouched: the center returns
+    because the node regains a RECORDED edge, not because anything selects an
+    anchor in the absence of one.
     """
     core = AureaCore()
     for claim in ("This statement is false.", "I always lie.",
@@ -643,33 +667,64 @@ def test_h_the_paradox_void_prediction_is_measured_and_did_not_hold():
     rebuilt = resumed.tca.topology
     assert [n for n, v in rebuilt.nodes.items()
             if v.node_type is NodeType.PARADOX] == paradoxes, (
-        "the paradox node itself is rebuilt - that half works")
-    assert all(not rebuilt.nodes[p].edges for p in paradoxes), (
-        "a rebuilt paradox acquired an edge; if this is now intended, the "
-        "improvisation res.5 forbids has been made")
-    assert rebuilt.constellations["paradox_void"].gravity_center is None, (
-        "THE MEASURED FINDING CHANGED: `paradox_void` regained a center. That "
-        "is Ruling 65's prediction finally holding, and it needs a ruling "
-        "rather than a green test.")
+        "the paradox node itself is rebuilt")
+    assert all(rebuilt.nodes[p].edges for p in paradoxes), (
+        "a rebuilt paradox lost its echo edge - Ruling 76 derives it from "
+        "`SuspensionEntry.claim_id`, so this means the join is not surviving "
+        "its own persistence boundary (the defect this ruling's first "
+        "measurement caught)")
+    assert rebuilt.constellations["paradox_void"].gravity_center == live_center, (
+        "`paradox_void` lost its center at restart. Ruling 76's whole success "
+        "criterion is that it does not - the edge is a DERIVATION now.")
 
 
-def test_h_runtime_edges_are_not_rebuilt_and_the_loss_is_recorded():
-    """PIN (h) / res.5. The second half of the measurement, and the one the
-    first draft of the in-file comment MISSED: there are TWO runtime edge sites,
-    not one.
+def test_h_the_event_edges_are_rebuilt_from_recorded_joins():
+    """PIN (h) - **SUPERSEDED 2026-08-05 BY RULING 76**, the twin of the pin
+    above and superseded for the same reason.
 
-        echo -> paradox   (the PARADOX_SUSPENDED branch)
-        echo -> scar      (the scar-formed branch)
+        ~~test_h_runtime_edges_are_not_rebuilt_and_the_loss_is_recorded~~
 
-    Both record what HAPPENED TO A CLAIM rather than where a node belongs, and
-    neither is recoverable from the echo record alone - which is exactly why
-    reconstructing them would be inventing relationships rather than restoring
-    them.
+        THE OLD PIN, KEPT VERBATIM:
+
+            PIN (h) / res.5. The second half of the measurement, and the one
+            the first draft of the in-file comment MISSED: there are TWO
+            runtime edge sites, not one.
+
+                echo -> paradox   (the PARADOX_SUSPENDED branch)
+                echo -> scar      (the scar-formed branch)
+
+            Both record what HAPPENED TO A CLAIM rather than where a node
+            belongs, and neither is recoverable from the echo record alone -
+            which is exactly why reconstructing them would be inventing
+            relationships rather than restoring them.
+
+            assert not (live_echo_edges & rebuilt_edges), (
+                "a runtime echo edge was reconstructed at rebuild - res.5
+                forbids improvising that, so if it is now intended it needs a
+                ruling")
+
+    **THE OLD MESSAGE NAMED ITS OWN SUCCESSOR CONDITION** - *"if it is now
+    intended it needs a ruling"* - and Ruling 76 is that ruling. What made the
+    reconstruction legitimate is that it stopped being a reconstruction: the
+    records now CARRY the join, so the edge is derived rather than remembered.
+
+    The identification of TWO sites survives and is still the point; both are
+    now derivable, and both are asserted here.
+
+    **`save_state()` IS REQUIRED HERE AND THE ASYMMETRY IS PRE-EXISTING, NOT
+    THIS RULING'S.** The two stores checkpoint differently: `BlackSphere.suspend`
+    calls `save_to_file()` eagerly inside itself, while `ScarLogicCore.add_scar`
+    says in terms "DO NOT auto-save here" and leaves it to
+    `AureaCore.save_state()`. So a restart without a checkpoint loses the SCAR,
+    not merely its edge - and the edge is correctly absent because its endpoint
+    is. Driving a real checkpoint is the honest restart scenario; the first
+    draft of this migration omitted it and the pin caught the difference.
     """
     core = AureaCore()
     for claim in ("This statement is false.", "Honesty is pointless.",
                   "A is not A."):
         core.process_input(claim)
+    core.save_state()
 
     live_edges = {(n, e) for n, v in core.tca.topology.nodes.items()
                   for e in v.edges}
@@ -683,9 +738,9 @@ def test_h_runtime_edges_are_not_rebuilt_and_the_loss_is_recorded():
     resumed = AureaCore()
     rebuilt_edges = {(n, e) for n, v in resumed.tca.topology.nodes.items()
                      for e in v.edges}
-    assert not (live_echo_edges & rebuilt_edges), (
-        "a runtime echo edge was reconstructed at rebuild - res.5 forbids "
-        "improvising that, so if it is now intended it needs a ruling")
+    assert live_echo_edges <= rebuilt_edges, (
+        f"an event edge was NOT rebuilt from its recorded join: "
+        f"{sorted(live_echo_edges - rebuilt_edges)}")
 
 
 # =====================================================================

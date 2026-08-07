@@ -60,6 +60,33 @@ class SuspensionEntry:
     last_accessed: Optional[datetime] = None
     linked_scars: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # RULING 76 (2026-08-05) - THE RECORD CARRIES ITS ORIGIN.
+    #
+    # A JOIN KEY, NOT AN ORIGIN FACT - `Echo.claim_id` and `Scar.claim_id`'s
+    # exact class, Ruling 60's canonical key extended to the third record a
+    # claim cycle can produce. It points at the claim-ancestry ledger line
+    # minted at ingress; the LEDGER still stores origin ONCE (L3 clean).
+    #
+    # **WHY: THE ECHO->PARADOX EDGE WAS RUNTIME HISTORY NOTHING COULD DERIVE.**
+    # Ruling 75 measured `paradox_void` losing its gravity center at every
+    # restart and reported it rather than repairing it - a paradox node's only
+    # edge is written at suspension time, and `suspend(...)` received content,
+    # source, pressure, reason and paradox_type with **NO id join of any kind**.
+    # Content-matching would have been the lexical-similarity defect class and
+    # was refused. This is the join instead.
+    #
+    # **ON THE SHARED ENTRY, NOT THE BLACK SPHERE'S OWN, BECAUSE THE RECORD IS
+    # SHARED.** CSA, the Veiled Thread and the Black Sphere all suspend into
+    # this one dataclass. Only the Black Sphere's pipeline door populates it in
+    # this ruling; every other suspension carries `None`, honestly, and that is
+    # not a gap - a tether suspension and a DEE fermentation have no claim cycle
+    # behind them. Whether CSA's own pipeline suspensions should carry it is a
+    # question this ruling does not answer, because nothing derives an edge from
+    # them.
+    #
+    # SET AT CREATION, never by post-hoc mutation, and NEVER SYNTHESIZED. No
+    # backfill: a legacy entry carries `None` and derives no edge.
+    claim_id: Optional[str] = None
 
 
 class SuspensionSystem(ABC):

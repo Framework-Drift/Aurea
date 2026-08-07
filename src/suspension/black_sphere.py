@@ -37,19 +37,34 @@ class BlackSphere(SuspensionSystem):
         self.gravitational_range = 0.3  # How far influence extends
         self.load_from_file()
         
-    def suspend(self, content: Any, source: str, 
+    def suspend(self, content: Any, source: str,
                 pressure: float, reason: str = "",
-                paradox_type: str = "unknown") -> SuspensionEntry:
+                paradox_type: str = "unknown", *,
+                claim_id: Optional[str] = None) -> SuspensionEntry:
         """
         Suspend paradox in Black Sphere for perpetual orbit.
-        
+
         Args:
             content: The paradoxical content
             source: Origin of the paradox
             pressure: Symbolic pressure (usually very high for paradoxes)
             reason: Reason for suspension
             paradox_type: Type of paradox (self-reference, gödel, etc.)
-            
+            claim_id: RULING 76 - the minted claim-ancestry id for the claim
+                whose collapse produced this paradox, KEYWORD-ONLY (mirroring
+                Ruling 58's `origin` and 60's `claim_id`). **THE JOIN THAT MAKES
+                THE ECHO->PARADOX EDGE DERIVABLE**: before this ruling `suspend`
+                received no id of any kind, so the edge written at suspension
+                time was runtime history nothing could rebuild - Ruling 75
+                measured `paradox_void` losing its center at every restart and
+                reported it rather than repairing it.
+
+                KEYWORD-ONLY so the two existing callers are unaffected and a
+                future one cannot bind it positionally into `reason`.
+                `None` is the honest default: the tether's suspensions
+                (`session_governor`) have no claim cycle behind them and must
+                not appear to. **Never synthesized, never backfilled.**
+
         Returns:
             SuspensionEntry for the orbiting paradox
         """
@@ -69,7 +84,8 @@ class BlackSphere(SuspensionSystem):
             reason=reason or f"Irreducible paradox at pressure {pressure:.2f}",
             orbit_stability=1.0,  # Perfect stability initially
             paradox_family=paradox_type,
-            gravitational_influence=pressure * 0.3  # Influence based on pressure
+            gravitational_influence=pressure * 0.3,  # Influence based on pressure
+            claim_id=claim_id,      # Ruling 76: a fact of origin, recorded once
         )
         
         # Add to paradox family
@@ -282,7 +298,15 @@ class BlackSphere(SuspensionSystem):
                 'gravitational_influence': entry.gravitational_influence,
                 'access_count': entry.access_count,
                 'last_accessed': entry.last_accessed.isoformat() if entry.last_accessed else None,
-                'metadata': entry.metadata
+                'metadata': entry.metadata,
+                # RULING 76: the JOIN must SURVIVE THE FILE, or it is not a
+                # join. This serializer writes an EXPLICIT field list, so a new
+                # field is invisible to it until named here - and the first
+                # measurement of this ruling caught exactly that: the scar edge
+                # reformed at restart and the paradox edge did not, because
+                # `claim_id` was being dropped at this boundary while the scar
+                # store carried it through.
+                'claim_id': entry.claim_id,
             }
             data['entries'].append(entry_dict)
             
@@ -316,7 +340,13 @@ class BlackSphere(SuspensionSystem):
                 gravitational_influence=entry_dict['gravitational_influence'],
                 access_count=entry_dict.get('access_count', 0),
                 last_accessed=datetime.fromisoformat(entry_dict['last_accessed']) if entry_dict.get('last_accessed') else None,
-                metadata=entry_dict.get('metadata', {})
+                metadata=entry_dict.get('metadata', {}),
+                # RULING 76, read with Ruling 75's TOLERANT form: `.get` so a
+                # legacy entry written before this ruling loads clean and
+                # carries `None`. Its bytes are untouched, it derives no edge,
+                # and nothing is inferred to fill the gap - ABSENT is a real
+                # answer (Rulings 58/70).
+                claim_id=entry_dict.get('claim_id'),
             )
             self.entries[entry.id] = entry
             

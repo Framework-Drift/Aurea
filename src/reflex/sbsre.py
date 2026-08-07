@@ -250,7 +250,7 @@ class SBSRE:
                 # That is not a failure. That is a scar.
                 thread.outcome = LoopOutcome.COLLAPSE
                 thread.reason = "contradiction irreconcilable - collapse"
-                self._request_scar(thread, cycle)
+                self._request_scar(thread, cycle, ctx)
                 return thread
 
         # =============================================================
@@ -391,10 +391,28 @@ class SBSRE:
                 reason="identity recursion - CSA lockdown",
             )
 
-    def _request_scar(self, thread: RecursionThread, cycle: CycleTrace) -> None:
+    def _request_scar(self, thread: RecursionThread, cycle: CycleTrace,
+                      ctx: Dict[str, Any]) -> None:
         """Collapse → scar. SBSRE does NOT write the scar store (Ruling 1).
 
         Scar Logic Core is the sole writer. This emits the request and lets the owner execute.
+
+        RULING 76 (2026-08-05): the request carries TWO FACTS OF ORIGIN it
+        already had in hand and had been discarding.
+
+        **`ctx` IS NOW A PARAMETER, AND THE CHANNEL ALREADY EXISTED.** The
+        caller has always passed `context={'echo_id': ..., 'collapse_pressure':
+        ...}` into `process`, and `ctx` reached `_run_cycle`, `_reflex_override`
+        and `_check_coherence` - every consumer except this one. So the fix is a
+        parameter rather than new plumbing: the facts were being carried past
+        the record that needed them.
+
+        `claim_id` is the JOIN (Ruling 60's canonical key) that makes the
+        echo->scar edge derivable at rebuild instead of runtime-only history;
+        `origin_pressure` is the RAW pressure, which `weight` clamps away.
+        **Both are passed through UNCHANGED - SBSRE coins neither and derives
+        neither.** Absent from `ctx`, both are `None`, which is honest: a caller
+        that supplied no claim cycle has no claim to record.
         """
         thread.scar_request = {
             "origin": f"SBSRE/{thread.id}",
@@ -402,6 +420,8 @@ class SBSRE:
             "weight": cycle.scar_weight,
             "description": f"Contradiction carried {thread.cycles_run} cycles without resolution",
             "linked_doctrines": [cycle.doctrine_thread] if cycle.doctrine_thread else [],
+            "claim_id": ctx.get("claim_id"),
+            "origin_pressure": ctx.get("collapse_pressure"),
         }
         if self.scar_core is not None and hasattr(self.scar_core, "form_scar"):
             # The OWNER executes the write and returns the record it minted. SBSRE keeps only
