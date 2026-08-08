@@ -1489,6 +1489,25 @@ class AureaCore:
         result['output_blocked'] = EXPRESSION_FOR_PATH[path].output_blocked
         result['expression_verdict'] = packet.expression_verdict
         result['truth_packet'] = packet
+        # RULING 77 FOLLOW-UP (2026-08-07) - THE PASS RECORDS ITS OWN
+        # DISPOSITION. Ruling 55's shape: one key, a RECORDED FACT, the value
+        # AS SELECTED by the code above rather than reconstructed afterwards.
+        #
+        # WHY IT WAS MISSING AND WHY THAT MATTERED. This method RECEIVED the
+        # `OutputPath` and wrote six keys without it, so the single most basic
+        # fact about a pass - WHICH EXIT IT TOOK - was the one fact `result`
+        # did not carry. It is not recoverable downstream: `EXPRESSION_FOR_PATH`
+        # is MANY-TO-ONE (PROCESSING_SUSPENDED, ARBITRATED_OUTPUT_LOCK,
+        # REFLEX_BLOCKED and STRUCTURAL_VIOLATION all map to WITHHOLD), so a
+        # reader given the verdict cannot get back to the path. The Ruling 77
+        # evaluation instrument had to observe it by WRAPPING this method; that
+        # wrapper is retired by this key, which is the fix it demanded in terms.
+        #
+        # THE MEMBER NAME, NOT THE MEMBER. A `str` crosses to a report, a JSON
+        # ledger and a case file unchanged, and EL3 (the evaluation vocabulary
+        # is HERS) is served by the name being the enum's own - never a parallel
+        # code. `OutputPath` stays importable for anyone who wants the member.
+        result['output_path'] = path.name
         # RULING 50 (4): the CONST-ID trace flag rides HERE, appended to what
         # HAIL produced rather than mixed into it. `rendered.render_trace` is
         # HAIL's own record of how it rendered and is UNMODIFIED; the entry

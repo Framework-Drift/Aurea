@@ -37,69 +37,129 @@ RUNNER = REPO / "scripts" / "evaluate.py"
 
 
 # =====================================================================
-# RESTORING WHAT `isolate()` MUTATES - and why this fixture is not optional
+# THE LOCAL RESTORE IS RETIRED - `conftest.py` OWNS IT NOW (2026-08-07)
 # =====================================================================
 #
-# **FOUND BY THE SUITE, NOT BY REASONING.** `soak.isolate()` redirects by
-# `setattr` on CLASS ATTRIBUTES, and `conftest.py` monkeypatches only FIVE of
-# the eight - `Codex.RUNTIME_PATH`, `ScarLogicCore.RUNTIME_PATH` and
-# `EchoMemory.RUNTIME_PATH` are redirected there as `__init__` DEFAULTS, not as
-# class attributes. So a test that calls `isolate()` leaves those three pointing
-# at a temp directory FOR THE REST OF THE SESSION, and nothing restores them.
+# **SUPERSEDED, old text kept verbatim below (Ruling-14 form).** This module
+# carried its own collection-time snapshot and an autouse restore, because the
+# Ruling 77 pass found the leak locally and the general fix touched the suite's
+# isolation contract - which was the board's to decide. **IT DECIDED IT:**
+# `conftest.py` now snapshots and restores exactly the three class attributes
+# `isolate()` mutates and it does not, for EVERY test in the suite.
 #
-# That breaks `tests/test_seed_isolation.py`'s class-level guard, which asserts
-# `RUNTIME_PATH.startswith("data/runtime/")` (Ruling 39) precisely BECAUSE the
-# fixture cannot mask a defect at that level.
+# ONE IMPLEMENTATION. A second copy here would be a second definition free to
+# drift from the first, and the drift would be invisible because both would look
+# right alone - Ruling 67's reason, and the reason this file already imports the
+# soak's isolation rather than copying it.
 #
-# **THE PRE-EXISTING HALF IS REPORTED, NOT FIXED HERE:** `tests/test_soak_smoke.py`
-# calls `isolate()` the same way and leaks the same three attributes. It has
-# never tripped the guard only because `test_soak_smoke` sorts AFTER
-# `test_seed_isolation` alphabetically - so a suite-wide correctness guard is
-# currently held up by FILE-NAME ORDER. Generalizing this fixture into
-# `conftest.py` would touch the suite's isolation contract, which is a decision
-# for the board rather than for this pass.
+# What survives here is the DERIVATION pin below, which is not a copy of the
+# mechanism: it asserts that the set `conftest.py` restores is exactly
+# (soak's class attributes) MINUS (the ones conftest already monkeypatches), so
+# a store added to the soak's table that conftest does not patch reddens it.
+#
+#     ~~RESTORING WHAT `isolate()` MUTATES - and why this fixture is not
+#     optional. **FOUND BY THE SUITE, NOT BY REASONING.** `soak.isolate()`
+#     redirects by `setattr` on CLASS ATTRIBUTES, and `conftest.py`
+#     monkeypatches only FIVE of the eight - `Codex.RUNTIME_PATH`,
+#     `ScarLogicCore.RUNTIME_PATH` and `EchoMemory.RUNTIME_PATH` are redirected
+#     there as `__init__` DEFAULTS, not as class attributes. So a test that
+#     calls `isolate()` leaves those three pointing at a temp directory FOR THE
+#     REST OF THE SESSION, and nothing restores them.
+#
+#     That breaks `tests/test_seed_isolation.py`'s class-level guard, which
+#     asserts `RUNTIME_PATH.startswith("data/runtime/")` (Ruling 39) precisely
+#     BECAUSE the fixture cannot mask a defect at that level.
+#
+#     **THE PRE-EXISTING HALF IS REPORTED, NOT FIXED HERE:**
+#     `tests/test_soak_smoke.py` calls `isolate()` the same way and leaks the
+#     same three attributes. It has never tripped the guard only because
+#     `test_soak_smoke` sorts AFTER `test_seed_isolation` alphabetically - so a
+#     suite-wide correctness guard is currently held up by FILE-NAME ORDER.
+#     Generalizing this fixture into `conftest.py` would touch the suite's
+#     isolation contract, which is a decision for the board rather than for this
+#     pass.~~
+#
+#     ~~def _injection_snapshot(): ... _PRISTINE = _injection_snapshot()
+#       @pytest.fixture(autouse=True) def _restore_injection_table(): ...~~
 
-def _injection_snapshot():
-    """The pristine values of everything `isolate()` overwrites."""
+
+def test_conftest_restores_exactly_what_isolate_mutates_and_it_does_not() -> None:
+    """**THE SET IS DERIVED, NOT LISTED** - the pin that survives the retirement.
+
+    `conftest` monkeypatches five of the eight class attributes `soak.isolate()`
+    overwrites; monkeypatch restores those five itself. The other three have no
+    restorer, which is the whole finding. This asserts conftest's restore set is
+    EXACTLY that difference - so a store added to the soak's table that conftest
+    does not also patch reddens here instead of leaking silently.
+    """
     from scripts.soak import _injection_table
-    class_attrs, init_defaults = _injection_table()
-    attrs = [(cls, name, getattr(cls, name)) for cls, name, _ in class_attrs]
-    defaults = [(cls, cls.__init__.__defaults__) for cls, _, _ in init_defaults]
-    return attrs, defaults
+    from tests.conftest import _ISOLATE_MUTATED_CLASS_ATTRS
+
+    class_attrs, _ = _injection_table()
+    soak_attrs = {(cls.__name__, name) for cls, name, _ in class_attrs}
+
+    conftest_src = (REPO / "tests" / "conftest.py").read_text(encoding="utf-8")
+    patched = set()
+    for node in ast.walk(ast.parse(conftest_src)):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "setattr" and len(node.args) >= 2
+                and isinstance(node.args[0], ast.Name)
+                and isinstance(node.args[1], ast.Constant)):
+            patched.add((node.args[0].id, node.args[1].value))
+
+    restored = {(cls.__name__, name) for cls, name in _ISOLATE_MUTATED_CLASS_ATTRS}
+    assert restored == soak_attrs - patched, (
+        f"conftest restores {sorted(restored)} but the unrestored set is "
+        f"{sorted(soak_attrs - patched)}. A class attribute `isolate()` "
+        f"overwrites and nothing restores leaks for the whole session.")
+    assert len(restored) == 3
 
 
-# Captured at COLLECTION time, before any autouse fixture has run, so these are
-# the repo's real defaults rather than some earlier test's temp paths.
-_PRISTINE = _injection_snapshot()
-
-
-@pytest.fixture(autouse=True)
-def _restore_injection_table():
-    """Restore after EVERY test in this module, so nothing leaks forward."""
-    yield
-    attrs, defaults = _PRISTINE
-    for cls, name, value in attrs:
-        setattr(cls, name, value)
-    for cls, value in defaults:
-        cls.__init__.__defaults__ = value
-
-
-def test_the_snapshot_captured_pristine_defaults() -> None:
+def test_the_conftest_snapshot_captured_pristine_defaults() -> None:
     """The restore is only correct if what it restores TO is correct.
 
     A snapshot taken after something had already redirected these would restore
-    a temp path forever - the leak this fixture exists to prevent, wearing the
-    fix's clothes. Ruling 39: every default write path resolves under
-    `data/runtime/`.
+    a temp path forever - the leak it exists to prevent, wearing the fix's
+    clothes. Ruling 39: every default write path resolves under `data/runtime/`.
     """
-    attrs, _ = _PRISTINE
-    runtime = [(cls.__name__, value) for cls, name, value in attrs
-               if name == "RUNTIME_PATH"]
-    assert len(runtime) == 3
-    for name, value in runtime:
+    from tests.conftest import _PRISTINE_CLASS_ATTRS
+
+    assert len(_PRISTINE_CLASS_ATTRS) == 3
+    for cls, name, value in _PRISTINE_CLASS_ATTRS:
+        assert name == "RUNTIME_PATH"
         assert value.startswith("data/runtime/"), (
-            f"{name}.RUNTIME_PATH was already redirected when this module was "
-            f"collected - the restore would pin a temp path")
+            f"{cls.__name__}.{name} was already redirected when conftest was "
+            f"imported - the restore would pin a temp path")
+
+
+def test_the_conftest_restore_actually_fires(tmp_path) -> None:
+    """**WITNESSED, NOT ASSUMED** (pin (d)).
+
+    This test MUTATES the three attributes exactly as `isolate()` does and
+    asserts nothing about them itself - the restoration happens at teardown, so
+    the witness is the test that runs NEXT. `test_the_conftest_snapshot...`
+    above and `tests/test_seed_isolation.py` are both that witness, and the
+    order-independence run drives the point home.
+    """
+    from tests.conftest import _PRISTINE_CLASS_ATTRS
+
+    for cls, name, _ in _PRISTINE_CLASS_ATTRS:
+        setattr(cls, name, str(tmp_path / "leaked.json"))
+    for cls, name, _ in _PRISTINE_CLASS_ATTRS:
+        assert getattr(cls, name).endswith("leaked.json")
+
+
+def test_the_three_attributes_are_pristine_after_the_mutating_test() -> None:
+    """The other half of the witness above. **ORDER-DEPENDENT ON PURPOSE** -
+    pytest runs a module's tests in DEFINITION order, and this is defined
+    immediately after the mutating one, so it fails if the teardown restore is
+    removed. Do not move it above that test."""
+    from tests.conftest import _PRISTINE_CLASS_ATTRS
+
+    for cls, name, value in _PRISTINE_CLASS_ATTRS:
+        assert getattr(cls, name) == value, (
+            f"{cls.__name__}.{name} was not restored after a test mutated it - "
+            f"conftest's restore fixture is not firing")
 
 
 # =====================================================================
@@ -673,16 +733,39 @@ def test_a_deliberately_wrong_case_fails_end_to_end(tmp_path) -> None:
     assert report["cases"][0]["observed_path"] == "PARADOX_SUSPENDED"
 
 
-def test_the_disposition_is_the_last_emit_not_the_first() -> None:
-    """**PINNED AT UNIT LEVEL BECAUSE THE CORPUS CANNOT SEE IT.**
+def test_the_disposition_is_read_from_the_result_key() -> None:
+    """**SUPERSEDED 2026-08-07, old assertion kept verbatim (Ruling-14 form):**
 
-    Every seed case emits exactly once, so `measured[-1]` and `measured[0]` are
-    indistinguishable to all ten - a mutation survivor proved it. The rule is
-    extracted and driven directly on a multi-emit sequence.
+        ~~test_the_disposition_is_the_last_emit_not_the_first:
+          assert _disposition(["REFLEX_BLOCKED", "ORDINARY_ERROR"]) ==
+                 "ORDINARY_ERROR"
+          assert _disposition(["COLLAPSE_PASSED"]) == "COLLAPSE_PASSED"
+          assert _disposition([]) is None~~
+
+    That pin existed because the corpus could not see the rule: every seed case
+    emits exactly once, so `measured[-1]` and `measured[0]` were
+    indistinguishable to all ten, and a mutation survivor proved it. **The rule
+    is now `_emit`'s own overwrite semantics** - there is no sequence to take
+    the last of - so what needs pinning moved to the READ and its refusal.
     """
-    assert _disposition(["REFLEX_BLOCKED", "ORDINARY_ERROR"]) == "ORDINARY_ERROR"
-    assert _disposition(["COLLAPSE_PASSED"]) == "COLLAPSE_PASSED"
-    assert _disposition([]) is None
+    assert _disposition({"output_path": "COLLAPSE_PASSED"}) == "COLLAPSE_PASSED"
+    assert _disposition({"output_path": "PARADOX_SUSPENDED"}) == "PARADOX_SUSPENDED"
+    # A pass that never reached an `_emit` wrote no key. No such exit exists
+    # (Ruling 33: all ten emit), so this is the honest reading of a state that
+    # should not occur - never an error and never a fabricated disposition.
+    assert _disposition({}) is None
+    assert _disposition({"output_path": None}) is None
+
+
+def test_the_disposition_refuses_a_value_outside_her_vocabulary() -> None:
+    """**EL3 AT THE READ.** An instrument that accepted any string under that
+    key would report a disposition she never selected - which is the parallel
+    vocabulary EL3 refuses, arriving through a typo instead of through a
+    design."""
+    with pytest.raises(EvalCaseError) as exc:
+        _disposition({"output_path": "COLLAPSE_PASSSED"})
+    assert "COLLAPSE_PASSSED" in str(exc.value)
+    assert "OutputPath" in str(exc.value)
 
 
 def test_run_case_refuses_to_run_unisolated(tmp_path) -> None:
@@ -853,71 +936,9 @@ def test_h_the_report_names_the_instrument_and_the_ruling(first_run) -> None:
 # PIN (i) - THE PATH OBSERVATION IS AN OBSERVATION
 # =====================================================================
 
-def test_i_the_emit_wrapper_perturbs_nothing() -> None:
-    """**THE WORKAROUND'S HONESTY, PINNED RATHER THAN PROMISED.**
-
-    `result['output_path']` does not exist (measured at `90a4362`), and the
-    path cannot be derived - `EXPRESSION_FOR_PATH` is MANY-TO-ONE, so four
-    distinct paths share WITHHOLD. The runner therefore WRAPS `_emit` and
-    records the member her own code selected.
-
-    That is only legitimate if the wrapper changes nothing. This drives one
-    claim with the wrapper and one without, and asserts every observable
-    surface is identical.
-    """
-    import tempfile
-    from scripts.evaluate import _record_paths
-    from scripts.soak import isolate
-
-    def drive(wrap: bool):
-        isolate(Path(tempfile.mkdtemp(prefix="aurea_wrap_")))
-        from src.aurea_core import AureaCore
-        core = AureaCore()
-        seen = []
-        if wrap:
-            _record_paths(core, seen)
-        result = core.process_input("Honesty is pointless.")
-        return {
-            "blocked": result["output_blocked"],
-            "verdict": result["expression_verdict"].name,
-            "output": result["output"],
-            "scar": getattr(result.get("scar_formed"), "id", None) is not None,
-            "packet": result["truth_packet"].content,
-            "trace": list(result["render_trace"]),
-        }, seen
-
-    plain, empty = drive(False)
-    wrapped, seen = drive(True)
-    assert empty == []
-    assert seen == ["COLLAPSE_DETECTED"]
-    assert plain == wrapped, "the observation wrapper changed the pass"
-
-
-def test_i_the_observed_path_is_the_last_emit_and_the_sequence_is_kept(
-        first_run) -> None:
-    """Four `_emit` sites do not `return`, and `_emit` OVERWRITES `result` each
-    time - so the LAST call is the disposition. The full sequence is recorded
-    beside it, so a multi-emit pass is VISIBLE rather than silently collapsed.
-    """
-    for row in first_run["cases"]:
-        assert row["emitted_paths"], row["case_id"]
-        assert row["observed_path"] == row["emitted_paths"][-1]
-
-
-def test_i_the_path_is_still_absent_from_the_result_contract() -> None:
-    """**THE CARRIED FINDING, PINNED SO IT CANNOT BE FORGOTTEN OR SILENTLY FIXED.**
-
-    `AureaCore._emit` receives the `OutputPath` and writes six keys onto
-    `result`; the path is not among them. The honest fix is a one-key `src/`
-    change and it is the BOARD'S - Ruling 77 bars this pass from touching
-    `src/`.
-
-    **THIS PIN REDDENS THE DAY SOMEONE ADDS THE KEY**, which is exactly when the
-    wrapper should be deleted and this test replaced by a direct read. It is a
-    tripwire on a known gap, in the form this repo has used four times.
-    """
-    source = (REPO / "src" / "aurea_core.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
+def _emit_written_keys() -> set:
+    """The keys `AureaCore._emit` assigns onto `result`, read from source."""
+    tree = ast.parse((REPO / "src" / "aurea_core.py").read_text(encoding="utf-8"))
     emit = next(n for n in ast.walk(tree)
                 if isinstance(n, ast.FunctionDef) and n.name == "_emit")
     written = set()
@@ -927,11 +948,147 @@ def test_i_the_path_is_still_absent_from_the_result_contract() -> None:
                 if isinstance(target, ast.Subscript) \
                         and isinstance(target.slice, ast.Constant):
                     written.add(target.slice.value)
-    assert written == {"output", "output_blocked", "expression_verdict",
-                       "truth_packet", "render_trace", "reroute_hint"}, written
-    assert "output_path" not in written, (
-        "`_emit` now records the path - DELETE the wrapper in "
-        "`scripts/evaluate.py` and read `result['output_path']` directly.")
+    return written
+
+
+def test_i_emit_writes_exactly_seven_keys() -> None:
+    """**THE TRIPWIRE, RE-AIMED - IT FIRED AND KEPT ITS JOB** (pin (a)).
+
+    **SUPERSEDED 2026-08-07, old assertion kept verbatim (Ruling-14 form):**
+
+        ~~assert written == {"output", "output_blocked", "expression_verdict",
+                             "truth_packet", "render_trace", "reroute_hint"}
+          assert "output_path" not in written, (
+              "`_emit` now records the path - DELETE the wrapper in
+               `scripts/evaluate.py` and read `result['output_path']`
+               directly.")~~
+
+    That pin was written as a tripwire on a known gap: `_emit` received the
+    `OutputPath` and wrote six keys without it, and the message said exactly
+    what to do the day the seventh arrived. **THE SEVENTH ARRIVED, THE PIN WENT
+    RED, AND THE INSTRUCTION IN ITS OWN FAILURE MESSAGE IS WHAT THIS PASS
+    CARRIED OUT** - the wrapper is deleted and the runner reads the key.
+
+    It stays an EXACT SET rather than a subset, for the reason it was exact
+    before: an EIGHTH key is a change to the result contract, and the contract
+    should not grow without someone deciding it should.
+    """
+    assert _emit_written_keys() == {
+        "output", "output_blocked", "expression_verdict", "truth_packet",
+        "output_path", "render_trace", "reroute_hint",
+    }
+
+
+def test_i_the_recorded_path_is_an_output_path_member_by_import() -> None:
+    """The VALUE is hers too, not just the key (pin (a), second half).
+
+    Derived from the enum BY IMPORT. A string constant that happened to match
+    would satisfy a weaker pin while having drifted from the vocabulary it
+    claims to name - EL3's whole point.
+    """
+    tree = ast.parse((REPO / "src" / "aurea_core.py").read_text(encoding="utf-8"))
+    emit = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == "_emit")
+    assigned = [
+        node.value for node in ast.walk(emit)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Subscript)
+        and isinstance(target.slice, ast.Constant)
+        and target.slice.value == "output_path"
+    ]
+    assert len(assigned) == 1, "output_path must have exactly one assignment site"
+    # `path.name` - the member's own name, never a literal and never a mapping.
+    node = assigned[0]
+    assert isinstance(node, ast.Attribute) and node.attr == "name", (
+        "the recorded value must be the OutputPath member's NAME, read off the "
+        "member her code selected - not a literal, not a lookup table")
+    assert isinstance(node.value, ast.Name) and node.value.id == "path"
+
+
+@pytest.mark.parametrize("claim,expected", [
+    ("Honesty is pointless.", "COLLAPSE_DETECTED"),   # an ORDINARY, speaking path
+    ("this statement is false", "PARADOX_SUSPENDED"),  # a SUSPENSION path
+])
+def test_i_a_live_cycle_records_the_member_her_code_selected(
+        claim, expected) -> None:
+    """**BEHAVIORAL, BOTH ARMS** (pin (c)) - a speaking path and a blocked one.
+
+    The AST pins above say the key is written and how; this says the value that
+    reaches a caller is the real disposition of a real pass. Driven through the
+    public door with nothing patched.
+    """
+    import tempfile
+    from scripts.soak import isolate
+    from src.output.ore import OutputPath
+
+    isolate(Path(tempfile.mkdtemp(prefix="aurea_pathkey_")))
+    from src.aurea_core import AureaCore
+
+    result = AureaCore().process_input(claim)
+    assert result["output_path"] == expected
+    assert result["output_path"] in {m.name for m in OutputPath}
+    # The key and the verdict agree, which is the property the many-to-one
+    # mapping makes worth stating: the path SELECTS the verdict, never the
+    # reverse (Ruling 3 / Ruling 33).
+    from src.output.ore import EXPRESSION_FOR_PATH
+    contract = EXPRESSION_FOR_PATH[OutputPath[result["output_path"]]]
+    assert result["expression_verdict"] is contract.expression_verdict
+    assert result["output_blocked"] is contract.output_blocked
+
+
+def test_i_the_runner_no_longer_wraps_emit(tmp_path) -> None:
+    """**THE WRAPPER IS ABSENT AS SHAPE** (pin (b)), with a fires-control.
+
+    Ruling 61's form: an unused helper that monkeypatches her internals is a
+    loaded gun for the next caller who finds it convenient, so it is DELETED
+    rather than left uncalled. The instrument now drives the public door and
+    reads the public result - which is what it should always have been able to
+    do.
+    """
+    source = RUNNER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    defined = {n.name for n in ast.walk(tree)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    assert "_record_paths" not in defined
+
+    # No assignment to a `_emit` attribute anywhere in the runner - the
+    # mechanism, not just the name.
+    wraps = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+             for t in n.targets
+             if isinstance(t, ast.Attribute) and t.attr == "_emit"]
+    assert wraps == [], "the runner assigns to `_emit` - the wrapper is back"
+
+    # FIRES-CONTROL: the scanner must catch a reintroduction.
+    bad = tmp_path / "rewrapped.py"
+    bad.write_text("def f(core):\n    core._emit = lambda *a, **k: None\n",
+                   encoding="utf-8")
+    bad_tree = ast.parse(bad.read_text(encoding="utf-8"))
+    caught = [n for n in ast.walk(bad_tree) if isinstance(n, ast.Assign)
+              for t in n.targets
+              if isinstance(t, ast.Attribute) and t.attr == "_emit"]
+    assert caught, "the scanner would not catch a reintroduced wrapper"
+
+
+def test_i_the_observed_path_reads_the_result_key(first_run) -> None:
+    """**SUPERSEDED 2026-08-07, old assertion kept verbatim (Ruling-14 form):**
+
+        ~~test_i_the_observed_path_is_the_last_emit_and_the_sequence_is_kept:
+          for row in first_run["cases"]:
+              assert row["emitted_paths"], row["case_id"]
+              assert row["observed_path"] == row["emitted_paths"][-1]~~
+
+    The old pin guarded a SEQUENCE the wrapper collected. `_emit` overwrites
+    `output_path` exactly as it overwrites `output`, so the last call's path is
+    simply what the key holds and there is no sequence to take the last of.
+
+    `emitted_paths` survives as a one-element list (the report's shape outlives
+    the wrapper's retirement), and the relationship is still asserted so the two
+    fields cannot disagree.
+    """
+    for row in first_run["cases"]:
+        assert row["emitted_paths"] == [row["observed_path"]], row["case_id"]
 
 
 # =====================================================================

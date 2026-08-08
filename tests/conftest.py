@@ -32,6 +32,17 @@ THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class attributes,
 twenty from `__init__` defaults. If you add a twenty-sixth and do not add it
 here, you have reopened the hole Ruling 31 closed.
 
+**THIS FILE NOW DOES TWO THINGS, AND THE COUNT ABOVE DESCRIBES ONLY THE FIRST**
+(2026-08-07). It REDIRECTS those twenty-five paths, and it RESTORES three class
+attributes that something ELSE redirected - `scripts/soak.py`'s `isolate()`,
+which is a standalone process and has nothing to restore to. **The two halves
+are separate on purpose and the count is not shared between them**: redirection
+is a coverage claim that can go stale, restoration is a derived set that cannot
+(it is pinned as the soak's class attributes MINUS the ones patched here). See
+the block above `_restore_bare_setattr_redirection` for the whole finding -
+including why a suite-wide guard was, until this change, held up by alphabetical
+file order.
+
     ~~THIS FIXTURE COVERS TWENTY-TWO PATHS: five resolved from class
     attributes, seventeen from `__init__` defaults.~~
 
@@ -120,6 +131,66 @@ from src.suspension.veiled_thread import VeiledThread
 from src.topology.tca_core import TopologicalSpace
 from src.topology.tcaml import TCAML
 from src.utils.echo_memory import EchoMemory
+
+
+# =====================================================================
+# THE RESTORE HALF (2026-08-07) - redirection this fixture does NOT own
+# =====================================================================
+#
+# **THE HAZARD, AND IT WAS REAL RATHER THAN THEORETICAL.** `scripts/soak.py`'s
+# `isolate()` redirects by BARE `setattr` on CLASS ATTRIBUTES - it is a
+# standalone process and has nothing to restore to. Three of those attributes,
+# `Codex.RUNTIME_PATH` / `ScarLogicCore.RUNTIME_PATH` / `EchoMemory.RUNTIME_PATH`,
+# are redirected BELOW as `__init__` DEFAULTS instead, so this fixture never
+# monkeypatches the class attributes and therefore never restores them.
+#
+# Any test that calls `isolate()` (the soak smoke test, the evaluation
+# instrument's tests) therefore left those three pointing at a temp directory
+# FOR THE REST OF THE SESSION. That breaks `tests/test_seed_isolation.py`'s
+# class-level guard, which asserts `RUNTIME_PATH.startswith("data/runtime/")`
+# (Ruling 39) precisely BECAUSE a class-level defect is one this fixture cannot
+# mask.
+#
+# **IT HAD NEVER FIRED FOR ONE REASON ONLY: `test_soak_smoke` SORTS AFTER
+# `test_seed_isolation` ALPHABETICALLY.** A suite-wide correctness guard was
+# being held up by FILE-NAME ORDER - which is the "discouraged, not
+# unexecutable" shape (CLAUDE.md section 3) sitting underneath the guard that
+# enforces Ruling 39. Ruling 77's pass hit it, restored the table LOCALLY in its
+# own file, and reported the general case as the board's. This is that
+# generalization: **ONE implementation, in the fixture that owns isolation.**
+#
+# WHY SNAPSHOT/RESTORE RATHER THAN ANOTHER `monkeypatch.setattr`: monkeypatch
+# restores the value it recorded AT PATCH TIME, so patching these here would
+# work - but it would also REDIRECT them, and this fixture deliberately moves
+# the `__init__` default rather than the class attribute for these three (see
+# the comment at the loop below: the SEED path must stay reachable). Snapshot
+# and restore leaves the redirection policy exactly as it is and only undoes
+# what someone else did.
+#
+# CAPTURED AT IMPORT, before any fixture has run, so these are the repo's real
+# defaults rather than some earlier test's temp paths.
+_ISOLATE_MUTATED_CLASS_ATTRS = (
+    (Codex, "RUNTIME_PATH"),
+    (ScarLogicCore, "RUNTIME_PATH"),
+    (EchoMemory, "RUNTIME_PATH"),
+)
+_PRISTINE_CLASS_ATTRS = tuple(
+    (cls, name, getattr(cls, name)) for cls, name in _ISOLATE_MUTATED_CLASS_ATTRS
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_bare_setattr_redirection():
+    """Undo, after every test, any bare `setattr` redirection of the three.
+
+    Runs for EVERY test rather than only the ones that call `isolate()`,
+    deliberately: a fixture that had to be requested is a fixture someone
+    forgets, and the whole finding here is that correctness was resting on
+    something nobody had to remember. This costs three attribute writes.
+    """
+    yield
+    for cls, name, value in _PRISTINE_CLASS_ATTRS:
+        setattr(cls, name, value)
 
 
 @pytest.fixture(autouse=True)

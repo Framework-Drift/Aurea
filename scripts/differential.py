@@ -135,6 +135,12 @@ def _claim_row(result: Dict[str, Any]) -> Dict[str, Any]:
         "echo_source": getattr(echo, "source", None) if echo else None,
         "output": result.get("output"),
         "output_blocked": result.get("output_blocked"),
+        # 77-FINDINGS HOUSEKEEPING (2026-08-07): the pass's own disposition.
+        # Captured so the key's ARRIVAL is WITNESSED by the instrument rather
+        # than merely asserted by a pin - Ruling 68's precedent, where node tags
+        # were added here for exactly that reason. `.get` because the BEFORE
+        # tree does not have the key, which is the delta.
+        "output_path": result.get("output_path"),
         "expression_verdict": getattr(result.get("expression_verdict"),
                                       "name", None),
         "pressure_generated": round(result.get("pressure_generated") or 0.0, 6),

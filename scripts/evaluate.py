@@ -43,41 +43,68 @@ THE DOCKET LAWS, in force for every Docket R item forever
                                      ADMISSION into the tracked seed corpus is
                                      human curation, never automatic.
 
-**THE PATH IS OBSERVED BY WRAPPER, AND THAT IS A WORKAROUND FOR A CARRIED GAP**
+**THE PATH IS READ FROM THE RESULT** (the wrapper is RETIRED)
 -------------------------------------------------------------------------------
-STATED PLAINLY BECAUSE A FUTURE READER MUST NOT MISTAKE IT FOR A PROPERTY OF THE
-SYSTEM, exactly as `differential.py` names its wall-clock normalization.
+**SUPERSEDED 2026-08-07 BY THE 77-FINDINGS HOUSEKEEPING PASS, old text kept
+verbatim below (Ruling-14 form) because it is the record of WHY the workaround
+existed and of the fix it demanded - which is the fix that landed.**
 
-MEASURED AT `90a4362`: `AureaCore._emit` RECEIVES the `OutputPath` and writes
-`output`, `output_blocked`, `expression_verdict`, `truth_packet`,
-`render_trace` and `reroute_hint` onto `result` - **but not the path itself.**
-So the pass's own disposition, the one fact this instrument exists to observe,
-is the one fact `result` does not carry.
+`AureaCore._emit` now writes `result['output_path']`, the `OutputPath` member
+NAME it was handed. The runner reads that key directly. The instrument no
+longer touches her internals at all: it drives the public door and reads the
+public result, which is what an observation instrument should always have been
+able to do.
 
-IT CANNOT BE DERIVED, AND THE ATTEMPT WOULD BE THE DEFECT. `EXPRESSION_FOR_PATH`
-is MANY-TO-ONE: four distinct paths (PROCESSING_SUSPENDED,
-ARBITRATED_OUTPUT_LOCK, REFLEX_BLOCKED, STRUCTURAL_VIOLATION) all map to
-WITHHOLD. Reconstructing a path from a verdict plus surrounding evidence would
-be INFERENCE, and an instrument that infers her disposition has coined a
-parallel disposition vocabulary in everything but name - EL3's refused class.
+**THE TRIPWIRE THAT DEMANDED THIS IS STILL LIVE, RE-AIMED.** The pin that
+asserted `_emit`'s written keys is now an exact SEVEN-key set, so an eighth key
+reddens it exactly as the sixth-to-seventh transition did. It was written as a
+tripwire on a known gap, it fired when the gap closed, and it keeps its job.
 
-So the runner WRAPS `_emit` on the instance and records the `OutputPath` it was
-handed. That is OBSERVATION of a real argument at a real call, not a
-reconstruction: the value recorded is the enum member her own code selected.
-The wrapper is a pure pass-through - it records and delegates, adds nothing,
-returns what the original returned.
+    ~~**THE PATH IS OBSERVED BY WRAPPER, AND THAT IS A WORKAROUND FOR A CARRIED
+    GAP.** STATED PLAINLY BECAUSE A FUTURE READER MUST NOT MISTAKE IT FOR A
+    PROPERTY OF THE SYSTEM, exactly as `differential.py` names its wall-clock
+    normalization.
 
-    **THE HONEST FIX IS A ONE-KEY `src/` CHANGE (`result['output_path']`), AND
-    IT IS THE BOARD'S, NOT THIS PASS'S.** Ruling 77 bars this pass from touching
-    `src/` at all. The gap is REPORTED, not routed around silently.
+    MEASURED AT `90a4362`: `AureaCore._emit` RECEIVES the `OutputPath` and
+    writes `output`, `output_blocked`, `expression_verdict`, `truth_packet`,
+    `render_trace` and `reroute_hint` onto `result` - **but not the path
+    itself.** So the pass's own disposition, the one fact this instrument
+    exists to observe, is the one fact `result` does not carry.
 
-THE FINAL EMIT IS THE DISPOSITION, AND THE SEQUENCE IS KEPT. Four of the ten
-`_emit` sites do not `return` (REFLEX_BLOCKED at `aurea_core.py:1303`,
-ORDINARY_ERROR at `:1388`, STRUCTURAL_VIOLATION at `:1749`, and Step 7's own),
-and `_emit` OVERWRITES `result['output']` each time - so the LAST call is what
-`result` ends up carrying, and that is the disposition. The full sequence is
-recorded beside it (`emitted_paths`), so a multi-emit pass is VISIBLE rather
-than silently collapsed to its last member.
+    IT CANNOT BE DERIVED, AND THE ATTEMPT WOULD BE THE DEFECT.
+    `EXPRESSION_FOR_PATH` is MANY-TO-ONE: four distinct paths
+    (PROCESSING_SUSPENDED, ARBITRATED_OUTPUT_LOCK, REFLEX_BLOCKED,
+    STRUCTURAL_VIOLATION) all map to WITHHOLD. Reconstructing a path from a
+    verdict plus surrounding evidence would be INFERENCE, and an instrument
+    that infers her disposition has coined a parallel disposition vocabulary in
+    everything but name - EL3's refused class.
+
+    So the runner WRAPS `_emit` on the instance and records the `OutputPath` it
+    was handed. That is OBSERVATION of a real argument at a real call, not a
+    reconstruction: the value recorded is the enum member her own code selected.
+    The wrapper is a pure pass-through - it records and delegates, adds nothing,
+    returns what the original returned.
+
+        **THE HONEST FIX IS A ONE-KEY `src/` CHANGE (`result['output_path']`),
+        AND IT IS THE BOARD'S, NOT THIS PASS'S.** Ruling 77 bars this pass from
+        touching `src/` at all. The gap is REPORTED, not routed around
+        silently.~~
+
+**THE DISPOSITION IS STILL THE FINAL EMIT, AND THE READ IS UNCHANGED BY THAT.**
+Four of the ten `_emit` sites do not `return`, and `_emit` OVERWRITES every key
+it writes - `output_path` included - so `result['output_path']` IS the last
+call's path by the same mechanism that made `result['output']` the last call's
+text. Reading the key gives the disposition without the runner having to track
+a sequence to find it.
+
+**WHAT THE RETIREMENT COST, STATED RATHER THAN GLOSSED:** `emitted_paths` was a
+LIST because the wrapper saw every call; the key shows only the last. A
+multi-emit pass is therefore no longer visible from the report. **No seed case
+has ever produced one** (all ten emit exactly once, pinned), and recovering the
+sequence would mean re-introducing the wrapper - so the loss is recorded here
+and `emitted_paths` is kept as a one-element tuple rather than deleted, so the
+report's shape survives and a future ruling that wants the sequence has a place
+to put it.
 
 IT IMPORTS THE SOAK'S ISOLATION MACHINERY RATHER THAN COPYING IT
 -------------------------------------------------------------------------------
@@ -354,21 +381,20 @@ def load_corpus(path: Path) -> Tuple[EvalCase, ...]:
 # R3 - THE RUNNER
 # ---------------------------------------------------------------------
 
-def _record_paths(core, sink: List[str]) -> None:
-    """Observe the `OutputPath` her own code selects. See the module docstring.
-
-    A PURE PASS-THROUGH. It records the argument and delegates; it adds nothing,
-    changes nothing, and returns exactly what the original returned. The
-    determinism pin and the differential's zero-movement requirement are what
-    keep that claim honest rather than merely asserted.
-    """
-    original = core._emit
-
-    def recording(result, path, *args, **kwargs):
-        sink.append(path.name)
-        return original(result, path, *args, **kwargs)
-
-    core._emit = recording
+# **`_record_paths` IS DELETED, NOT DEPRECATED** (2026-08-07). It wrapped
+# `AureaCore._emit` to observe the path before `result` carried it. Ruling 61's
+# form governs the removal: an unused helper that monkeypatches her internals is
+# a loaded gun for the next caller who finds it convenient, and the shape rule
+# is that the wrong path must be UNEXECUTABLE rather than merely unused.
+# `tests/test_ruling77.py` pins its ABSENCE by AST with a fires-control.
+#
+# The old body, for the record:
+#
+#     original = core._emit
+#     def recording(result, path, *args, **kwargs):
+#         sink.append(path.name)
+#         return original(result, path, *args, **kwargs)
+#     core._emit = recording
 
 
 def _ledger_sizes(core) -> Dict[str, int]:
@@ -440,19 +466,46 @@ def _deltas(case: EvalCase, observed_path: Optional[str],
     return out
 
 
-def _disposition(measured: Sequence[str]) -> Optional[str]:
-    """THE PASS'S DISPOSITION IS ITS **LAST** EMIT.
+def _disposition(result: Dict[str, Any]) -> Optional[str]:
+    """THE PASS'S DISPOSITION, **READ FROM THE RECORD SHE WROTE**.
 
-    Four of the ten `_emit` sites do not `return`, and `_emit` OVERWRITES
-    `result['output']`, `output_blocked` and the packet on every call - so what
-    `result` ends up carrying is the last one. Taking the first would report a
-    disposition her own `result` contradicts.
+    **SUPERSEDED 2026-08-07, old text kept verbatim (Ruling-14 form):**
 
-    A one-line rule, extracted so it can be pinned directly: every case in the
-    seed corpus emits exactly once today, which means an in-place `measured[-1]`
-    is indistinguishable from `measured[0]` to the entire corpus.
+        ~~THE PASS'S DISPOSITION IS ITS **LAST** EMIT. Four of the ten `_emit`
+        sites do not `return`, and `_emit` OVERWRITES `result['output']`,
+        `output_blocked` and the packet on every call - so what `result` ends up
+        carrying is the last one. Taking the first would report a disposition
+        her own `result` contradicts. A one-line rule, extracted so it can be
+        pinned directly: every case in the seed corpus emits exactly once today,
+        which means an in-place `measured[-1]` is indistinguishable from
+        `measured[0]` to the entire corpus.~~
+
+    That reasoning was right and is now moot: `_emit` overwrites `output_path`
+    exactly as it overwrites `output`, so the LAST call's path is simply what
+    the key holds. The rule did not change - it stopped needing to be
+    re-derived by the reader.
+
+    **THE VALUE IS VALIDATED AGAINST THE REAL ENUM, BY IMPORT.** EL3 says the
+    vocabulary is HERS, and the instrument's job is to record what she selected,
+    not to accept any string that turns up under that key. A value outside
+    `OutputPath` means the contract moved, and the honest response is to refuse
+    rather than to report a disposition that names nothing.
+
+    `None` is a real answer and is NOT an error: a pass that returned before
+    reaching any `_emit` wrote no key. No such path exists today (all ten exits
+    emit - Ruling 33), so this is the honest reading of a state that should not
+    occur rather than a case anyone has seen.
     """
-    return measured[-1] if measured else None
+    observed = result.get("output_path")
+    if observed is None:
+        return None
+    if observed not in output_path_names():
+        raise EvalCaseError(
+            f"`result['output_path']` is {observed!r}, which is not an "
+            f"`OutputPath` member. Known: {sorted(output_path_names())}. The "
+            f"evaluation vocabulary is HERS (EL3) - an instrument that accepted "
+            f"an unknown disposition would be reporting one she never selected.")
+    return observed
 
 
 def _refuse_unisolated(root: Path) -> None:
@@ -500,29 +553,33 @@ def run_case(case: EvalCase, root: Path, seed: int) -> Dict[str, Any]:
     from src.aurea_core import AureaCore
 
     core = AureaCore()
-    emitted: List[str] = []
-    _record_paths(core, emitted)
 
     # Context first, through THE SAME DOOR. A context input is a real claim
     # cycle and is measured as one - it just is not the input under test.
+    #
+    # **THE CONTEXT'S DISPOSITION IS STRUCTURALLY NOT THE CASE'S NOW.** Each
+    # `process_input` returns its OWN result dict, and only the measured call's
+    # is read - so a context cycle cannot be charged to the case even by
+    # accident. Under the retired wrapper this needed an explicit slice of a
+    # shared sink (`emitted[context_emits:]`), and getting that slice wrong was
+    # a real mutation survivor. The key removes the whole class.
     for prior in case.context:
         core.process_input(prior)
 
     before = _ledger_sizes(core)
-    context_emits = len(emitted)
     result = core.process_input(case.input)
 
-    # THE CONTEXT'S EMITS ARE NOT THE CASE'S. A context input is a real claim
-    # cycle and emits a real disposition; charging it to the case under test
-    # would make a case pass on its context's behaviour.
-    measured = emitted[context_emits:]
     facts = _observe_facts(core, result, before)
-    observed_path = _disposition(measured)
+    observed_path = _disposition(result)
 
     return {
         **case.as_dict(),
         "observed_path": observed_path,
-        "emitted_paths": measured,
+        # KEPT as a one-element tuple rather than deleted: the report's shape
+        # survives the wrapper's retirement, and a future ruling that wants the
+        # full emit sequence back has somewhere to put it. See the module
+        # docstring for what the retirement cost.
+        "emitted_paths": [observed_path] if observed_path else [],
         "observed_facts": facts,
         "claim_id": result.get("claim_id"),
         "expectation_deltas": _deltas(case, observed_path, facts),
