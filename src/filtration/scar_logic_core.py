@@ -46,10 +46,34 @@ class ScarLogicCore:
         self.load_from_file()  # Load at startup
 
     def add_scar(self, scar: Scar) -> None:
-        """
-        Add a new scar to memory (DO NOT auto-save here).
+        """Add a new scar to memory, and write it down.
+
+            ~~Add a new scar to memory (DO NOT auto-save here).~~
+
+        RULING 78 res.3 (2026-08-09) - SUPERSEDED, old text kept above verbatim.
+        The struck line carried NO REASONING - it was an instruction without an
+        argument, and this ruling supplies the discipline that replaces it.
+
+        THE SINGLE WRITE DOOR. `form_scar` is the owner-side execution of every
+        scar REQUEST in the system (Ruling 1) and it ends here, so saving here
+        covers every requester BY CONSTRUCTION rather than by each caller
+        remembering - the AST census in `tests/test_ruling78.py` pins that
+        `form_scar` is still the only caller in `src/`.
+
+        WHAT IT CLOSES - THE FORMATION WINDOW. `scars.json` was already
+        checkpointed, but only by `SML.transition` (a later DECAY) and by an
+        operator `save_state`. So a formed scar was durable only if something
+        happened to it AFTERWARDS: a wound was remembered because it later
+        cooled, and lost if nothing ever disturbed it. That is Ruling 54's
+        erosion argument inverted - there, calm must not ERODE what she
+        survived; here, calm must not ERASE it - and it left Ruling 76's
+        `claim_id` joins able to point from a durable suspension at a scar that
+        never landed.
+
+        The snapshot itself is unchanged and still atomic (Rider R3).
         """
         self.scars.append(scar)
+        self.save_to_file()
 
     def form_scar(self, origin: str, type: str = "", weight: float = 0.0,
                   description: str = "", name: Optional[str] = None,

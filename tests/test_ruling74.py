@@ -1046,11 +1046,28 @@ def test_i_the_writer_gate_runs_before_mkdir_and_open():
         if isinstance(node, ast.Call):
             name = getattr(node.func, "id", None) or getattr(node.func, "attr",
                                                              None)
-            if name in ("validate_record_value", "mkdir", "open"):
+    # MIGRATED 2026-08-09 (RULING 78), old text struck below, ASSERTION
+    # UNCHANGED IN SUBSTANCE. The gate-before-creation property is exactly
+    # what it was; what moved is the CREATION CALL. R78 routed every append
+    # in `src/` through `durable_append_text`, so the file-creating call in
+    # this method is now that helper rather than a raw `open` - and the
+    # helper does the `mkdir` too. Scanning for `open` alone would find
+    # nothing and PASS VACUOUSLY, which is the quietest way for a structural
+    # pin to survive while measuring nothing.
+    #
+    #     ~~if name in ("validate_record_value", "mkdir", "open"):~~
+            if name in ("validate_record_value", "mkdir", "open",
+                        "durable_append_text"):
                 order.append((node.lineno, name))
     sequence = [name for _, name in sorted(order)]
     assert sequence.index("validate_record_value") < sequence.index("mkdir")
-    assert sequence.index("validate_record_value") < sequence.index("open")
+    assert (sequence.index("validate_record_value")
+            < sequence.index("durable_append_text")), (
+        "the writer gate must run before the append helper - a gate that\n"
+        "runs after the write has already left a line behind")
+    assert "open" not in sequence, (
+        "RULING 78: this write must route through the append funnel, not a\n"
+        "raw open - see the AST census in tests/test_ruling78.py")
 
     # `allow_nan=False`, and NO `default=` - Ruling 66's second half.
     dumps = [n for n in ast.walk(append) if isinstance(n, ast.Call)

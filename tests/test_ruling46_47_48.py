@@ -1008,15 +1008,38 @@ def test_the_write_publishes_by_replace_and_never_opens_the_destination():
         "the temp file must be fsynced before it is published; replacing an "
         "unsynced file publishes a name whose contents are still in flight")
 
-    # And nothing in this module may open the DESTINATION for writing - only the
+    # And the SNAPSHOT PATH may not open the DESTINATION for writing - only the
     # temp file it created. This is what a "no os.replace, just write it" edit
     # would have to introduce, so it closes the same mutant a second way.
-    for node in ast.walk(tree):
+    #
+    #     ~~for node in ast.walk(tree):  # the WHOLE MODULE~~
+    #
+    # MIGRATED 2026-08-09 (RULING 78), old scope struck above, ASSERTION
+    # UNCHANGED - and the migration is the RULING moving, not the test bending.
+    # This module held exactly one write function when the assertion was
+    # written, so "the module" and "the snapshot path" were the same set. R78
+    # added `durable_append_text`, whose CONTRACT IS TO OPEN ITS DESTINATION in
+    # mode "a" - an append that wrote to a temp file and replaced would be the
+    # whole-file rewrite this module's docstring refuses in terms.
+    for node in ast.walk(write_fn):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id == "open"):
             first = node.args[0] if node.args else None
             assert isinstance(first, ast.Name) and first.id == "tmp_name", (
-                "open() in atomic_write.py may only target the temp file")
+                "open() in atomic_write_text may only target the temp file")
+
+    # NOT A WEAKENING: the module-wide half is KEPT and made sharper. Narrowing
+    # the scan above would otherwise license a truncating `open(path, "w")`
+    # anywhere else in the file - so no open ANYWHERE in this module may use a
+    # rewriting mode, which is the property the original scope was protecting.
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "open"):
+            modes = [a.value for a in node.args[1:] if isinstance(a, ast.Constant)]
+            modes += [k.value.value for k in node.keywords
+                      if k.arg == "mode" and isinstance(k.value, ast.Constant)]
+            assert all("w" not in str(m) and "+" not in str(m) for m in modes), (
+                f"a truncating open appeared in atomic_write.py: {modes}")
 
 
 def test_a_real_store_snapshot_round_trips_through_the_atomic_path(tmp_path):

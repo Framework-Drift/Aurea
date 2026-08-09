@@ -51,6 +51,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from src.utils.atomic_write import durable_append_text
 
 
 class BehaviorType(Enum):
@@ -234,9 +235,17 @@ class RBSystem:
         `flush_failures` record instead."""
         try:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.log_path, "a") as f:
-                for entry in entries:
-                    f.write(json.dumps(entry.to_dict(), allow_nan=False) + "\n")
+            # RULING 78 res.2: durable at its own write. THE BLOCK IS BUILT
+            # FIRST AND WRITTEN ONCE - this is the only routed site that wrote
+            # SEVERAL lines per open, and appending them one call at a time
+            # would fsync once per entry for no gain: the flush boundary that
+            # matters is the one this method already had. Bytes identical
+            # (same lines, same order, same separators); the old call took the
+            # PLATFORM DEFAULT encoding and `json.dumps` is `ensure_ascii=True`,
+            # so the payload is pure ASCII and utf-8 writes the same bytes.
+            block = "".join(json.dumps(entry.to_dict(), allow_nan=False) + "\n"
+                            for entry in entries)
+            durable_append_text(self.log_path, block)
             return True
         except Exception as exc:  # any write error, by ruling - not a bare pass
             self.flush_failures.append({

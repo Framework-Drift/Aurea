@@ -78,18 +78,44 @@ power loss at the block layer is a different and larger claim, and making a
 partial version of it look complete is the completeness-claim defect this
 codebase has now found seven times.
 
-APPEND-ONLY LOGS ARE EXEMPT, AND THE EXEMPTION IS A DIFFERENT FAILURE CLASS,
-not a smaller version of the same one. `CAE`'s ledger, the RB log, the GSR
-alerts, SAE's restart records, the structural-violation log and EchoMemory all
-open mode `"a"`. A torn APPEND damages exactly the line being written and
-leaves every prior line intact - and every one of those readers already handles
-it, by FLOOR SEMANTICS: `cae._derive_seq` and `cae.read_all` skip a line that
-will not parse, on purpose, because "a forensic log outlives the code that
-wrote it." A torn SNAPSHOT destroys the whole prior state. Detectable-and-
-droppable versus unrecoverable: routing an append through this helper would
-mean reading the entire ledger into memory and rewriting it on every entry,
-which converts an append-only record into a whole-file rewrite - turning the
-exempt failure class into the dangerous one in the name of fixing it.
+APPEND-ONLY LOGS ARE EXEMPT FROM *THIS* FUNNEL, AND THE EXEMPTION IS A
+DIFFERENT FAILURE CLASS, not a smaller version of the same one. `CAE`'s ledger,
+the RB log, the GSR alerts, SAE's restart records, the structural-violation log
+and EchoMemory all open mode `"a"`. A torn APPEND damages exactly the line being
+written and leaves every prior line intact - and every one of those readers
+already handles it, by FLOOR SEMANTICS: `cae._derive_seq` and `cae.read_all`
+skip a line that will not parse, on purpose, because "a forensic log outlives
+the code that wrote it." A torn SNAPSHOT destroys the whole prior state.
+Detectable-and-droppable versus unrecoverable: routing an append through
+`atomic_write_text` would mean reading the entire ledger into memory and
+rewriting it on every entry, which converts an append-only record into a
+whole-file rewrite - turning the exempt failure class into the dangerous one in
+the name of fixing it.
+
+    ~~That paragraph was the whole of what this module said about appends.~~
+
+RULING 78 (2026-08-09) - SUPERSEDED IN PART, old text kept above verbatim.
+**THE ATOMICITY EXEMPTION STANDS EXACTLY AS WRITTEN. WHAT IT NEVER ANSWERED
+WAS DURABILITY, AND THE TWO WERE NEVER THE SAME GUARANTEE.** Atomicity asks
+whether a reader can see a half-written line; durability asks whether a line
+the writer believes it wrote is on the device at all. Every argument above is
+about the first, and the second went unaddressed by omission rather than by
+decision - so an append returned, the caller treated the record as made, and
+the bytes sat in the page cache where a power loss took them.
+
+That is not a smaller version of the torn-line problem either. The sharpest
+consequence is CROSS-STORE: a minted id escapes into records that ARE fsync'd
+(a suspension snapshot, one of Ruling 76's `claim_id` joins), its own ledger
+line dies in the cache, the mint's floor re-derives LOWER at restart, and the
+id is REBORN naming a different perception while durable joins still point at
+it. Ruling 69's letter holds - the line never reached disk - and its intent
+does not.
+
+So appends are exempt from the SNAPSHOT funnel and are NOT exempt from
+durability: `durable_append_text` below is their funnel, and the argument for
+one funnel is the argument `atomic_write_json` already makes for `allow_nan`
+- twelve disciplined sites are twelve chances to forget; one funnel is a
+property, and it stays true for the thirteenth site nobody has written yet.
 """
 
 from __future__ import annotations
@@ -172,3 +198,55 @@ def atomic_write_json(path: Union[str, Path], payload: Any,
     """
     atomic_write_text(path, json.dumps(payload, allow_nan=False, **dump_kwargs),
                       encoding=encoding)
+
+
+def durable_append_text(path: Union[str, Path], line: str,
+                        encoding: str = "utf-8") -> None:
+    """Append `line` to `path` and do not return until it is on the device.
+
+    RULING 78 res.2 (2026-08-09) - THE APPEND FUNNEL. Every mode-`"a"` write in
+    `src/` routes through here; the AST pin in `tests/test_ruling78.py` asserts
+    there are none left outside this module, so the routing is unexecutable-by-
+    omission rather than remembered.
+
+    THE CALLER SUPPLIES THE TRAILING NEWLINE, AND THAT IS THE RULED CHOICE.
+    This function writes the bytes it is given and not one more. Appending a
+    separator would be choosing something about CONTENT, and the line separator
+    is part of a ledger's format, which belongs to the ledger's owner - the same
+    boundary `atomic_write_text` draws when it writes `text` verbatim. It also
+    keeps every routed site a pure substitution: each one already wrote
+    `json.dumps(...) + "\\n"`, so the bytes on disk are identical to what the
+    raw `open` produced and only the durability is new.
+
+    WHAT STAYS AT THE SITE, DELIBERATELY: `json.dumps`, `validate_record_value`,
+    `allow_nan=False`, id minting, the mint lock, and each writer's error
+    discipline. This helper decides NOTHING - it is a filesystem primitive of
+    the same standing as `json.dumps` or `Path.mkdir`, and the "not a second
+    writer" argument in this module's docstring applies to it unchanged. There
+    is no store import here and there must never be one.
+
+    `flush` THEN `fsync`, BOTH REQUIRED AND NEITHER REDUNDANT - `flush` moves
+    Python's buffer into the OS, `fsync` moves the OS's buffer onto the device.
+    Returning after only the first is what let a recorded line die in the page
+    cache while the caller treated the record as made.
+
+    IT RAISES. An `OSError` from the fsync reaches the caller exactly as one
+    from the `open` already did, so each site's existing discipline decides what
+    that means: the ledgers whose write GATES the thing being recorded (Rulings
+    58/61) still refuse, and the best-effort forensic writers still catch and
+    land it on their own failure ledgers (Ruling 11 - the observer never gates
+    the observed). This function does not choose between those, because the
+    choice is the site's and always was.
+
+    `mkdir` here is deliberate belt-and-braces: the routed sites each do their
+    own, several of them ordered AFTER a validator on purpose so that a refused
+    entry leaves no directory it did not already need. Those orderings are
+    untouched; this one exists so the primitive is complete for the site nobody
+    has written yet.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding=encoding) as handle:
+        handle.write(line)
+        handle.flush()
+        os.fsync(handle.fileno())

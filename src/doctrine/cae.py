@@ -102,6 +102,7 @@ from typing import Any, Dict, List, Optional
 # RULING 66: the shared record-value validator. A pure function - it owns no
 # store, opens no file, and mutates nothing.
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
+from src.utils.atomic_write import durable_append_text
 from src.utils.record_value import validate_record_value
 
 
@@ -285,8 +286,11 @@ class CAE:
         # this write without passing through here.
         validate_record_value(entry, path="cae_entry")
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.ledger_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, allow_nan=False) + "\n")
+        # RULING 78 res.2: durable at its own write. Bytes identical -
+        # the serializer, the validator above and this store's error
+        # discipline are unchanged; only the fsync is new.
+        durable_append_text(self.ledger_path,
+                            json.dumps(entry, allow_nan=False) + "\n")
         self.entries.append(entry)
         return entry["id"]
 

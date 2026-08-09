@@ -138,6 +138,17 @@ class Codex:
                 f"'{doctrine.id}' is not marked is_seed. Only origin doctrine may be seeded."
             )
         self.doctrines[doctrine.id] = doctrine
+        # RULING 78 res.3 - THIS METHOD DELIBERATELY DOES NOT SAVE, and the
+        # absence is pinned by AST in `tests/test_ruling78.py`.
+        #
+        # THE TRACKED SEED IS ALREADY THIS WRITE'S DURABLE RECORD (Ruling 32).
+        # Genesis re-reads the same file every construction, so a runtime
+        # snapshot of it would record nothing that was not already on disk -
+        # and it would put a WRITER on the genesis path, which is exactly the
+        # shape Ruling 32 split the seed away from. A first run that has never
+        # mutated should leave `data/runtime/doctrines.json` ABSENT; the
+        # difference between "no runtime state" and "runtime state identical to
+        # the seed" is one a later loader can read, and it must stay true.
         return doctrine
 
     def seal(self) -> None:
@@ -182,6 +193,22 @@ class Codex:
             )
         self.doctrines[doctrine.id] = doctrine
         self._consumed.add(auth.authorization_id)
+        # RULING 78 res.3 (2026-08-09) - THE EVENT BOUNDARY. This is the
+        # TERMINAL WRITE of every doctrine event: mutation, birth and reversion
+        # all end here, so one save here is one save per event.
+        #
+        # WHAT IT CLOSES: before this line the Codex was durable only when an
+        # operator called `save_state`, while `sae_epoch.json` had been durable
+        # at the moment of SPENDING since Ruling 34. A mutation followed by an
+        # unclean restart therefore left the budget spent and the belief gone -
+        # not a lost mutation but a DISAGREEMENT BETWEEN STORES, with the
+        # surviving half recording that she had already changed her mind.
+        #
+        # IT SAVES BOTH HALVES: `save_to_file` snapshots `doctrines` AND
+        # `fossils`, so the ancestor's fall and the successor's rise become
+        # durable together, which is why the pair is checkpointed HERE and not
+        # in `fossilize` - see that method.
+        self.save_to_file()
         return doctrine
 
     def fossilize(self, doctrine_id: str, auth: MutationAuthorization,
@@ -214,6 +241,19 @@ class Codex:
         self.fossils[doctrine_id] = doctrine
         del self.doctrines[doctrine_id]
         self._consumed.add(auth.authorization_id)
+        # RULING 78 res.3 - THIS METHOD DELIBERATELY DOES NOT SAVE, and the
+        # absence is pinned by AST in `tests/test_ruling78.py`.
+        #
+        # Fossilization is always the MID-EVENT half of a pair: `mutate_doctrine`
+        # fossilizes the ancestor and then commits the successor. A save here
+        # would publish that intermediate state - ancestor fallen, successor
+        # absent - as a perfectly well-formed file, so a crash in the window
+        # between the two writes would leave a durable record of a doctrine that
+        # fell and was replaced by nothing. The honest unit of durability is the
+        # EVENT, and `commit` is where the event ends.
+        #
+        # `save_to_file` snapshots fossils and active doctrines together, so
+        # nothing is lost by waiting: the commit save carries this write too.
         return doctrine
 
     def link_scar(self, doctrine_id: str, scar_id: str,

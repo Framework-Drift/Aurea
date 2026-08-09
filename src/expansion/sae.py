@@ -165,7 +165,7 @@ from src.doctrine.codex import (
     MutationAuthorization,
     new_authorization_id,
 )
-from src.utils.atomic_write import atomic_write_json
+from src.utils.atomic_write import atomic_write_json, durable_append_text
 from src.utils.models import Doctrine
 
 
@@ -1488,8 +1488,11 @@ class SAE:
         try:
             path = Path(self.RESTART_LOG_PATH)
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, allow_nan=False) + "\n")
+            # RULING 78 res.2: durable at its own write. The `except OSError`
+            # below is UNCHANGED and now covers the fsync too - a restart record
+            # that cannot be written still lands on `persist_failures` rather
+            # than raising into the constructor.
+            durable_append_text(path, json.dumps(record, allow_nan=False) + "\n")
         except OSError as exc:
             self.persist_failures.append({
                 "op": "restart_log", "path": str(self.RESTART_LOG_PATH),

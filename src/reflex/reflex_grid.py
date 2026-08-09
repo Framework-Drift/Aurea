@@ -27,6 +27,7 @@ from src.reflex.racm import RACM, ReflexClaim, Scope
 # not be reachable from one another.
 from src.topology.tcaml import LockClass
 from src.reflex.rb_system import RBSystem, BehaviorType
+from src.utils.atomic_write import durable_append_text
 
 
 class ReflexPriority(Enum):
@@ -284,8 +285,13 @@ class GSR(SymbolicReflex):
             'message': message
         }
         
-        with open(alert_path, 'a') as f:
-            f.write(json.dumps(alert, allow_nan=False) + '\n')
+        # RULING 78 res.2: durable at its own write. The old call took the
+        # PLATFORM DEFAULT encoding where the helper names utf-8; `json.dumps`
+        # is `ensure_ascii=True` by default, so this alert is pure ASCII and
+        # the bytes on disk are identical (`save_state`'s Rider R3 comment
+        # made the same observation for the same reason).
+        durable_append_text(alert_path,
+                            json.dumps(alert, allow_nan=False) + '\n')
             
     def calculate_system_coherence(self, active_scars: int, 
                                   active_reflexes: int,

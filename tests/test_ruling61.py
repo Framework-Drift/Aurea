@@ -281,6 +281,16 @@ def test_the_module_opens_no_file_in_a_rewriting_mode() -> None:
 
     Mode "a" is the only write mode in the file. A `"w"` anywhere here would
     truncate the history the ledger exists to be.
+
+        ~~assert "a" in modes, "the append path vanished"~~
+
+    MIGRATED 2026-08-09 (RULING 78), old assertion struck above. The guarantee
+    is unchanged - no rewriting open, and the append path still present - but
+    R78 routed every append in `src/` through `durable_append_text`, so the
+    append no longer opens anything here and the struck line now asserts the
+    presence of a mechanism the ruling removed. Its successor asserts exactly
+    what it did: that the write did not simply DISAPPEAR, which the
+    `<= {"r", "a"}` half alone would happily allow.
     """
     tree = ast.parse(MODULE.read_text(encoding="utf-8"))
     modes = []
@@ -294,7 +304,10 @@ def test_the_module_opens_no_file_in_a_rewriting_mode() -> None:
                     modes.append(kw.value.value)
 
     assert set(modes) <= {"r", "a"}, f"a rewriting open mode appeared: {modes}"
-    assert "a" in modes, "the append path vanished"
+    assert [n for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and getattr(n.func, "id", None) == "durable_append_text"], (
+        "the append path vanished")
 
 
 # =====================================================================

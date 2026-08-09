@@ -59,6 +59,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from src.utils.deep_freeze import deep_freeze as _deep_freeze
 from src.utils.deep_freeze import thaw as _thaw
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
+from src.utils.atomic_write import durable_append_text
 from src.utils.record_value import validate_record_value
 
 # =====================================================================
@@ -738,8 +739,19 @@ class GoalLedger:
         converting the exempt failure class into the dangerous one in the name
         of fixing it.
 
-        THERE IS NO WRITE MODE ANYWHERE IN THIS FILE BUT `"a"`. That is what
-        makes the commitment unrewritable in fact rather than by convention.
+            ~~THERE IS NO WRITE MODE ANYWHERE IN THIS FILE BUT `"a"`. That
+            is what makes the commitment unrewritable in fact rather than
+            by convention.~~
+
+        RULING 78 (2026-08-09) - SUPERSEDED IN PLACE, old text struck above.
+        The append moved to `atomic_write.durable_append_text`, so there is
+        now no write mode in this file AT ALL. **THE PROPERTY IS UNCHANGED
+        AND STRONGER**: the unrewritability is enforced by the funnel plus
+        the AST census in `tests/test_ruling78.py`, which forbids a
+        mode-`"a"` open anywhere in `src/` outside the helper - so a `"w"`
+        here would have to get past a tree-wide scan rather than a reader.
+        The atomicity exemption below still stands exactly as written; what
+        the move added is DURABILITY, which that exemption never answered.
 
         RULING 66's WRITER GATE runs BEFORE `mkdir` and BEFORE `open`, so a
         refused entry leaves no file, no line, and no directory it did not
@@ -749,8 +761,11 @@ class GoalLedger:
         """
         validate_record_value(payload, path="goal_entry")
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.ledger_path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, allow_nan=False) + "\n")
+        # RULING 78 res.2: durable at its own write. Bytes identical -
+        # the serializer, the validator above and this store's error
+        # discipline are unchanged; only the fsync is new.
+        durable_append_text(self.ledger_path,
+                            json.dumps(payload, allow_nan=False) + "\n")
         self.entries.append(payload)
 
     def commit(self,

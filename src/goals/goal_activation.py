@@ -86,6 +86,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from src.goals.goal_arbitration import GoalExamination
 from src.utils.deep_freeze import deep_freeze as _deep_freeze
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
+from src.utils.atomic_write import durable_append_text
 from src.utils.record_value import validate_record_value
 
 
@@ -499,8 +500,18 @@ class ActivationLayer:
         `allow_nan=False`; and there is NO `default=`, so a non-canonical leaf
         REFUSES rather than being silently stringified into a permanent record.
 
-        Mode `"a"` is the only write mode in this file - which is what makes an
-        open unrewritable in fact rather than by convention.
+            ~~Mode `"a"` is the only write mode in this file - which is what
+            makes an open unrewritable in fact rather than by convention.~~
+
+        RULING 78 (2026-08-09) - SUPERSEDED IN PLACE, old text struck above.
+        The append moved to `atomic_write.durable_append_text`, so there is
+        now no write mode in this file AT ALL. **THE PROPERTY IS UNCHANGED
+        AND STRONGER**: the unrewritability is enforced by the funnel plus
+        the AST census in `tests/test_ruling78.py`, which forbids a
+        mode-`"a"` open anywhere in `src/` outside the helper - so a `"w"`
+        here would have to get past a tree-wide scan rather than a reader.
+        The atomicity exemption below still stands exactly as written; what
+        the move added is DURABILITY, which that exemption never answered.
 
         DELIBERATELY NOT ATOMIC (Rider R3's exemption, CAE's reason verbatim): a
         torn APPEND damages one line, which the floor semantics already drop; a
@@ -508,8 +519,11 @@ class ActivationLayer:
         """
         validate_record_value(payload, path="activation_entry")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.log_path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, allow_nan=False) + "\n")
+        # RULING 78 res.2: durable at its own write. Bytes identical -
+        # the serializer, the validator above and this store's error
+        # discipline are unchanged; only the fsync is new.
+        durable_append_text(self.log_path,
+                            json.dumps(payload, allow_nan=False) + "\n")
         self.entries.append(payload)
 
     # -----------------------------------------------------------------

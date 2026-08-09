@@ -50,7 +50,7 @@ from src.goals.goal_ledger import GoalLedger
 from src.goals.goal_arbitration import GoalArbiter, GoalExamination
 from src.goals.goal_activation import (ActivationLayer, BoundKind,
                                        GoalActivation, StopCondition)
-from src.utils.atomic_write import atomic_write_json
+from src.utils.atomic_write import atomic_write_json, durable_append_text
 from src.utils.echo_memory import EchoLogUnreadable, EchoMemory
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
@@ -1785,8 +1785,12 @@ class AureaCore:
         `structural_log_failures` and the in-memory record still stands."""
         try:
             self.structural_log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.structural_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(entry, allow_nan=False) + "\n")
+            # RULING 78 res.2: durable at its own write. The never-raise
+            # discipline above is UNCHANGED and now covers one more failure -
+            # an fsync error lands on `structural_log_failures` exactly as an
+            # open error already did.
+            durable_append_text(self.structural_log_path,
+                                json.dumps(entry, allow_nan=False) + "\n")
         except Exception as exc:
             self.structural_log_failures.append({
                 'error': f"{type(exc).__name__}: {exc}",
@@ -2483,6 +2487,20 @@ class AureaCore:
         # ALREADY durable at every mutation, so this is a consistency snapshot
         # rather than the mechanism - if this were the only save point, a process
         # kill would still restore her budget.
+        #
+        # RULING 78 res.3 (2026-08-09) - THE NEXT TWO LINES ARE NOW THE SAME
+        # KIND OF THING, and the correction matters because the comment above
+        # named SAE as the exception when it had become the rule.
+        # `ScarLogicCore` is durable at `add_scar` and `Codex` at `commit`, so
+        # both are ALREADY durable at their own mutation, exactly like SAE and
+        # like the Ruling 42 stores below. These two calls are consistency
+        # snapshots, not the mechanism.
+        #
+        # THIS METHOD STILL GAINS NO INTERNAL CALLERS, and that is the point of
+        # the change rather than an omission from it: position (a) - "let
+        # `save_state` be the checkpoint and call it more often" - was refused
+        # in terms, because a checkpoint that fires only when someone remembers
+        # is the defect and not the fix.
         self.scar_core.save_to_file()
         self.codex.save_to_file()
         self.tca.topology.save_to_file()

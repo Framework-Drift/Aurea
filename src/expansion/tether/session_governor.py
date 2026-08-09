@@ -393,5 +393,8 @@ class TetherProtocol:
         if extra:
             payload.update(extra)
         import json
-        with open(self.telemetry_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, allow_nan=False) + "\n")
+        # RULING 78 res.2: durable at its own write. Bytes identical; only the
+        # fsync is new.
+        from src.utils.atomic_write import durable_append_text
+        durable_append_text(self.telemetry_path,
+                            json.dumps(payload, allow_nan=False) + "\n")

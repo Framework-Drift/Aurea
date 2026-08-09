@@ -58,6 +58,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
 from src.utils.models import Echo
+from src.utils.atomic_write import durable_append_text
 from src.utils.record_value import validate_record_value
 
 
@@ -275,15 +276,30 @@ class EchoMemory:
         `default=`, so a non-canonical leaf REFUSES rather than being silently
         stringified.
 
-        Mode `"a"` is the only write mode in this file. DELIBERATELY NOT ATOMIC
+            ~~Mode `"a"` is the only write mode in this file.~~
+
+        RULING 78 (2026-08-09) - SUPERSEDED IN PLACE, old text struck above.
+        The append moved to `atomic_write.durable_append_text`, so there is
+        now no write mode in this file AT ALL. **THE PROPERTY IS UNCHANGED
+        AND STRONGER**: the unrewritability is enforced by the funnel plus
+        the AST census in `tests/test_ruling78.py`, which forbids a
+        mode-`"a"` open anywhere in `src/` outside the helper - so a `"w"`
+        here would have to get past a tree-wide scan rather than a reader.
+        The atomicity exemption below still stands exactly as written; what
+        the move added is DURABILITY, which that exemption never answered.
+
+        DELIBERATELY NOT ATOMIC
         (Rider R3's exemption, CAE's reason verbatim): a torn APPEND damages one
         line, which the floor semantics already drop; a torn SNAPSHOT destroys
         the prior state.
         """
         validate_record_value(payload, path="echo_entry")
         self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.runtime_path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, allow_nan=False) + "\n")
+        # RULING 78 res.2: durable at its own write. Bytes identical -
+        # the serializer, the validator above and this store's error
+        # discipline are unchanged; only the fsync is new.
+        durable_append_text(self.runtime_path,
+                            json.dumps(payload, allow_nan=False) + "\n")
 
     def record(self, content: str, *,
                claim_id: Optional[str] = None,
