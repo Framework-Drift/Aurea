@@ -128,6 +128,12 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     class_attrs = [
         (AureaCore, "STRUCTURAL_LOG_PATH", "logs/structural_violations.jsonl"),
         (AureaCore, "STATE_PATH", "aurea_state.json"),
+        # Ruling 79. The divergence report, and the ONE ruled table movement of
+        # that pass (28 -> 29) - any other movement is a STOP. The detector runs
+        # at EVERY construction, so an unredirected path here would append a
+        # real finding to shared forensics on the first soak that ever produced
+        # one: the contamination class this table exists to make unexecutable.
+        (AureaCore, "DIVERGENCE_LOG_PATH", "logs/divergence.jsonl"),
         (Codex, "RUNTIME_PATH", "doctrines.json"),
         (ScarLogicCore, "RUNTIME_PATH", "scars.json"),
         (EchoMemory, "RUNTIME_PATH", "echoes.jsonl"),

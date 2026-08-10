@@ -29,7 +29,8 @@ from src.doctrine.mutation_proof import InvalidMutationProof
 from src.doctrine.doctrine_spine import DoctrineSpine
 from src.doctrine.dee import DEE
 from src.expansion.sae import (SAE, CeilingExceeded, EpochStateQuarantined,
-                               ExclusionViolation, MutationPreflightViolation)
+                               ExclusionViolation, MutationClass,
+                               MutationPreflightViolation)
 from src.expansion.nova import (NovaEngine, FermentationStatus, StoreFragment,
                                 ProvenanceOverwriteViolation,
                                 UngroundedEchoViolation,
@@ -50,7 +51,10 @@ from src.goals.goal_ledger import GoalLedger
 from src.goals.goal_arbitration import GoalArbiter, GoalExamination
 from src.goals.goal_activation import (ActivationLayer, BoundKind,
                                        GoalActivation, StopCondition)
+from src.retrieval.divergence import DivergenceFinding, detect_divergence
 from src.utils.atomic_write import atomic_write_json, durable_append_text
+from src.utils.ledger_mint import derive_max_ordinal
+from src.utils.record_value import validate_record_value
 from src.utils.echo_memory import EchoLogUnreadable, EchoMemory
 from src.utils.models import Echo, Scar, Doctrine
 from datetime import datetime
@@ -256,6 +260,15 @@ class AureaCore:
     # runtime state rather than a stray untracked file at the repo root.
     STATE_PATH = "data/runtime/aurea_state.json"
 
+    # Ruling 79 res.4: the divergence report. Same class-attribute shape as
+    # `STRUCTURAL_LOG_PATH` above and for the same reason (Ruling 31 - a literal
+    # in a method body is UNREACHABLE by the isolation fixture, not merely
+    # uncovered). **THE FILE EXISTS ONLY IF A FINDING EVER DID**: a clean
+    # construction writes nothing at all, not even a heartbeat line, because a
+    # per-construction heartbeat would move every census in the tree and turn
+    # silence - the healthy state - into noise nobody reads.
+    DIVERGENCE_LOG_PATH = "data/runtime/logs/divergence.jsonl"
+
     def __init__(self, config: Dict[str, Any] = None,
                  ancestry: Optional[ClaimAncestryLedger] = None):
         """
@@ -273,6 +286,16 @@ class AureaCore:
         self.structural_violations: List[Dict[str, Any]] = []
         self.structural_log_path = Path(self.STRUCTURAL_LOG_PATH)
         self.structural_log_failures: List[Dict[str, Any]] = []
+
+        # Ruling 79: the same three-part shape for the divergence report - the
+        # legible in-memory surface, its durable sink, and the sink's own
+        # failure surface. `divergence_log_failures` is its OWN list rather than
+        # a share of `structural_log_failures`: one failure surface covering two
+        # different logs is Ruling 29's defect (a single type spanning two
+        # causes), and a reader could not tell which record never landed.
+        self.divergence_findings: List[Dict[str, Any]] = []
+        self.divergence_log_path = Path(self.DIVERGENCE_LOG_PATH)
+        self.divergence_log_failures: List[Dict[str, Any]] = []
 
         # Initialize core modules
         self.spl = SPL()
@@ -700,6 +723,116 @@ class AureaCore:
         self.goal_ledger = GoalLedger()
         self.goal_arbiter = GoalArbiter(self.goal_ledger)
         self.goal_activation = ActivationLayer(self.goal_arbiter)
+
+        # ---- THE DIVERGENCE DETECTOR (Ruling 79 res.4) -----------------------
+        #
+        # ONCE, HERE: after every store has loaded and before the first input.
+        # After the loads because there is nothing to compare until each store
+        # has said what it holds; before the first input because a finding is
+        # about what she came back WITH, and a claim processed first would begin
+        # writing the very records being compared.
+        #
+        # It decides NOTHING. No quarantine (Ruling 51 quarantines what cannot
+        # be ADJUDICATED; a divergence is two readable files whose disagreement
+        # R78's ordering law already adjudicated), no refusal (crash residue
+        # must never be fatal - a detector that stopped construction would turn
+        # a survived crash into an unsurvivable one), and no repair, ever
+        # (backfilling a record fabricates history).
+        self._run_divergence_detection()
+
+    # =================================================================
+    # RULING 79 - THE DIVERGENCE REPORT
+    # =================================================================
+
+    def _run_divergence_detection(self) -> None:
+        """Read the disagreement between stores and write it down. NEVER raises.
+
+        RULING 11'S VALENCE, and it points the same way here as there: the
+        detector OBSERVES a change that already happened and gates nothing, so
+        its own failure - an unreadable ledger, a full disk - must not be able
+        to stop AUREA constructing. A crash-consistency instrument that makes a
+        crashed system unstartable has inverted its purpose.
+
+        THE THREE VOCABULARIES ARE GATHERED HERE AND PASSED DOWN, because the
+        pure module refuses to author any of them (see `divergence.py`): the
+        ancestry ledger's own lines, the Codex's ids, and `MutationClass`'s
+        values. A copy of any of them inside the detector would be a second
+        definition free to drift.
+        """
+        try:
+            findings = detect_divergence(
+                sae_state=self._divergence_sae_state(),
+                cae_entries=self.cae.read_all(),
+                scars=self.scar_core.all_scars(),
+                # BLACK SPHERE ONLY, and that is a census result rather than an
+                # oversight: Ruling 76 res.1 records that only pipeline
+                # suspensions carry a `claim_id`. A CSA quarantine and a Veiled
+                # Thread fermentation carry `None` honestly, so including them
+                # would add records that can produce no finding by construction.
+                suspensions=list(self.black_sphere.entries.values()),
+                echoes=self.echo_memory.read_all(),
+                claim_ids=[record.claim_id
+                           for record in self.ancestry.read_all()],
+                codex_ids=(list(self.codex.doctrines)
+                           + list(self.codex.fossils)),
+                mutation_events=[cls.value for cls in MutationClass],
+                floors={
+                    "CLM-": derive_max_ordinal(self.ancestry.ledger_path,
+                                               "CLM-"),
+                    "CAE-": derive_max_ordinal(self.cae.ledger_path, "CAE-"),
+                },
+            )
+        except Exception as exc:
+            self.divergence_log_failures.append({
+                'error': f"{type(exc).__name__}: {exc}",
+                'stage': 'detect',
+                'timestamp': datetime.now().isoformat(),
+            })
+            return
+
+        self.divergence_findings = [f.as_dict() for f in findings]
+        for finding in findings:
+            self._flush_divergence_finding(finding)
+
+    def _divergence_sae_state(self) -> Dict[str, Any]:
+        """SAE's durable facts as plain records, for a module that reads none.
+
+        `history` is handed over as DICTS rather than `MutationRecord`s: the
+        detector is stdlib-only and must stay constructible from hand-built
+        dicts in a test (which is what makes its own pins independent of every
+        store in this tree).
+        """
+        return {
+            'epoch': self.sae.epoch,
+            'epoch_count': self.sae.epoch_count,
+            'history': [{'epoch': record.epoch, 'cae_id': record.cae_id,
+                         'target_id': record.target_id,
+                         'authorization_id': record.authorization_id}
+                        for record in self.sae.history],
+        }
+
+    def _flush_divergence_finding(self, finding: DivergenceFinding) -> None:
+        """Best-effort durable append of ONE finding. NEVER raises.
+
+        The site owns its serialization and its validator, per Ruling 78's
+        division of labour with the funnel: `durable_append_text` receives bytes
+        and a destination and decides nothing, including the trailing newline.
+        """
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            **finding.as_dict(),
+        }
+        try:
+            validate_record_value(entry, path="divergence_finding")
+            durable_append_text(self.divergence_log_path,
+                                json.dumps(entry, allow_nan=False) + "\n")
+        except Exception as exc:
+            self.divergence_log_failures.append({
+                'error': f"{type(exc).__name__}: {exc}",
+                'stage': 'write',
+                'kind': finding.kind.value,
+                'timestamp': datetime.now().isoformat(),
+            })
 
     def _create_seed_doctrines(self):
         """Create foundational doctrines.
@@ -2388,6 +2521,17 @@ class AureaCore:
                 }
             },
             'topology': tca_metrics,
+            # Ruling 79: READ-ONLY, and empty in a healthy system. The count and
+            # the records, with no severity and no aggregate - `divergence.py`
+            # coins no magnitude and this surface does not get to invent one on
+            # its way past. **Nothing in `src/` reads this back into a
+            # decision** (pinned as structure): a finding grants nothing and
+            # gates nothing, which is EL1's law arriving at a second instrument.
+            'divergence': {
+                'findings': list(self.divergence_findings),
+                'count': len(self.divergence_findings),
+                'log_failures': list(self.divergence_log_failures),
+            },
             'statistics': self.stats
         }
     

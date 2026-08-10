@@ -430,8 +430,18 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # dropping the run's isolation call left `configured` empty, and every
     # emptiness check above was trivially satisfied while nothing was audited.
     # A count is what makes the verdict mean something.
-    assert audit["configured_paths"] == 28
-    assert first_run["isolation"]["configured_paths"] == 28
+    #
+    # ~~assert audit["configured_paths"] == 28~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 28~~
+    #
+    # MIGRATED 2026-08-09 (Ruling 79), old text kept verbatim above. The
+    # divergence report is the ONE ruled table movement of that pass (28 -> 29),
+    # declared in its pin (i) precisely so that any OTHER movement is a STOP.
+    # The assertion is unchanged in kind and still exact: a count is what makes
+    # the verdict mean something, and a `>=` here would have absorbed the
+    # movement silently instead of forcing this edit.
+    assert audit["configured_paths"] == 29
+    assert first_run["isolation"]["configured_paths"] == 29
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1103,9 +1113,18 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     had introduced a durable path in `src/`, Ruling 31 would require registering
     it in the SAME commit - and the self-audit would refuse until it was.
     """
+    #
+    # ~~assert len(class_attrs) + len(init_defaults) == 28~~
+    #
+    # MIGRATED 2026-08-09 (Ruling 79), old text kept verbatim above. **THIS PIN
+    # DID EXACTLY WHAT IT IS FOR.** Its own docstring says a durable path added
+    # in `src/` must be registered in the SAME commit - Ruling 79 added one, and
+    # this assertion is what made that edit mandatory rather than optional. The
+    # test's SUBJECT is unchanged: the EVALUATION INSTRUMENT still registers no
+    # store of its own; what moved is the table it counts, by another ruling.
     from scripts.soak import _injection_table
     class_attrs, init_defaults = _injection_table()
-    assert len(class_attrs) + len(init_defaults) == 28
+    assert len(class_attrs) + len(init_defaults) == 29
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

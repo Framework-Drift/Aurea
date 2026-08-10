@@ -28,9 +28,20 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class attributes,
-twenty from `__init__` defaults. If you add a twenty-sixth and do not add it
+THIS FIXTURE COVERS TWENTY-SIX PATHS: six resolved from class attributes,
+twenty from `__init__` defaults. If you add a twenty-seventh and do not add it
 here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class
+    attributes, twenty from `__init__` defaults.~~
+
+**CORRECTED 2026-08-09 (Ruling 79), old text kept above verbatim.** The
+divergence report (`AureaCore.DIVERGENCE_LOG_PATH`) is the twenty-sixth, and it
+was added in the SAME commit as the store, which is the rule this count exists
+to police. It is the sixth CLASS ATTRIBUTE, so the class/init split moves too -
+a count that tracked the total while the split went stale would be the same
+defect one level down. **This one did NOT drift**: the mechanism worked because
+the pass that added the path was the pass that updated the number.
 
 **THIS FILE NOW DOES TWO THINGS, AND THE COUNT ABOVE DESCRIBES ONLY THE FIRST**
 (2026-08-07). It REDIRECTS those twenty-five paths, and it RESTORES three class
@@ -226,6 +237,20 @@ def _persist_to_tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(
         SAE, "RESTART_LOG_PATH",
         str(tmp_path / "sae_restarts.jsonl"),
+    )
+    # Ruling 79: the divergence report. The detector runs at EVERY `AureaCore`
+    # construction, so an unredirected path here would append a real finding to
+    # shared forensics from any test that happens to build a store pair that
+    # disagrees - and hand-built test worlds disagree routinely. Redirected in
+    # the SAME commit that adds the store, per Ruling 31's standing rule.
+    #
+    # PATCHED HERE RATHER THAN LEFT TO THE RESTORE SET ABOVE: `_PRISTINE_CLASS_
+    # ATTRS` only UNDOES a bare `setattr` someone else performed, which protects
+    # the next test and does nothing for this one. Redirection and restoration
+    # answer different questions, and this path needs the first.
+    monkeypatch.setattr(
+        AureaCore, "DIVERGENCE_LOG_PATH",
+        str(tmp_path / "divergence.jsonl"),
     )
     # Repoint each remaining store's path default at tmp.
     #

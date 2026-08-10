@@ -575,13 +575,36 @@ def test_h_no_consumer_in_src_reads_the_retrieval_module():
     """res.5. It is CAPABILITY, not wiring - nothing consumes it this pass, and
     this pin reddens the day something does, which is exactly when that wiring
     needs its own ruling."""
+    #
+    # ~~if "record_joins" in node.module or "retrieval" in node.module.split("."):~~
+    #
+    # MIGRATED 2026-08-09 (Ruling 79), old text kept verbatim above, and the
+    # ASSERTION IS UNCHANGED - `record_joins` still has no consumer in `src/`.
+    #
+    # WHAT MOVED IS THE SCAN'S AIM, WHICH WAS BROADER THAN ITS OWN SUBJECT. The
+    # second clause flagged an import from the retrieval PACKAGE, while this
+    # test's name, docstring and failure message all speak of the retrieval
+    # MODULE. That was a distinction without a difference for exactly as long as
+    # `record_joins.py` was the package's only member; Ruling 79 adds
+    # `divergence.py` beside it, and `aurea_core` imports THAT - so the old form
+    # reddened for a module this pin was never written about.
+    #
+    # **IT IS NARROWED WITHOUT BEING WEAKENED.** The package clause existed to
+    # catch `from src.retrieval import record_joins`, where the module string
+    # names only the package - so that form is still caught, now by checking the
+    # imported NAMES rather than by flagging the package wholesale. A consumer
+    # of `record_joins` in either spelling still reddens this, which is the day
+    # that wiring needs its own ruling.
     consumers = []
     for path in sorted((REPO / "src").rglob("*.py")):
         if "__pycache__" in path.parts or path.name == "record_joins.py":
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and node.module:
-                if "record_joins" in node.module or "retrieval" in node.module.split("."):
+                imported = {alias.name for alias in node.names}
+                if ("record_joins" in node.module
+                        or ("retrieval" in node.module.split(".")
+                            and "record_joins" in imported)):
                     consumers.append(path.relative_to(REPO).as_posix())
     assert consumers == [], f"the retrieval module acquired a consumer: {consumers}"
 
