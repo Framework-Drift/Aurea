@@ -244,6 +244,76 @@ def test_r82_the_model_door_refuses_an_empty_identity_through_the_vocabulary():
     assert declaration.asserted_by.value == "gpt-fictional-v9"
 
 
+# =====================================================================
+# RULING 80 - TWO GAPS THE MUTATION SLATE FOUND, CLOSED
+# =====================================================================
+
+def test_r80_an_unknown_operation_is_refused_at_load():
+    """**FOUND BY A SURVIVING MUTANT** (R80-M1), not by design.
+
+    Deleting the operation-vocabulary check left the whole suite green: nothing
+    pinned the loader's newest refusal. A case naming a sequence this runner
+    does not have would then fall through to the ORDINARY single-claim drive
+    and report GREEN for a law it never exercised - which is the skipped-case
+    failure class EL2 exists to catch, arriving through the schema.
+    """
+    from scripts.evaluate import EvalCase, EvalCaseError, output_path_names
+
+    raw = {"case_id": "AEC-X", "revision": 1, "category": "goal_door",
+           "input": "x", "operation": "no_such_sequence",
+           "expected_facts": {"door_refused": True}}
+    with pytest.raises(EvalCaseError) as excinfo:
+        EvalCase(raw, source="t", line=1, valid_paths=output_path_names())
+    assert "no_such_sequence" in str(excinfo.value)
+
+    raw["operation"] = "restart_after_claim"      # a real one still loads
+    assert EvalCase(raw, source="t", line=1,
+                    valid_paths=output_path_names()).operation == "restart_after_claim"
+
+
+def test_r80_a_restart_operation_actually_reconstructs_the_core():
+    """**FOUND BY A SURVIVING MUTANT** (R80-M3), and it is the sharper of the two.
+
+    Replacing the reconstructed core with the LIVE one left AEC-011 and AEC-012
+    green - because Ruling 78 made the writes eager, so their facts are true on
+    BOTH cores. **Those cases are REGRESSION GUARDS on Ruling 78**: they only
+    distinguish anything if the runner really crosses the boundary, and nothing
+    pinned that it did. A case that passes for the wrong reason witnesses
+    nothing, which is this repo's oldest lesson about vacuous pins arriving in
+    an instrument.
+
+    So the reconstruction is pinned DIRECTLY: the observed core is a different
+    object, and it independently holds what the driven one wrote.
+    """
+    import tempfile
+    from pathlib import Path as _Path
+    from scripts.evaluate import _operate
+    from scripts.soak import isolate
+
+    root = _Path(tempfile.mkdtemp(prefix="r80_restart_"))
+    isolate(root)                       # the ad-hoc rule: isolate BEFORE building
+
+    from src.aurea_core import AureaCore
+
+    class _Case:
+        operation = "restart_after_claim"
+
+    core = AureaCore()
+    result = core.process_input("Honesty is pointless.")
+    observed, extra = _operate(_Case(), core, result)
+
+    assert observed is not core, (
+        "the restart operation returned the LIVE core - the case would then "
+        "assert what was true before the boundary and witness nothing")
+    assert isinstance(observed, AureaCore)
+    assert extra == {}, "restart_after_claim contributes no extra facts"
+    # And the reconstruction is REAL: the resumed core loaded the scar from
+    # disk rather than inheriting it in memory.
+    claim_id = result.get("claim_id")
+    assert any(s.claim_id == claim_id for s in observed.scar_core.all_scars()), (
+        "the resumed core does not hold what the driven one wrote")
+
+
 def test_r82_the_adapter_did_not_grow_its_own_guard():
     """RULING 82, the structural half of the same point."""
     import ast
