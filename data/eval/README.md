@@ -92,19 +92,44 @@ key stays in the vocabulary so the day a real path exists, the case is writable
 without reopening a closed vocabulary (Rulings 63/64's unproducible-member
 form).
 
-### `restart_continuity` — **DECLARED OUT, OWNED BY A LATER R ITEM**
+### `restart_continuity` — **BUILT 2026-08-09 (RULING 80, item R4)**
 
-Ruling 77 declares it out by name. The runner drives `process_input` and reads
-stores; it does not save, restart and re-read, and the instrument that does
-that comparison lives in `tests/` and in `scripts/differential.py`. Building a
-restart case here would mean this runner growing a second mode, which is a
-decision a later Docket R item makes.
+    ~~**DECLARED OUT, OWNED BY A LATER R ITEM.** Ruling 77 declares it out by
+    name. The runner drives `process_input` and reads stores; it does not save,
+    restart and re-read, and the instrument that does that comparison lives in
+    `tests/` and in `scripts/differential.py`. Building a restart case here
+    would mean this runner growing a second mode, which is a decision a later
+    Docket R item makes.~~
 
-### Goal-door cases — **DECLARED OUT**
+**THE LATER R ITEM ARRIVED, AND IT MADE EXACTLY THE DECISION THE OLD TEXT
+RESERVED.** The runner grew the second mode: a case may name an `operation`
+from a closed vocabulary, and the restart operations reconstruct `AureaCore`
+and observe the facts on the RESUMED core. Four cases (AEC-011..014) restate
+Rulings 76/78/69's continuity laws.
 
-Arbitration and activation behaviour is suite-pinned (Rulings 73/73-A/74), and
-the goal doors are `process_input`'s siblings rather than its path. A later R
-item if ever needed.
+**No `save_state` is called anywhere in those sequences.** Ruling 78 made the
+durable writes eager precisely so a restart needs no cooperation; calling the
+checkpoint would test the checkpoint instead of the law.
+
+### Goal-door cases — **BUILT 2026-08-09 (RULING 80, item R5)**
+
+    ~~**DECLARED OUT.** Arbitration and activation behaviour is suite-pinned
+    (Rulings 73/73-A/74), and the goal doors are `process_input`'s siblings
+    rather than its path. A later R item if ever needed.~~
+
+Four cases (AEC-015..018) drive the goal doors. Because those doors are
+`process_input`'s SIBLINGS, the case's DISPOSITION is its ordinary claim's —
+**the law each one witnesses lives in `expected_facts`**, which is why
+`door_refused` exists as a fact key. Three of the four expect a REFUSAL, which
+is EL2 in its purest form: a corpus that could only record what she DID would
+be weighted toward fabricated completeness.
+
+**AEC-018 was corrected by measurement during its own pass**, and the record is
+worth keeping: its first draft examined twice and opened twice and the second
+open SUCCEEDED. That read like a missing guard and was not — Ruling 73-A's
+ladder ROTATES, so a second examination selects a DIFFERENT goal, and serial
+attention is one open episode PER GOAL. The sequence now examines until the
+arbiter comes back round to the goal that already has an open episode.
 
 ---
 

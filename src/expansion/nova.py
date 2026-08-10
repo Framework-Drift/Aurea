@@ -364,6 +364,28 @@ class NovaEngine:
         # ProvenanceOverwriteViolation on a collision that was NOT a double
         # authorship. Persisting the counter removes the false-positive CAUSE; the
         # detector below is untouched, and still fires on the real thing.
+        #
+        # RULING 81 (2026-08-09) - CLOSED BY DISPOSITION: RULING 69'S CLASS DOES
+        # NOT APPLY HERE, and the reason is the res.4 block above.
+        #
+        # Ruling 69 deleted three ledger counters because each was a CACHED
+        # DERIVATION OF A FILE TRUSTED OVER ITS SOURCE - derived once at
+        # construction, incremented in memory forever, never re-synced, so two
+        # instances over one path minted the same id. **This counter is not that
+        # shape.** It rides INSIDE the atomic snapshot with the `echo_index` it
+        # numbers (see `save`), persists AT THE MOMENT OF MINTING, is
+        # floor-validated against the recorded ids at load (see `load`), has a
+        # single writer by G4, and runs under the one-process topology Ruling 69
+        # res.4 declared. **A counter carried in the record it numbers, atomic
+        # with that record, is not a cached derivation - it is the record.**
+        #
+        # THE DISPOSITION RESTS ON THE LOAD-TIME FLOOR, so that is what is
+        # pinned by construction rather than argued: a hand-written snapshot
+        # whose `seq` sits BELOW its highest recorded `NE-` ordinal must resume
+        # from the DERIVED floor and mint into open space
+        # (`tests/test_batch80.py`, Ruling 81 section). If `seq` ever stops
+        # riding in this snapshot - its own file, a separate write path - the
+        # disposition needs re-taking, and that pin is what says so.
         self._seq = 0
 
         # Ruling 42 taxonomy. See `load` for what each outcome means here.

@@ -293,9 +293,19 @@ def test_a_fact_value_of_the_wrong_type_is_refused(tmp_path) -> None:
 # =====================================================================
 
 def test_b_the_seed_corpus_loads_clean() -> None:
+    #
+    # ~~assert len(cases) == 10~~
+    # ~~assert len({c.case_id for c in cases}) == 10~~
+    #
+    # MIGRATED 2026-08-09 (RULING 80), old text kept verbatim above. The corpus
+    # grew 10 -> 18: R4's four restart-continuity cases and R5's four goal-door
+    # cases. **THE EXISTING TEN ARE BYTE-UNTOUCHED** - the new ones were
+    # APPENDED and the append was verified against the prior bytes as a prefix -
+    # so this pin moves because the CORPUS grew by ruling, not because any case
+    # was edited to keep it green.
     cases = load_corpus(SEED_CORPUS)
-    assert len(cases) == 10
-    assert len({c.case_id for c in cases}) == 10
+    assert len(cases) == 18
+    assert len({c.case_id for c in cases}) == 18
 
 
 def test_b_every_case_path_is_a_real_output_path_by_import() -> None:
@@ -611,6 +621,22 @@ def test_f_every_seed_case_is_green(first_run) -> None:
     ("AEC-008", "SBSRE_CARRIED"),
     ("AEC-009", "COLLAPSE_PASSED"),
     ("AEC-010", "COLLAPSE_PASSED"),
+    # RULING 80 (2026-08-09): the eight new cases join the recorded table. The
+    # four restart-continuity dispositions are the MEASURED claim dispositions -
+    # a restart case's `operation` runs after the measured claim, so the path
+    # under test is still that claim's. The four goal-door cases drive doors
+    # that are `process_input`'s SIBLINGS, so their claim is an ordinary one and
+    # their disposition is COLLAPSE_PASSED: **the law they witness lives in
+    # `expected_facts`, not in the path**, which is exactly why `door_refused`
+    # had to exist as a fact key.
+    ("AEC-011", "COLLAPSE_DETECTED"),
+    ("AEC-012", "PARADOX_SUSPENDED"),
+    ("AEC-013", "SBSRE_CARRIED"),
+    ("AEC-014", "COLLAPSE_PASSED"),
+    ("AEC-015", "COLLAPSE_PASSED"),
+    ("AEC-016", "COLLAPSE_PASSED"),
+    ("AEC-017", "COLLAPSE_PASSED"),
+    ("AEC-018", "COLLAPSE_PASSED"),
 ])
 def test_f_each_case_observed_the_measured_disposition(
         first_run, case_id, path) -> None:
@@ -934,7 +960,13 @@ def test_h_the_report_records_the_commit_and_the_corpus_blob(first_run) -> None:
                             cwd=REPO, capture_output=True, text=True,
                             timeout=60).stdout.strip()
     assert blob == actual, "the report's corpus blob is not the tracked bytes"
-    assert first_run["corpus"]["cases"] == 10
+    # ~~assert first_run["corpus"]["cases"] == 10~~
+    #
+    # MIGRATED 2026-08-09 (RULING 80), old text kept verbatim. The corpus grew
+    # 10 -> 18 by ruling; the BLOB assertion above is unchanged and is the one
+    # that matters, because it compares the report against the tracked bytes
+    # rather than against a number anyone can edit.
+    assert first_run["corpus"]["cases"] == 18
 
 
 def test_h_the_report_names_the_instrument_and_the_ruling(first_run) -> None:

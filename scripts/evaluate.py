@@ -115,7 +115,13 @@ drift, and the drift would be invisible because both would look right alone.
 ONE isolation, three callers.
 
 COINS: the case schema's field names, the closed `FACT_KEYS` vocabulary, and the
-`AEC-` case-id prefix. **`AEC-` IS AN AUTHORED-INPUT NAMESPACE AND IS
+`AEC-` case-id prefix. **RULING 80 (2026-08-09) ADDS** the `operation` field,
+the closed `OPERATIONS` vocabulary naming the scripted door-sequences, and four
+fact keys (`doctrine_present`, `mint_above_floor`, `door_refused`,
+`stop_condition`) - each derived from a real read surface exactly as the
+original eight are, and each existing so a ruled law became ASSERTABLE rather
+than because a case wanted a field. **NO DISPOSITION VOCABULARY IS COINED**:
+EL3 is untouched, `OutputPath` is still imported and never copied. **`AEC-` IS AN AUTHORED-INPUT NAMESPACE AND IS
 DELIBERATELY NOT A `ledger_mint` CONSUMER**: cases are written by a human into a
 tracked, read-only file, and Ruling 69's mint governs RUNTIME RECORDS that a
 process appends. Minting a case id would make the corpus a store with a writer -
@@ -173,8 +179,57 @@ CASE_FIELDS = frozenset({
     "case_id", "revision", "category", "input", "context",
     "expected_paths", "forbidden_paths", "expected_facts", "forbidden_facts",
     "notes",
+    # RULING 80 (2026-08-09) - THE OPERATION FIELD, and it is the smallest thing
+    # that could make R4/R5 expressible.
+    #
+    # Docket R's first corpus asked ONE question of every case: drive the public
+    # door with a string and read the disposition. R4's laws are about what
+    # survives a PROCESS BOUNDARY and R5's about doors that are not
+    # `process_input` at all, and neither is reachable from an input string -
+    # a restart is not something a claim can say, and a goal activation is
+    # opened through a different door entirely.
+    #
+    # SO THE CASE NAMES ITS SCRIPTED SEQUENCE, from a CLOSED vocabulary, and the
+    # loader refuses an unknown one exactly as it refuses an unknown path or
+    # fact key. **The alternative was encoding the scenario in the `input`
+    # string and branching on it**, which would have made the corpus's most
+    # load-bearing field mean two different things depending on category - the
+    # overloaded-field defect, in the schema this docket exists to keep honest.
+    "operation",
 })
 REQUIRED_FIELDS = frozenset({"case_id", "revision", "category", "input"})
+
+# THE CLOSED OPERATION VOCABULARY (Ruling 80). Each names a scripted sequence
+# below; a case that omits it drives the ORDINARY single-claim sequence, which
+# is what every pre-R80 case does and what they continue to do byte-unchanged.
+#
+# **NO OPERATION INVENTS A SURFACE.** Each drives doors that already exist -
+# `process_input`, the three goal doors (Ruling 74 res.6), and `SAE.mutate_
+# doctrine` through the real mutation path - and then RECONSTRUCTS `AureaCore`,
+# which is exactly what R78's own restart pins do. The runner performs no write
+# a caller could not perform.
+OPERATIONS: Dict[str, str] = {
+    "restart_after_claim":
+        "drive the input, reconstruct the core, observe the facts on the "
+        "RESUMED core - so every fact answers 'did this survive the boundary'",
+    "restart_after_mutation":
+        "drive the input, mutate a live doctrine through the real SAE path, "
+        "reconstruct, and ask whether she still holds the successor",
+    "restart_mint_floor":
+        "drive the input, reconstruct, drive a SECOND claim, and ask whether "
+        "the new mint sits strictly above every id already on disk",
+    "goal_unbounded_open":
+        "found a root, examine it, and attempt an activation with a "
+        "non-positive bound - the REFUSAL is the success state",
+    "goal_double_close":
+        "open a bounded activation, close it, and attempt a second close",
+    "goal_stop_condition":
+        "open a bounded activation and close it naming a stop condition, "
+        "which the closing record must carry",
+    "goal_serial_attention":
+        "open a bounded activation and attempt a second one against the same "
+        "goal while the first is still open",
+}
 
 # THE CLOSED FACT VOCABULARY. Every key is DERIVED FROM A REAL READ SURFACE -
 # the owner's own accessor or Ruling 76's retrieval joins - never from a return
@@ -201,6 +256,29 @@ FACT_KEYS: Dict[str, type] = {
     # Ruling 25's loud field. A structural violation is a success state for a
     # case that expects one (EL2).
     "structural_violation": bool,
+    # ---- RULING 80 (2026-08-09) -------------------------------------------
+    # Four keys, each DERIVED FROM A REAL READ SURFACE exactly as the eight
+    # above are - the owner's own accessor, never a parsed diagnostic.
+    #
+    # Ruling 79's law: a doctrine committed through the real path is in the
+    # Codex (live or fossil) after an unclean restart. Read from `codex.get` /
+    # `codex.fossils`, the store's own surfaces.
+    "doctrine_present": bool,
+    # Rulings 69 + 78: every id minted after a restart sits STRICTLY ABOVE
+    # every id any durable record already carries. The reborn-id law, read at
+    # rest.
+    "mint_above_floor": bool,
+    # **A REFUSAL IS A SUCCESS STATE (EL2), AND THIS IS THE KEY THAT SAYS SO.**
+    # Ruling 74's doors refuse an unbounded open, a second close, and a second
+    # concurrent activation; a corpus that could only record what she DID would
+    # be weighted toward fabricated completeness, which is the defect EL2
+    # exists to catch.
+    "door_refused": bool,
+    # Ruling 74 / QL5: the closing record carries the member of the closed stop
+    # set that the caller named. A `str` key because the VALUE is the fact -
+    # "it closed" is a weaker claim than "it closed FOR THIS REASON", and the
+    # stop set is her vocabulary, not the runner's.
+    "stop_condition": str,
 }
 
 
@@ -224,7 +302,7 @@ class EvalCase:
 
     __slots__ = ("case_id", "revision", "category", "input", "context",
                  "expected_paths", "forbidden_paths", "expected_facts",
-                 "forbidden_facts", "notes")
+                 "forbidden_facts", "notes", "operation")
 
     def __init__(self, raw: Dict[str, Any], *, source: str, line: int,
                  valid_paths: frozenset) -> None:
@@ -257,6 +335,19 @@ class EvalCase:
         self.input = raw["input"]
         self.notes = raw.get("notes", "")
 
+        # RULING 80: the operation names a SCRIPTED SEQUENCE from a closed
+        # vocabulary, and an unknown one is REFUSED at load - the loader's own
+        # discipline, applied to the field that decides which doors get driven.
+        # A case naming a sequence this runner does not have would otherwise
+        # fall through to the ordinary single-claim drive and report green for a
+        # law it never exercised.
+        self.operation = raw.get("operation")
+        if self.operation is not None and self.operation not in OPERATIONS:
+            raise EvalCaseError(
+                f"{source}:{line} ({raw['case_id']}) names operation "
+                f"{self.operation!r}, which this runner does not have. The "
+                f"operation vocabulary is CLOSED ({sorted(OPERATIONS)}).")
+
         self.context = tuple(_str_list(raw.get("context", ()), "context", source, line))
         self.expected_paths = tuple(_paths(
             raw.get("expected_paths", ()), "expected_paths", valid_paths, source, line))
@@ -276,6 +367,7 @@ class EvalCase:
 
     def as_dict(self) -> Dict[str, Any]:
         return {"case_id": self.case_id, "revision": self.revision,
+                "operation": self.operation,
                 "category": self.category}
 
 
@@ -404,7 +496,8 @@ def _ledger_sizes(core) -> Dict[str, int]:
 
 
 def _observe_facts(core, result: Dict[str, Any],
-                   before: Dict[str, int]) -> Dict[str, Any]:
+                   before: Dict[str, int],
+                   extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Derive the closed fact vocabulary FROM THE STORES.
 
     **THROUGH THE REAL READ SURFACES** (pin (g)): `record_joins` for the claim
@@ -433,7 +526,7 @@ def _observe_facts(core, result: Dict[str, Any],
     ancestry = core.ancestry.read_all()
     summary = corroboration([r.claim_id for r in ancestry], ancestry)
 
-    return {
+    facts = {
         "scar_formed": scarred,
         "suspension_created": suspended,
         "claim_id_joined": joined,
@@ -442,7 +535,23 @@ def _observe_facts(core, result: Dict[str, Any],
         "genealogy_distinct_origins": summary.distinct_recorded_origins,
         "genealogy_unknown": summary.unknown_count,
         "structural_violation": result.get("structural_violation") is not None,
+        # RULING 80's four keys at their HONEST DEFAULTS for an ordinary case:
+        # no door was driven so none refused; no doctrine was named so none is
+        # present; nothing was minted after a restart so the floor law is not
+        # in evidence; and no activation closed so there is no stop condition.
+        "doctrine_present": False,
+        "mint_above_floor": False,
+        "door_refused": False,
+        "stop_condition": "",
     }
+    # RULING 80's four keys. Merged rather than branched: an ORDINARY case
+    # observes them at their honest defaults (no door was driven, so none
+    # refused; no doctrine was named, so none is present), and an operation
+    # OVERWRITES the ones its sequence actually measured. A case asserting a key
+    # its operation never touches therefore reads the default and FAILS, which
+    # is the correct outcome - it asserted something nothing measured.
+    facts.update(extra or {})
+    return facts
 
 
 def _deltas(case: EvalCase, observed_path: Optional[str],
@@ -536,6 +645,160 @@ def _refuse_unisolated(root: Path) -> None:
             f"unisolated writes into shared state.")
 
 
+def _live_doctrine_id(core) -> Optional[str]:
+    """A doctrine the Codex actually holds, READ rather than named.
+
+    Naming a literal here would make the runner assert a fact about
+    `data/doctrines.json` that belongs to Ruling 32's seed rather than to any
+    case. `Doctrine-0*` is excluded because it is LOCKED (Ruling 35) and so is
+    excluded from mutation scanning while staying live and readable.
+    """
+    live = [d for d in core.codex.active() if not d.id.startswith("Doctrine-0")]
+    return live[0].id if live else None
+
+
+def _found_and_examine(core):
+    """Found the goal roots and take ONE examination. Ruling 74's authorization.
+
+    Genesis is called HERE rather than in `AureaCore.__init__` - Ruling 72's own
+    reasoning, which the core deliberately honours: an incidental construction
+    must not found two permanent roots. A case that drives a goal door is
+    exactly the caller that wants them, so it asks.
+    """
+    core.goal_ledger.ensure_genesis()
+    return core.examine_goals()
+
+
+def _refusal(fn, *args, **kwargs) -> Dict[str, Any]:
+    """Drive a door and record WHETHER IT REFUSED. **EL2 as a helper.**
+
+    A refusal is a SUCCESS STATE, so it is recorded as a fact rather than
+    allowed to abort the case. The exception TYPE is recorded too, so a case
+    that expected a refusal cannot be satisfied by an unrelated crash - the
+    guard's identity is part of what was observed.
+    """
+    try:
+        return {"refused": False, "value": fn(*args, **kwargs), "error": ""}
+    except Exception as exc:                       # the refusal IS the answer
+        return {"refused": True, "value": None,
+                "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _operate(case: EvalCase, core, result: Dict[str, Any]) -> Tuple[Any, Dict[str, Any]]:
+    """Run the case's scripted sequence. Returns (core_to_observe, extra_facts).
+
+    **THE RESTART OPERATIONS RECONSTRUCT `AureaCore` AND OBSERVE THE RESUMED
+    ONE**, which is what makes their facts answer "did this survive the
+    boundary" rather than "did this happen". No `save_state` is called anywhere
+    here: Ruling 78 made the durable writes eager precisely so a restart needs
+    no cooperation, and calling it would test the checkpoint instead of the law.
+    """
+    from src.aurea_core import AureaCore
+    from src.goals.goal_activation import BoundKind, StopCondition
+    from src.utils.models import Doctrine
+    from datetime import datetime
+
+    operation = case.operation
+
+    if operation == "restart_after_claim":
+        return AureaCore(), {}
+
+    if operation == "restart_after_mutation":
+        ancestor = _live_doctrine_id(core)
+        successor = f"{ancestor}::eval" if ancestor else None
+        if ancestor is not None:
+            sys.path.insert(0, str(REPO))
+            from tests.proof_support import minimal_proof
+            core.sae.mutate_doctrine(
+                ancestor,
+                Doctrine(id=successor, name="Successor",
+                         description="the belief after",
+                         created_at=datetime.now()),
+                collapse_lineage="Scar-0",
+                proof=minimal_proof("eval_corpus"))
+        resumed = AureaCore()
+        present = (successor is not None
+                   and (resumed.codex.get(successor) is not None
+                        or successor in resumed.codex.fossils))
+        return resumed, {"doctrine_present": bool(present)}
+
+    if operation == "restart_mint_floor":
+        on_disk = {r.claim_id for r in core.ancestry.read_all()}
+        resumed = AureaCore()
+        second = resumed.process_input("A second claim, after the boundary.")
+        minted = second.get("claim_id")
+        # STRICTLY ABOVE every id already on disk (Rulings 69 + 78): the new id
+        # must not be one of them, and must order above the highest.
+        above = bool(minted) and minted not in on_disk and (
+            not on_disk or minted > max(on_disk))
+        return resumed, {"mint_above_floor": above}
+
+    if operation == "goal_unbounded_open":
+        examination = _found_and_examine(core)
+        outcome = _refusal(core.open_goal_activation, examination,
+                           BoundKind.EXAMINATION_BOUND, 0)
+        return core, {"door_refused": outcome["refused"]}
+
+    if operation == "goal_double_close":
+        examination = _found_and_examine(core)
+        activation = core.open_goal_activation(
+            examination, BoundKind.EXAMINATION_BOUND, 1)
+        core.close_goal_activation(activation.activation_id,
+                                   StopCondition.BOUND_REACHED)
+        outcome = _refusal(core.close_goal_activation,
+                           activation.activation_id,
+                           StopCondition.BOUND_REACHED)
+        return core, {"door_refused": outcome["refused"]}
+
+    if operation == "goal_stop_condition":
+        examination = _found_and_examine(core)
+        activation = core.open_goal_activation(
+            examination, BoundKind.EXAMINATION_BOUND, 1)
+        closed = core.close_goal_activation(activation.activation_id,
+                                            StopCondition.NO_PROGRESS)
+        recorded = getattr(closed, "stop_condition", None)
+        return core, {"stop_condition": getattr(recorded, "value", "") or ""}
+
+    if operation == "goal_serial_attention":
+        # **SERIAL ATTENTION IS PER-GOAL, AND THIS SEQUENCE WAS CORRECTED BY
+        # MEASUREMENT RATHER THAN REASONED INTO PLACE.**
+        #
+        # The first draft examined twice and opened twice, and the second open
+        # SUCCEEDED - which read like a missing guard and was not. Ruling 73-A
+        # made the ladder ROTATE (least-recently-examined before
+        # oldest-unresolved), so a second examination selects a DIFFERENT goal,
+        # and opening an episode against a different goal is exactly what
+        # Ruling 74 permits: the law is one open episode PER GOAL, not one in
+        # the system.
+        #
+        # So the sequence examines until the arbiter comes BACK ROUND to the
+        # goal that already has an open episode, and attempts the open there.
+        # Bounded by the candidate count (+1 for the rotation that returns), so
+        # it terminates whatever the field size - Ruling 4's declared bound
+        # rather than a `while True` that happens to exit.
+        first = _found_and_examine(core)
+        core.open_goal_activation(first, BoundKind.EXAMINATION_BOUND, 2)
+
+        target, attempts = first.selected_goal_id, len(first.candidate_goal_ids) + 1
+        again = None
+        for _ in range(attempts):
+            candidate = core.examine_goals()
+            if candidate.selected_goal_id == target:
+                again = candidate
+                break
+        if again is None:
+            # The rotation never returned. REPORTED as an unrefused door rather
+            # than passed off as a refusal - a case that could not reach its own
+            # precondition has not witnessed the law.
+            return core, {"door_refused": False}
+
+        outcome = _refusal(core.open_goal_activation, again,
+                           BoundKind.EXAMINATION_BOUND, 2)
+        return core, {"door_refused": outcome["refused"]}
+
+    return core, {}
+
+
 def run_case(case: EvalCase, root: Path, seed: int) -> Dict[str, Any]:
     """Drive ONE case against a FRESH isolated AUREA. Returns per-case facts.
 
@@ -569,7 +832,12 @@ def run_case(case: EvalCase, root: Path, seed: int) -> Dict[str, Any]:
     before = _ledger_sizes(core)
     result = core.process_input(case.input)
 
-    facts = _observe_facts(core, result, before)
+    # RULING 80: the scripted sequence, if the case names one. It runs AFTER
+    # the measured claim, so the disposition under test is still that claim's -
+    # an operation extends what is OBSERVED, never what is being judged.
+    observed_core, extra = _operate(case, core, result)
+
+    facts = _observe_facts(observed_core, result, before, extra)
     observed_path = _disposition(result)
 
     return {

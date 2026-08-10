@@ -160,14 +160,29 @@ def model_declaration(
     corroboration; a caller who genuinely knows the descent declares it and
     gets a recorded answer instead.
 
-    NOTED, NOT DECIDED - AN EMPTY IDENTITY STRING. `model_identity=""` is
-    accepted here, and two records carrying it would compare EQUAL and be read
-    by `source_genealogy.shares_recorded_asserter` as ONE SHARED ASSERTER -
-    the identical failure mode Ruling 64 res.7 closed for `provided(None)`.
-    It is NOT refused here because refusing it is a value judgment Ruling 70
-    does not delegate, and the vocabulary's own guard lives in
-    `claim_ancestry.provided()`, which is outside this pass's scope. FLAGGED
-    for the board rather than decided in passing.
+        ~~NOTED, NOT DECIDED - AN EMPTY IDENTITY STRING. `model_identity=""`
+        is accepted here, and two records carrying it would compare EQUAL and
+        be read by `source_genealogy.shares_recorded_asserter` as ONE SHARED
+        ASSERTER - the identical failure mode Ruling 64 res.7 closed for
+        `provided(None)`. It is NOT refused here because refusing it is a
+        value judgment Ruling 70 does not delegate, and the vocabulary's own
+        guard lives in `claim_ancestry.provided()`, which is outside this
+        pass's scope. FLAGGED for the board rather than decided in passing.~~
+
+    RULING 82 (2026-08-09) - DECIDED, old text kept above verbatim. The empty
+    identity is REFUSED, and **it is refused where this paragraph said it
+    belonged**: in `claim_ancestry.provided()`, the vocabulary's own guard, not
+    here. So `model_declaration` gains no check of its own - an empty identity
+    now raises from `provided()` one frame down, with res.7's message form, and
+    a second guard here would be a second definition of the same rule free to
+    drift from it.
+
+    THE FLAG WAS DISCHARGED THE WAY IT WAS RAISED. Ruling 70 declined to decide
+    a value judgment it had not been delegated; Ruling 82 delegated it, a census
+    established that nothing in the tree constructs the state, and the guard
+    closed it there. **Whitespace-only is refused too, and the value is still
+    never stripped** - res.1's byte-identical recording is untouched, because
+    the degenerate value is REFUSED rather than repaired into a different one.
     """
     if not isinstance(model_identity, str):
         raise TypeError(

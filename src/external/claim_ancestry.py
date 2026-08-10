@@ -181,6 +181,39 @@ def provided(value: Any) -> AncestryField:
             "for 'the channel said nothing'. Two records carrying "
             "provided(None) would compare EQUAL and be read as sharing one "
             "recorded asserter.")
+    # RULING 82 (2026-08-09) - THE EMPTY IDENTITY IS REFUSED, res.7's GUARD
+    # EXTENDED TO ITS OTHER SPELLING.
+    #
+    # Ruling 70 flagged this and deliberately did not decide it: an EMPTY
+    # `model_identity` was accepted, and **two such records compare EQUAL and
+    # read as ONE SHARED ASSERTER** - the identical failure mode res.7 closed
+    # for `None`, arriving as `""` instead. The genealogy module cannot tell
+    # them apart, because at that point there is nothing to tell apart.
+    #
+    # A CENSUS RAN FIRST (78 `provided(` call sites tree-wide, by AST): NOT ONE
+    # passes an empty or whitespace-only string, so this refuses a state nothing
+    # in the tree constructs - which is the only condition under which a guard
+    # like this is a closure rather than a behaviour change.
+    #
+    # WHITESPACE-ONLY IS THE SAME DEFECT WEARING A CHARACTER. `" "` and `"\t"`
+    # are not identities either, and two of them collide exactly as two empty
+    # strings do. **The value is NOT stripped and NOT normalized** - Ruling 70
+    # res.7 records the declared identity BYTE-IDENTICAL, so this refuses the
+    # degenerate value rather than repairing it into a different one.
+    #
+    # STRINGS ONLY. `provided([])` and `provided({})` are untouched: an empty
+    # container is a value a channel supplied, and deciding what an empty
+    # replication list MEANS is a genealogy question this guard has no standing
+    # to answer. **This changes what PROVIDED accepts; it changes nothing about
+    # what ABSENT or DECLARED_NONE mean.**
+    if isinstance(value, str) and not value.strip():
+        raise ValueError(
+            "provided('') is not a state. PROVIDED means a value IS present - "
+            "use declared_none() for 'there are none' or absent() for 'the "
+            "channel said nothing'. Two records carrying an empty or "
+            "whitespace-only value would compare EQUAL and be read as sharing "
+            "one recorded asserter (Ruling 82; Ruling 64 res.7's guard in its "
+            "other spelling).")
     return AncestryField(state=FieldState.PROVIDED, value=value)
 
 

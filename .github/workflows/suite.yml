@@ -59,7 +59,20 @@ jobs:
           # with no writer - nothing in `src/` reads it and no process appends
           # to it, so a change here is a HUMAN CURATION EVENT (EL4/EL6) and
           # must be visible as one rather than arriving silently.
-          expected_eval_cases=828292ff93ce593e5065ec3412b864a4937231aa
+          # ~~expected_eval_cases=828292ff93ce593e5065ec3412b864a4937231aa~~
+          #
+          # MIGRATED 2026-08-09 (RULING 80, Docket R items R4+R5), old hash kept
+          # verbatim above. THE CORPUS GREW 10 -> 18 CASES: four
+          # restart-continuity cases (the category Ruling 77 declared ABSENT
+          # "with its owner" - this is that owner arriving) and four goal-door
+          # cases, each restating a closed ruling by number.
+          #
+          # **THIS IS THE ONE RULED CORPUS MOVEMENT, AND MIGRATING THE PIN IS
+          # THE POINT OF THE PIN.** A blob change here is a HUMAN CURATION EVENT
+          # (EL4/EL6) and must arrive as one. The existing ten cases are
+          # BYTE-UNTOUCHED - the eight new ones were APPENDED, and the append
+          # was verified against the prior bytes as a prefix.
+          expected_eval_cases=7dd09af749f832d095d6049ce0e8c1954015a025
 
           actual_doctrines=$(git hash-object data/doctrines.json)
           actual_scars=$(git hash-object data/scars.json)
