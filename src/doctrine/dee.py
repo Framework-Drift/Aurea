@@ -897,7 +897,6 @@ class DEE:
         if self.veiled_thread is not None and hasattr(self.veiled_thread, "suspend"):
             self.veiled_thread.suspend(
                 content=doctrine_id,
-                source="DEE",
                 pressure=0.6,
                 reason=reason,
             )

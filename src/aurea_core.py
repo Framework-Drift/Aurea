@@ -1252,7 +1252,6 @@ class AureaCore:
                 if collapse_result.verdict is EchoVerdict.PARADOX:
                     bs_entry = self.black_sphere.suspend(
                         content=echo.content,
-                        source='pipeline',
                         pressure=collapse_result.pressure_generated,
                         reason=collapse_result.reason or 'Self-reference paradox',
                         paradox_type='self_reference',
@@ -2166,7 +2165,6 @@ class AureaCore:
                         'origin_id': getattr(echo, 'origin_id', None),
                         'status': getattr(getattr(echo, 'status', None), 'value', None),
                     },
-                    source='nova',
                     # The real pressure of the collapse that failed. Absent =
                     # unrecorded -> 0.0, the lowest quarantine: the
                     # uninformative case is the conservative case, and a

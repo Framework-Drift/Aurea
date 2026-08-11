@@ -231,8 +231,11 @@ def test_a_persisted_paradox_is_rebuilt_with_no_topology_file_present():
     only have come from the Black Sphere's own persisted entries.
     """
     core = AureaCore()
+    # MIGRATED 2026-08-11 (RULING 84), old call kept verbatim:
+    #     content="This sentence is false.", source="test",
+    # The `source` parameter is DELETED from the door. No assertion moved.
     entry = core.black_sphere.suspend(
-        content="This sentence is false.", source="test",
+        content="This sentence is false.",
         pressure=0.9, reason="self-reference", paradox_type="self_reference")
     node = core.tca.place_paradox(entry)
     assert node.id in core.tca.topology.nodes

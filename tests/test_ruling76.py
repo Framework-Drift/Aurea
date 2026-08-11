@@ -176,7 +176,11 @@ def test_b_the_claim_id_survives_the_black_sphere_file(tmp_path):
     """
     path = tmp_path / "bs.json"
     sphere = BlackSphere(filepath=str(path))
-    entry = sphere.suspend(content="a paradox", source="pipeline",
+    # MIGRATED 2026-08-11 (RULING 84), old call kept verbatim:
+    #     entry = sphere.suspend(content="a paradox", source="pipeline",
+    #                            pressure=0.9, claim_id="CLM-0042")
+    # `source` is DELETED from the door. Every assertion below is unchanged.
+    entry = sphere.suspend(content="a paradox",
                            pressure=0.9, claim_id="CLM-0042")
     assert entry.claim_id == "CLM-0042"
 
@@ -191,18 +195,33 @@ def test_b_the_claim_id_survives_the_black_sphere_file(tmp_path):
 
 def test_b_the_claim_id_is_keyword_only_on_suspend(tmp_path):
     """PIN (i) / res.1. Keyword-only, so the two existing callers are
-    unaffected and a future one cannot bind it positionally into `reason`."""
+    unaffected and a future one cannot bind it positionally into `reason`.
+
+    MIGRATED 2026-08-11 (RULING 84), old call kept verbatim:
+        sphere.suspend("content", "source", 0.9, "reason", "type", "CLM-0001")
+    `source` is DELETED from the door, so the positional list loses one slot.
+    **THIS MIGRATION STRENGTHENS THE PIN AND THE REASON IS WORTH RECORDING:**
+    the old call passed SIX positionals against FIVE slots, so it raised on
+    ARITY and would have raised even if `claim_id` had been positional. The new
+    call passes exactly the four positional slots that exist plus `claim_id`,
+    so the raise now witnesses keyword-only-ness and nothing else.
+    """
     sphere = BlackSphere(filepath=str(tmp_path / "bs.json"))
     with pytest.raises(TypeError):
-        sphere.suspend("content", "source", 0.9, "reason", "type", "CLM-0001")
+        sphere.suspend("content", 0.9, "reason", "type", "CLM-0001")
 
 
 def test_b_non_pipeline_suspensions_carry_none(tmp_path):
     """PIN (i) / res.1. **ABSENT IS A REAL ANSWER.** The tether's suspensions
-    have no claim cycle behind them and must not appear to."""
+    have no claim cycle behind them and must not appear to.
+
+    MIGRATED 2026-08-11 (RULING 84), old call kept verbatim:
+        entry = sphere.suspend(content="tether paradox", source="tether",
+                               pressure=0.9)
+    No assertion moved.
+    """
     sphere = BlackSphere(filepath=str(tmp_path / "bs.json"))
-    entry = sphere.suspend(content="tether paradox", source="tether",
-                           pressure=0.9)
+    entry = sphere.suspend(content="tether paradox", pressure=0.9)
     assert entry.claim_id is None
 
 
@@ -505,7 +524,10 @@ def test_h_absent_joins_contribute_nothing():
                Scar(id="S3", name="n", origin="o", claim_id=None)]
     assert claims_present(records) == ["CLM-0001"]
     assert claim_of_scar(records[0]) is None
-    entry = SuspensionEntry(id="BS-x", content="c", source="tether",
+    # MIGRATED 2026-08-11 (RULING 84), old construction kept verbatim:
+    #     entry = SuspensionEntry(id="BS-x", content="c", source="tether",
+    # The field is DELETED from the record. No assertion moved.
+    entry = SuspensionEntry(id="BS-x", content="c",
                             suspension_type=SuspensionType.BLACK_SPHERE,
                             pressure_level=0.5)
     assert claim_of_suspension(entry) is None
@@ -641,7 +663,10 @@ def test_j_the_new_fields_are_optional_and_default_to_none():
     scar = Scar(id="S", name="n", origin="o")
     assert scar.claim_id is None and scar.origin_pressure is None
 
-    entry = SuspensionEntry(id="E", content="c", source="s",
+    # MIGRATED 2026-08-11 (RULING 84), old construction kept verbatim:
+    #     entry = SuspensionEntry(id="E", content="c", source="s",
+    # The field is DELETED from the record. No assertion moved.
+    entry = SuspensionEntry(id="E", content="c",
                             suspension_type=SuspensionType.BLACK_SPHERE,
                             pressure_level=0.0)
     assert entry.claim_id is None

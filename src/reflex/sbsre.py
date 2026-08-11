@@ -350,7 +350,6 @@ class SBSRE:
         if self.csa is not None:
             thread.csa_entry = self.csa.suspend(
                 content=str(thread.contradiction),
-                source="SBSRE",
                 pressure=1.0,
                 reason=f"Recursive Overload - {reason} after {thread.cycles_run} cycles",
             )
@@ -386,7 +385,6 @@ class SBSRE:
         elif outcome is LoopOutcome.ROUTE and self.csa is not None:
             thread.csa_entry = self.csa.suspend(
                 content=str(thread.contradiction),
-                source="SBSRE",
                 pressure=0.9,
                 reason="identity recursion - CSA lockdown",
             )

@@ -306,7 +306,7 @@ class TetherProtocol:
     # ---------- Suspension helpers ----------
 
     def suspend_to_csa(self, content: Any, reason: str, pressure: float) -> str:
-        entry = self.csa.suspend(content=content, source="tether", pressure=pressure, reason=reason)
+        entry = self.csa.suspend(content=content, pressure=pressure, reason=reason)
         self._log("suspended_csa", extra={"id": entry.id, "pressure": pressure})
         self.state.phase = TetherPhase.SUSPENDED
         if self.on_suspend:
@@ -314,7 +314,7 @@ class TetherProtocol:
         return entry.id
 
     def suspend_to_veiled(self, content: Any, reason: str, pressure: float) -> str:
-        entry = self.vt.suspend(content=content, source="tether", pressure=pressure, reason=reason)
+        entry = self.vt.suspend(content=content, pressure=pressure, reason=reason)
         self._log("suspended_vt", extra={"id": entry.id, "pressure": pressure})
         self.state.phase = TetherPhase.SUSPENDED
         if self.on_suspend:
@@ -323,7 +323,7 @@ class TetherProtocol:
 
     def suspend_to_black_sphere(self, content: Any, reason: str, pressure: float, family: str = "unknown") -> Optional[str]:
         try:
-            entry = self.bs.suspend(content=content, source="tether", pressure=pressure, reason=reason, paradox_type=family)
+            entry = self.bs.suspend(content=content, pressure=pressure, reason=reason, paradox_type=family)
             self._log("suspended_bs", extra={"id": entry.id, "pressure": pressure, "family": family})
             self.state.phase = TetherPhase.SUSPENDED
             if self.on_suspend:

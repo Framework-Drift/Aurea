@@ -44,6 +44,11 @@ exact property Ruling 32 says a seed must not have.
 
 ## Categories present
 
+*(Updated 2026-08-11, Ruling 85: this table lagged Ruling 80, which added
+AEC-011..018 and two categories. The sections below had been updated in that
+pass and this table had not — a corpus listing that under-reports its own
+contents is the completeness-claim defect in the file that documents it.)*
+
 | Category | Cases | What it holds |
 |---|---|---|
 | `self_reference_paradox` | AEC-001, AEC-002 | Paradox routes to a suspension store and is held |
@@ -53,6 +58,10 @@ exact property Ruling 32 says a seed must not have.
 | `abstention_surface` | AEC-008 | EL2: the refusal is the success state |
 | `corroboration_repeat` | AEC-009 | Silence never corroborates |
 | `doctrine_resonance` | AEC-010 | Agreement generates no pressure — AEC-005's other half |
+| `restart_continuity` | AEC-011..014 | What survives a process boundary — Rulings 76/78/69 (Ruling 80, R4) |
+| `goal_door` | AEC-015..018 | The goal doors, three of them asserting a REFUSAL (Ruling 80, R5) |
+
+**18 cases, 9 categories.**
 
 ---
 
@@ -146,6 +155,7 @@ nothing checks):
 | `category` | ✔ | Grouping label |
 | `input` | ✔ | The claim text fed to `process_input` |
 | `context` | | Prior inputs fed first, same door, in order |
+| `operation` | | A SCRIPTED SEQUENCE from a closed vocabulary (Ruling 80). An unknown one is refused exactly as an unknown path or fact key is — a case naming a sequence the runner lacks would otherwise fall through to the ordinary drive and report green for a law it never exercised. The alternative was encoding the scenario in `input` and branching on it, which would make the corpus's most load-bearing field mean two things by category |
 | `expected_paths` | | `OutputPath` names, **any-of** |
 | `forbidden_paths` | | `OutputPath` names, **none-of** |
 | `expected_facts` | | Fact keys → required values |
@@ -160,17 +170,40 @@ may not invent a disposition.**
 A case that asserts nothing is refused: it would add a green line to a report
 that measured nothing.
 
+### Operations
+
+`restart_after_claim` · `restart_after_mutation` · `restart_mint_floor` ·
+`goal_unbounded_open` · `goal_double_close` · `goal_stop_condition` ·
+`goal_serial_attention`
+
+The restart operations reconstruct `AureaCore` and observe the facts on the
+RESUMED core, which is what makes their facts answer *did this survive the
+boundary* rather than *did this happen*. **No `save_state` is called anywhere
+in them** — Ruling 78 made the durable writes eager precisely so a restart
+needs no cooperation, and calling the checkpoint would test the checkpoint
+instead of the law.
+
 ### Fact keys
 
 `scar_formed` · `suspension_created` · `claim_id_joined` · `clm_lines` ·
 `ech_lines` · `genealogy_distinct_origins` · `genealogy_unknown` ·
-`structural_violation`
+`structural_violation` · `doctrine_present` · `mint_above_floor` ·
+`door_refused` · `stop_condition`
+
+*(The last four were added by Ruling 80; this list lagged them until Ruling 85.)*
 
 Every one is derived from a real read surface — `record_joins` for the claim
 joins, `source_genealogy` for corroboration, each owner's own accessor for the
 rest. The two `*_lines` counts are **lines written by the measured input**, not
 totals for the run: a case's `context` writes lines too, and charging them to
 the case would make the one-to-one guarantee unassertable.
+
+`door_refused` is **EL2's key — the one that says a REFUSAL IS A SUCCESS
+STATE.** It exists because the goal doors are `process_input`'s SIBLINGS, so a
+goal case's disposition is its ordinary claim's and the law it witnesses has
+nowhere else to live. `stop_condition` records WHICH condition closed an
+activation, because *it closed* is a weaker claim than *it closed for this
+reason* (Ruling 74 / QL5).
 
 ---
 

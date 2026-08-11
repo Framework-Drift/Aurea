@@ -37,16 +37,21 @@ class BlackSphere(SuspensionSystem):
         self.gravitational_range = 0.3  # How far influence extends
         self.load_from_file()
         
-    def suspend(self, content: Any, source: str,
+    def suspend(self, content: Any,
                 pressure: float, reason: str = "",
                 paradox_type: str = "unknown", *,
                 claim_id: Optional[str] = None) -> SuspensionEntry:
         """
         Suspend paradox in Black Sphere for perpetual orbit.
 
+        RULING 84 (2026-08-11): the `source` parameter is DELETED. This door
+        carried the one literal Ruling 83 classified as report-only
+        (`source='pipeline'` at `aurea_core`) - true but vaguer than its
+        siblings' module identities, and beside `claim_id` it was the field a
+        reader would reach for while the join was the one that was true.
+
         Args:
             content: The paradoxical content
-            source: Origin of the paradox
             pressure: Symbolic pressure (usually very high for paradoxes)
             reason: Reason for suspension
             paradox_type: Type of paradox (self-reference, gödel, etc.)
@@ -78,7 +83,6 @@ class BlackSphere(SuspensionSystem):
         entry = SuspensionEntry(
             id=f"BS-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
             content=str(content),  # Convert to string for safety
-            source=source,
             suspension_type=SuspensionType.BLACK_SPHERE,
             pressure_level=pressure,
             reason=reason or f"Irreducible paradox at pressure {pressure:.2f}",
@@ -289,7 +293,9 @@ class BlackSphere(SuspensionSystem):
             entry_dict = {
                 'id': entry.id,
                 'content': entry.content,
-                'source': entry.source,
+                # RULING 84: `'source': entry.source` STOOD HERE. The key is no
+                # longer written; a legacy file that carries it is read without
+                # it and never rewritten with it.
                 'pressure_level': entry.pressure_level,
                 'timestamp': entry.timestamp.isoformat(),
                 'reason': entry.reason,
@@ -330,7 +336,9 @@ class BlackSphere(SuspensionSystem):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],
-                source=entry_dict['source'],
+                # RULING 84: `source=entry_dict['source']` STOOD HERE. This
+                # loader reads EXPLICIT keys, so deleting the read is the whole
+                # of era honesty - a legacy key is simply never consulted.
                 suspension_type=SuspensionType.BLACK_SPHERE,
                 pressure_level=entry_dict['pressure_level'],
                 timestamp=datetime.fromisoformat(entry_dict['timestamp']),

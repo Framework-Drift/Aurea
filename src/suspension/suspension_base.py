@@ -33,7 +33,29 @@ class SuspensionEntry:
     """
     id: str
     content: Any  # Can be Echo, partial doctrine, paradox, etc.
-    source: str
+    # RULING 84 (2026-08-11) - THE SOURCE FIELD RETIRES.
+    #
+    # `source: str` STOOD HERE and is DELETED AS SHAPE, Ruling 68's form.
+    #
+    # It was `Echo.source`'s exact pre-Ruling-68 profile: a manufactured origin
+    # string on a durable record, with ZERO logic readers anywhere in `src/` -
+    # three serializers wrote it out, three loaders read it back, and nothing
+    # ever decided anything by it. Ruling 83's census classified all seventeen
+    # of its call sites and found NO class-(b) site, because the replacement
+    # Ruling 68 used - deletion, with origin reached through the join - was
+    # barred to that pass. **THIS IS THE RULING IT WAITED FOR.**
+    #
+    # THE REPLACEMENT ALREADY EXISTS AND IS UNTOUCHED: `claim_id` below is the
+    # record's real origin, a join into the claim-ancestry ledger, populated by
+    # the pipeline door and honestly `None` everywhere else. A demoted display
+    # string sitting beside an honest join is not harmless - it is the field
+    # people read while the join is the one that is true.
+    #
+    # **ERA HONESTY FALLS OUT BY CONSTRUCTION, and that is why no tolerant-load
+    # filter was added:** all three loaders read EXPLICIT keys rather than
+    # splatting the dict (`Echo(**data)`'s shape, which needed Ruling 75's
+    # filter), so a legacy file's `source` key is simply never read. The bytes
+    # are never rewritten in place and the key never round-trips back out.
     suspension_type: SuspensionType
     pressure_level: float
     timestamp: datetime = field(default_factory=datetime.now)
@@ -103,9 +125,14 @@ class SuspensionSystem(ABC):
         self.last_purge: Optional[datetime] = None
         
     @abstractmethod
-    def suspend(self, content: Any, source: str, 
+    def suspend(self, content: Any,
                 pressure: float, reason: str = "") -> SuspensionEntry:
-        """Suspend content with given parameters."""
+        """Suspend content with given parameters.
+
+        RULING 84: the `source` parameter is GONE from this door and from the
+        three that implement it. A suspension's origin is `claim_id` where a
+        claim cycle produced it, and nothing where one did not.
+        """
         pass
         
     @abstractmethod

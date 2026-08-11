@@ -38,14 +38,18 @@ class CSA(SuspensionSystem):
         self.max_dormancy = 100  # Cycles before auto-decay
         self.load_from_file()
         
-    def suspend(self, content: Any, source: str, 
+    def suspend(self, content: Any,
                 pressure: float, reason: str = "") -> SuspensionEntry:
         """
         Quarantine dangerous content in CSA.
-        
+
+        RULING 84 (2026-08-11): the `source` parameter is DELETED. Its five
+        callers passed real module identities (`RIL`, `SBSRE` x2, `tether`,
+        `nova`) - honest strings, and still a second origin field beside
+        `claim_id` that no logic anywhere read.
+
         Args:
             content: The dangerous content to quarantine
-            source: Origin of the content
             pressure: Symbolic pressure level (determines quarantine level)
             reason: Reason for quarantine
             
@@ -63,7 +67,6 @@ class CSA(SuspensionSystem):
         entry = SuspensionEntry(
             id=f"CSA-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
             content=str(content),  # Convert to string for safety
-            source=source,
             suspension_type=SuspensionType.CSA,
             pressure_level=pressure,
             reason=reason or f"Quarantined at pressure {pressure:.2f}",
@@ -227,7 +230,7 @@ class CSA(SuspensionSystem):
             entry_dict = {
                 'id': entry.id,
                 'content': entry.content,
-                'source': entry.source,
+                # RULING 84: `'source': entry.source` STOOD HERE.
                 'pressure_level': entry.pressure_level,
                 'timestamp': entry.timestamp.isoformat(),
                 'reason': entry.reason,
@@ -258,7 +261,8 @@ class CSA(SuspensionSystem):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],
-                source=entry_dict['source'],
+                # RULING 84: `source=entry_dict['source']` STOOD HERE. Explicit
+                # key reads mean a legacy key is never consulted.
                 suspension_type=SuspensionType.CSA,
                 pressure_level=entry_dict['pressure_level'],
                 timestamp=datetime.fromisoformat(entry_dict['timestamp']),

@@ -29,9 +29,15 @@ class _MinimalSuspension(SuspensionSystem):
     base predicate all three organs inherit, with no organ-specific behavior
     in the way."""
 
-    def suspend(self, content, source, pressure, reason=""):
+    # MIGRATED 2026-08-11 (RULING 84), old signature and construction kept
+    # verbatim:
+    #     def suspend(self, content, source, pressure, reason=""):
+    #         entry = SuspensionEntry(
+    #             id=..., content=content, source=source, ...)
+    # The double tracks the real base door, which no longer takes `source`.
+    def suspend(self, content, pressure, reason=""):
         entry = SuspensionEntry(
-            id=f"T-{len(self.entries)}", content=content, source=source,
+            id=f"T-{len(self.entries)}", content=content,
             suspension_type=SuspensionType.CSA, pressure_level=pressure,
             reason=reason)
         self.entries[entry.id] = entry
@@ -50,12 +56,15 @@ def test_capacity_boundary_is_exact():
     that admits capacity+1 entries has no capacity, only a suggestion."""
     system = _MinimalSuspension(capacity=3)
 
-    system.suspend("a", "test", 0.5)
-    system.suspend("b", "test", 0.5)
+    # MIGRATED 2026-08-11 (RULING 84): the calls dropped their `"test"` source
+    # positional (old form `system.suspend("a", "test", 0.5)`). No assertion
+    # moved - the capacity boundary is what this pins.
+    system.suspend("a", 0.5)
+    system.suspend("b", 0.5)
     assert len(system.entries) == 2
     assert system.is_at_capacity() is False, "capacity-1 entries: room remains"
 
-    system.suspend("c", "test", 0.5)
+    system.suspend("c", 0.5)
     assert len(system.entries) == 3
     assert system.is_at_capacity() is True, "capacity entries: FULL, exactly here"
 
@@ -66,11 +75,14 @@ def test_black_sphere_refuses_at_capacity_paradoxes_are_permanent(tmp_path):
     old one - orbits are permanent, so refusal is the only bound there is."""
     sphere = BlackSphere(capacity=2,
                          filepath=str(tmp_path / "black_sphere_test.json"))
-    sphere.suspend("liar paradox", "test", pressure=0.95)
+    # MIGRATED 2026-08-11 (RULING 84): the calls dropped their `"test"` source
+    # positional (old form `sphere.suspend("liar paradox", "test",
+    # pressure=0.95)`). No assertion moved.
+    sphere.suspend("liar paradox", pressure=0.95)
     assert sphere.is_at_capacity() is False, "one below capacity: admits"
-    sphere.suspend("godel sentence", "test", pressure=0.95)
+    sphere.suspend("godel sentence", pressure=0.95)
     assert sphere.is_at_capacity() is True
 
     with pytest.raises(Exception):
-        sphere.suspend("berry paradox", "test", pressure=0.95)
+        sphere.suspend("berry paradox", pressure=0.95)
     assert len(sphere.entries) == 2, "the refused paradox did not land"

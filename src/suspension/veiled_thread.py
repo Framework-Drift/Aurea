@@ -34,14 +34,17 @@ class VeiledThread(SuspensionSystem):
         self.doctrine_potential_threshold = 0.8  # When content becomes doctrine candidate
         self.load_from_file()
         
-    def suspend(self, content: Any, source: str, 
+    def suspend(self, content: Any,
                 pressure: float, reason: str = "") -> SuspensionEntry:
         """
         Suspend content in Veiled Thread for fermentation.
-        
+
+        RULING 84 (2026-08-11): the `source` parameter is DELETED. Its two
+        callers passed `DEE` and `tether` - real module identities, and still a
+        display string no logic read.
+
         Args:
             content: The unresolved content to ferment
-            source: Origin of the content
             pressure: Symbolic pressure level
             reason: Reason for suspension
             
@@ -57,7 +60,6 @@ class VeiledThread(SuspensionSystem):
         entry = SuspensionEntry(
             id=f"VT-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
             content=content,
-            source=source,
             suspension_type=SuspensionType.VEILED,
             pressure_level=pressure,
             reason=reason or f"Suspended for fermentation at pressure {pressure:.2f}",
@@ -279,7 +281,7 @@ class VeiledThread(SuspensionSystem):
             entry_dict = {
                 'id': entry.id,
                 'content': str(entry.content),  # Convert to string for JSON
-                'source': entry.source,
+                # RULING 84: `'source': entry.source` STOOD HERE.
                 'pressure_level': entry.pressure_level,
                 'timestamp': entry.timestamp.isoformat(),
                 'reason': entry.reason,
@@ -311,7 +313,8 @@ class VeiledThread(SuspensionSystem):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],
-                source=entry_dict['source'],
+                # RULING 84: `source=entry_dict['source']` STOOD HERE. Explicit
+                # key reads mean a legacy key is never consulted.
                 suspension_type=SuspensionType.VEILED,
                 pressure_level=entry_dict['pressure_level'],
                 timestamp=datetime.fromisoformat(entry_dict['timestamp']),

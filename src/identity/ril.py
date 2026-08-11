@@ -315,7 +315,6 @@ class RIL:
             self.csa.suspend(
                 content=(f"identity fracture: doctrine {doctrine.id} superseded "
                          f"{ancestor_id}, an ancestor RIL had anchored identity to"),
-                source="RIL",
                 pressure=IDENTITY_FRACTURE_PRESSURE,
                 reason=(f"ICA not authorized to resolve identity fracture "
                         f"({ruling.reason})"),

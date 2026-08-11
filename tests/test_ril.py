@@ -195,7 +195,14 @@ def test_unresolved_fracture_routes_to_csa_as_request():
     assert len(ril.threads[IdentityThread.VOID]) == 1
     assert len(csa.calls) == 1
     call = csa.calls[0]
-    assert call["source"] == "RIL"
+    # MIGRATED 2026-08-11 (RULING 84), old assertion kept verbatim:
+    #     assert call["source"] == "RIL"
+    # The `source` parameter is DELETED from the CSA door, so RIL no longer
+    # declares an identity string there. **NO ASSERTION IS WEAKENED** - the
+    # replacement is STRICTER: it asserts the key is GONE from the call, which
+    # would redden if a caller reintroduced it.
+    assert "source" not in call, (
+        "RULING 84: the suspension door carries no `source` parameter")
     assert call["pressure"] == IDENTITY_FRACTURE_PRESSURE
 
 
