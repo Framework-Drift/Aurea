@@ -70,7 +70,7 @@ Ruling 33 (2026-07-26) split the output layer in two, and the split is one-way: 
 
 Project Structure
 
-Only BUILT modules are listed. Several canonical module names in the corpus are present as 0-byte stubs and are named under "Declared but unbuilt" below — an empty file is not a built organ, and listing the two together is how a reader ends up looking for code that does not exist.
+Only BUILT modules are listed — an empty file is not a built organ, and listing the two together is how a reader ends up looking for code that does not exist. Canonical names reserved in the corpus but not yet built are no longer carried in this tree as empty files; see "Reserved names" below.
 
 src/
   aurea_core.py                # Orchestrator (pipeline controller)
@@ -90,13 +90,19 @@ src/
   utils/                       # Models, EchoMemory, LedgerMint, AtomicWrite, RecordValue,
                                #   Continuity, DeepFreeze, SymbolicGrouping
 
-Declared but unbuilt (0-byte stubs, canonical names reserved):
-  perception/cpa.py · filtration/{echotrace,scar_decay,bloom_mapping}.py
-  doctrine/{dml,harmonizer}.py · reflex/{car,rdm}.py · identity/anchor.py
-  expansion/{chrono_layer,sge,sep,aqgl}.py · output/{echo_buffer,itr}.py
-  topology/{tca,echo_map}.py · suspension/{contradiction_gateway,csam}.py
-  external/{xaig,fsmd,sif,asis,asi,lcae,mloc,ece}.py
-  utils/{logger,helpers,config,audit,cbsal}.py
+Reserved names (not in this tree)
+
+M1 (2026-08-13) deleted thirty-two 0-byte placeholder modules and one empty package. A reserved
+name wearing a module's shape owns no store, no authority, no transformation and no invariant —
+it is a name, and a name does not need a file to hold its place. Every one of them remains
+recoverable from git history and from the corpus; nothing was lost but the empty files.
+
+Those names and their dispositions now live in DOMAINS.md at the repo root: 11 registered to
+heading phases with destinations, 21 retired, and one deliberately RETAINED —
+src/output/echo_buffer.py is still present at 0 bytes because tests/invariants/
+test_ruling3_truth_effect.py names it as a string, which makes it a live invariant fixture rather
+than scaffolding. The six-domain architecture that assigns these names is ruled in
+BUILD_CONTRACT.md (Aurea Build); CLAUDE.md §2 carries the summary.
 
 scripts/
   main.py                      # Minimal entry point / demo

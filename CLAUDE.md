@@ -169,6 +169,29 @@ Docket M's contribution stands: a runtime clamp guard in the invariant suite and
 
 ---
 
+### THE SIX DOMAINS *(heading: `AUREA_PIVOT_ARCHITECTURE.md` in `Aurea Build`; ruling table: `BUILD_CONTRACT.md`)*
+
+The architectural frame around the ownership table above: every subsystem sits in exactly one domain. **POINTER, NOT COPY** — the per-module map is `DOMAINS.md` at the repo root, and the **RULING record is BUILD_CONTRACT's domain-assignment table.** Neither is restated here, and if this section and that table ever disagree, **the table wins** (§7 precedence).
+
+| Domain | What it answers | |
+|---|---|---|
+| **Kernel** | what may mean what | The existing build. **PASSIVE — nothing loops.** |
+| **World Model** | what seems to exist | `record_projection` is the seed. **A VIEW, NEVER A SOURCE** — which is Ruling 64's own finding, not a softening of it. |
+| **Executive** | what receives cognition | **FUTURE (M7). It LOOPS, and it is CONSTITUTIONALLY DISPOSABLE.** |
+| **Capability Plane** | what cognition/action can be used | `model_provider` · `spl` · `hail`/`srg`. **ROLES, NOT BRANDS.** |
+| **Foundry** | what capabilities actually do | The AUREA-Foundry repo — **OUTSIDE the system.** |
+| **Builder** | what changes the machinery | The governance practice itself. |
+
+**DOMAIN MEMBERSHIP IS LOCATION, NEVER AUTHORITY.** Placing `hail`/`srg` in the Capability Plane grants them nothing: **Ruling 3's truth-effect cut is untouched**, HAIL still never overrides an ORE verdict, and every ownership row in the table above still governs. A domain says where a thing lives, not what it may do.
+
+**THE NO-SEVENTH-BOX ADMISSION TEST.** Every newly named subsystem must own a **store, an authority, a transformation, or an invariant**, and must locate that ownership in one of the six domains — otherwise it is a **function, a view, or a policy, and NOT a subsystem.** *(M1 is that test applied: thirty-two names owning none of the four were deleted, 2026-08-13.)*
+
+**THE REFLEX FAMILY IS `HELD` / `RE-DERIVE`** — `racm` · `reflex_grid` · `sbsre` · `rb_system` · `anchor_collapse` — pending the M3 grounding. **The current implementation REMAINS AUTHORITATIVE RUNTIME BEHAVIOR.** HELD is a statement about where they will be assigned; it is **never** a licence to change what they do.
+
+**"DOMAIN" IS A FOURTH SENSE OF A WORD THIS TREE ALREADY USES THREE WAYS**, and the census is recorded here so no one later derives one sense from another — **Ruling 30's defect, which cost a whole ruling to untangle two senses of "scope".** The architectural domain is **NOT** `Echo.symbolic_domain` (a persisted Nova field), **NOT** `DependencyLink.DOMAIN_VALIDITY` (a closed enum member, Ruling 61), and **NOT** the Lexicon *trigger* domain (`reflex_grid` / `anchor_collapse` — *"scar density is GSR's Lexicon domain"*, Ruling 10). **No code reads the architectural domain, and none should:** it is a documentation partition, not a runtime axis.
+
+---
+
 ## 3. THE GOVERNING PRINCIPLE
 
 > ### The wrong path must be **unexecutable**, not merely discouraged.
