@@ -13,6 +13,13 @@ RULING 4 — BOUNDED RECURSION. Every recursion entry point terminates.
 
 WHY THIS TEST EXISTS — AND THE TRAP IN IT
 ------------------------------------------
+M3-D NOTE (2026-08-14): the loop described above now lives in
+`aurea_core._carry_contradiction`, driven by the episode record; SBSRE's
+decision path is RETIRED and this file's target - `clamp` /
+`compute_loop_limit`, the bound DERIVATION - stands in place, which is why
+census sec 4 records invariants 13, 14 and 22 as unmoved. The base case still
+fires the Abort Reflex on exhaustion; only the caller moved.
+
 Every other guard on SBSRE is reflex-TRIGGERED: ICA on integrity breach, Anchor
 Collapse past 25 degrees, CSA on saturation. All of them fire on a spike. So a
 high-scar contradiction with a steady compass and an unstrained identity trips
@@ -181,6 +188,30 @@ def test_sbsre_clamp_binds_at_runtime() -> None:
 
     All magnitudes referenced are the Ruling 4 canon set (1/3/5) already pinned
     at the top of this file - nothing here is coined.
+
+        ~~"Ruling 4's entire termination argument is that `loop_limit` enters
+          the loop already bounded to [FLOOR, CEILING] and only ever
+          decreases."~~
+
+    **MIGRATED 2026-08-14 (M3-D retirement), old sentence struck above, every
+    ASSERTION BELOW UNCHANGED.** `M3_D_CENSUS.md` sec 4 for this invariant:
+    *"RETAINED while SBSRE stands (C3) ... At decision-path retirement:
+    Ruling-14 migration, old/new verbatim."*
+
+    THE SUBJECT IS UNMOVED AND SO IS THE TARGET: `clamp` and
+    `compute_loop_limit` are the BOUND DERIVATION (census S1) and they survive
+    the retirement in place, which is why census sec 4 records invariants 13 and
+    22 as UNMOVED too - all three still execute against the same functions.
+
+    WHAT MOVED IS WHERE THE BOUND IS SPENT. There is no `loop_limit` any more:
+    the value this test clamps is now declared at `open_episode` and FIXED
+    there, and the loop that honors it is the caller's. **The episode-open bind
+    - the clamp value actually reaching `open_episode` - is pinned as B1 in
+    `tests/test_m3d_episode_path.py::test_b_the_recorded_bound_is_the_clamp_value`**,
+    which also re-asserts `FLOOR <= bound <= CEILING` on the recorded value. The
+    constitutional twin (the store's `>=` forcing at the bound) is pinned in
+    `tests/test_m3a.py`. This invariant keeps the half it can execute from
+    source: that the derivation itself cannot be reasoned past.
     """
     path = _first_existing(SBSRE_CANDIDATES)
     if path is None:

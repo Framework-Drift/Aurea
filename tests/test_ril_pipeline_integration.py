@@ -37,7 +37,7 @@ def test_collapse_to_scar_to_doctrine_populates_ril_identity_threads():
     # 0.75) without tripping the logic net's paradox path (worst.net != logical_
     # contradiction), so EchoNet returns Verdict.SCARRED. _echonet_resolver reads that
     # verdict as "irreconcilable" on SBSRE's first cycle, so the contradiction chamber
-    # collapses immediately (LoopOutcome.COLLAPSE) and requests a scar - the real,
+    # collapses immediately (the episode path's COLLAPSED disposition; ~~LoopOutcome.COLLAPSE~~ retired M3-D) and requests a scar - the real,
     # un-mocked pipeline path, not a shortcut to one.
     result = aurea.process_input("Honesty is pointless.")
 

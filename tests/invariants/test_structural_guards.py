@@ -54,53 +54,91 @@ def _tree_or_skip(path: Path, why: str):
 # SBSRE — the bound must only ever TIGHTEN
 # =====================================================================
 
-def test_sbsre_bound_can_only_shrink():
-    """Ruling 4's termination proof rests on ONE property: `loop_limit` never increases.
+# =====================================================================
+# INVARIANT 21 — RETIRED SUBSUMED (M3-D, 2026-08-14)
+# =====================================================================
+#
+# `test_sbsre_bound_can_only_shrink` RETIRES. Ruling-14 migration citing
+# `M3_D_CENSUS.md` sec 4's own sentence, verbatim:
+#
+#     "At retirement, SUBSUMED with the record stating why: fixed-at-open +
+#      recorded early termination is strictly stronger than shrink-only
+#      (Ruling M3-D-alpha's semantic note); retires only by Ruling-14
+#      migration citing this census."
+#
+# **IT WAS ALREADY VACUOUS WHEN THIS EDIT WAS MADE, AND THAT IS THE POINT.**
+# The retirement deleted `_tighten` and `loop_limit` from `sbsre.py`, so this
+# scan ran over a file with nothing left to scan and passed for a reason
+# unrelated to its subject - Ruling 35's structurally-vacuous-guard defect. A
+# guard that cannot fail is not a guard, and leaving it green would have been
+# the worse half of retiring the mechanism it watched.
+#
+# **WHAT HOLDS THE PROPERTY NOW, AND WHY IT IS STRONGER.** The old bound was
+# unforgeable only because ONE function was careful: `_tighten` decreased it
+# and nothing else was allowed to touch it, which a `_loosen()` or a `+= 1`
+# could undo at any time - which is exactly what this scan watched for. The
+# episode's bound is FIXED AT OPEN and has NO amend surface at all, and an
+# early stop is a RECORDED shaping act rather than a silently mutated number.
+# Pinned in `tests/test_m3a.py`:
+#     * `test_d_no_amend_surface_exists`          - no amend/extend/rebound/reopen
+#     * `test_d_bound_is_written_once_and_only_at_open`
+#     * `test_e_reached_is_greater_or_equal_not_strictly_greater`
+# and the clamp value reaching `open_episode` is pinned as B1 in
+# `tests/test_m3d_episode_path.py::test_b_the_recorded_bound_is_the_clamp_value`.
+#
+# THE OLD TEST, VERBATIM AND STRUCK:
+#
+#     def test_sbsre_bound_can_only_shrink():
+#         """Ruling 4's termination proof rests on ONE property: `loop_limit` never increases.
+#
+#         The loop guard is a non-increasing bound over a strictly increasing counter. That is the
+#         entire argument for why SBSRE halts. If any code path raises the limit — a `_loosen()`,
+#         an `+= 1`, a reset — the proof is void and the quiet grinder comes back: a high-scar
+#         contradiction with a steady compass and an unstrained identity trips NO reflex and
+#         recurses forever.
+#
+#         The reflex net catches violence. It does not catch patience.
+#         """
+#         sbsre = _module("reflex", "sbsre.py")
+#         tree = _tree_or_skip(sbsre, "SBSRE loop bound")
+#
+#         violations: list[H.Violation] = []
+#
+#         for lineno, name in H.find_defs_matching(tree, ("loosen", "extend_limit", "raise_limit")):
+#             violations.append(
+#                 H.Violation(sbsre, lineno, f"defines `{name}()` — the bound must only shrink")
+#             )
+#
+#         for node in ast.walk(tree):
+#             # `thread.loop_limit += n`
+#             if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Attribute) \
+#                     and node.target.attr == "loop_limit" and isinstance(node.op, ast.Add):
+#                 violations.append(
+#                     H.Violation(sbsre, node.lineno,
+#                                 "INCREASES `loop_limit` (+=) — termination proof void")
+#                 )
+#             # `x.loop_limit = <expr involving +>`
+#             if isinstance(node, ast.Assign):
+#                 for tgt in node.targets:
+#                     if isinstance(tgt, ast.Attribute) and tgt.attr == "loop_limit":
+#                         if isinstance(node.value, ast.BinOp) and isinstance(node.value.op, ast.Add):
+#                             violations.append(
+#                                 H.Violation(sbsre, node.lineno,
+#                                             "assigns an INCREASED `loop_limit` — termination proof void")
+#                             )
+#
+#         assert not violations, H.fail_message(
+#             "RULING 4 — the SBSRE bound is monotonic (may only decrease)",
+#             violations,
+#             "PSI may SHORTEN the leash (`_tighten`). Nothing may lengthen it. If a contradiction "
+#             "needs more cycles than the clamp allows, the correct outcome is the ABORT REFLEX — "
+#             "halt, store the partial thread in CSA, suppress repeats. Carrying a contradiction "
+#             "to exhaustion and setting it down IS the designed behavior, not a failure to fix.",
+#         )
+#
+# Git preserves the executable body at every commit up to this one.
 
-    The loop guard is a non-increasing bound over a strictly increasing counter. That is the
-    entire argument for why SBSRE halts. If any code path raises the limit — a `_loosen()`,
-    an `+= 1`, a reset — the proof is void and the quiet grinder comes back: a high-scar
-    contradiction with a steady compass and an unstrained identity trips NO reflex and
-    recurses forever.
 
-    The reflex net catches violence. It does not catch patience.
-    """
-    sbsre = _module("reflex", "sbsre.py")
-    tree = _tree_or_skip(sbsre, "SBSRE loop bound")
-
-    violations: list[H.Violation] = []
-
-    for lineno, name in H.find_defs_matching(tree, ("loosen", "extend_limit", "raise_limit")):
-        violations.append(
-            H.Violation(sbsre, lineno, f"defines `{name}()` — the bound must only shrink")
-        )
-
-    for node in ast.walk(tree):
-        # `thread.loop_limit += n`
-        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Attribute) \
-                and node.target.attr == "loop_limit" and isinstance(node.op, ast.Add):
-            violations.append(
-                H.Violation(sbsre, node.lineno,
-                            "INCREASES `loop_limit` (+=) — termination proof void")
-            )
-        # `x.loop_limit = <expr involving +>`
-        if isinstance(node, ast.Assign):
-            for tgt in node.targets:
-                if isinstance(tgt, ast.Attribute) and tgt.attr == "loop_limit":
-                    if isinstance(node.value, ast.BinOp) and isinstance(node.value.op, ast.Add):
-                        violations.append(
-                            H.Violation(sbsre, node.lineno,
-                                        "assigns an INCREASED `loop_limit` — termination proof void")
-                        )
-
-    assert not violations, H.fail_message(
-        "RULING 4 — the SBSRE bound is monotonic (may only decrease)",
-        violations,
-        "PSI may SHORTEN the leash (`_tighten`). Nothing may lengthen it. If a contradiction "
-        "needs more cycles than the clamp allows, the correct outcome is the ABORT REFLEX — "
-        "halt, store the partial thread in CSA, suppress repeats. Carrying a contradiction "
-        "to exhaustion and setting it down IS the designed behavior, not a failure to fix.",
-    )
 
 
 def test_sbsre_clamp_survives_corrupt_input():

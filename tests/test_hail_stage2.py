@@ -152,9 +152,12 @@ def _drive_every_reachable_exit():
     """Every mapped exit the live pipeline can actually reach, driven for real.
 
     SBSRE_MIRRORED is absent and that is a FINDING, not an omission:
-    `LoopOutcome.MIRROR` needs `ctx["symbolic_betrayal"]` (sbsre.py:290) and
-    aurea_core's SBSRE context never sets it - nothing in the tree emits that
-    flag. The path is wired so it is correct when a betrayal detector arrives;
+    ~~`LoopOutcome.MIRROR` needs `ctx["symbolic_betrayal"]` (sbsre.py:290)~~
+    MIGRATED 2026-08-14 (M3-D retirement): `LoopOutcome` is DELETED and that
+    line number no longer exists. The mirror branch now lives in
+    `aurea_core._carry_contradiction`, still needs `ctx["symbolic_betrayal"]`,
+    and the context dict there still never sets it - nothing in the tree emits
+    that flag. **THE REACHABILITY FINDING IS UNCHANGED**; only the address is. The path is wired so it is correct when a betrayal detector arrives;
     faking the flag to light it up would be inventing the trigger. Its mapping
     is pinned at the table level instead (see the contract assertions below).
     """
