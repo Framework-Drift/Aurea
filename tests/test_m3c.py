@@ -368,6 +368,39 @@ def test_d_the_fold_is_deterministic_and_restart_invariant(tmp_path):
                    resumed_led) == first, "the profile changed across a restart"
 
 
+def test_d_the_fold_sorts_regardless_of_file_order(tmp_path):
+    """PIN D6b - FOUND BY A SURVIVING MUTANT, and it was a REAL GAP.
+
+    Within ONE ledger, OPEN records appear in MINT order, which IS sorted order
+    - so no fixture built through the API can tell `sorted()` from insertion
+    order, and dropping the sort survived every other pin here. A FILE can carry
+    anything, and the determinism claim is about the RECORDS, not about the luck
+    of how they were appended.
+
+    Hand-written out of id order, exactly as the M3-B precedence fixture is.
+    """
+    path = tmp_path / "obligations.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {"record_type": "open", "obligation_id": "OBL-0003",
+         "created_seq": "SEQ-000003", "source": "s", "target_kind": "doctrine",
+         "target_id": "Doctrine-0", "claim_text": "c3"},
+        {"record_type": "open", "obligation_id": "OBL-0001",
+         "created_seq": "SEQ-000001", "source": "s", "target_kind": "doctrine",
+         "target_id": "Doctrine-0", "claim_text": "c1"},
+        {"record_type": "open", "obligation_id": "OBL-0002",
+         "created_seq": "SEQ-000002", "source": "s", "target_kind": "doctrine",
+         "target_id": "Doctrine-0", "claim_text": "c2"},
+    ]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+    led = ObligationLedger(ledger_path=str(path))
+    log = EpisodeRecord(log_path=str(tmp_path / "episodes.jsonl"))
+    standing = profile(TargetKind.DOCTRINE, "Doctrine-0", log, led)
+    assert standing.obligation_ids == ("OBL-0001", "OBL-0002", "OBL-0003"), (
+        "the fold returned file order rather than a deterministic order")
+
+
 def test_d_an_empty_world_profiles_to_nothing(tmp_path):
     """PIN D7. No records is not an error, and it authorizes nothing."""
     led, log = _world(tmp_path)
