@@ -217,12 +217,24 @@ pytest tests/invariants/ -v
 ```
 
 **Run this before you start and before you finish. Every session. No exceptions.**
-**Baseline as of 2026-07-31: 27 passed, 0 failed, 0 skipped.** Anything less is a regression.
-**Full suite baseline (`pytest tests/`): 1725 passed, 0 xfailed.** ~~1523~~ — the
+**Baseline as of 2026-08-14: 26 passed, 0 failed, 0 skipped.** Anything less is a regression.
+~~27 as of 2026-07-31~~ — **INVARIANT 21 RETIRED SUBSUMED at the M3-D retirement**, the
+first movement off 27 since Ruling 42 Slice 2 and **the first invariant ever retired.**
+It is not a weakening and the distinction is the whole point: `sbsre_bound_can_only_shrink`
+watched a `loop_limit` that no longer exists, so after the deletion it passed over an empty
+file — Ruling 35's structurally-vacuous-guard defect. Its property is held more strongly by
+the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned in
+`tests/test_m3a.py` and `tests/test_m3d_episode_path.py`. The retirement quotes
+`M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
+**§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
+a suite green.**
+**Full suite baseline (`pytest tests/`): 1730 passed, 0 xfailed.** ~~1523~~ ~~1725~~ — the
 M3 pivot's construction passes: **1523 → 1612** (M3-A, the K2/K3 substrate, +89)
 → **1680** (M3-B typed defeaters +39, M3-C standing profiles +28, +1 follow-up)
 → **1707** (M3-D commit 1, the admission seam +27) → **1725** (M3-D commit 2, the
-episode path +18). **Invariants have stood at 27/27 throughout.**
+episode path +18) → **1730** (the M3-D retirement: **−1** for invariant 21 retiring,
+**+6** pins closing the owed slates' survivors). **Invariants stood at 27/27 from
+Ruling 42 Slice 2 until the retirement, which took them to 26** — see §4.
 
 **A SECOND STALE BASELINE, AND IT WAS THE INVARIANT COUNT ITSELF (2026-08-13, M3-D).**
 The M3-D handoff and `M3_D_CENSUS.md` both stated **invariants 39**; the tree measured
