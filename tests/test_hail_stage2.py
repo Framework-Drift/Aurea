@@ -88,7 +88,13 @@ def test_a_gsr_cascade_speaks_no_echo_content_end_to_end():
     and Step 6. No reflex is hand-built and no response is injected.
     """
     core = AureaCore()
-    core.sbsre.resolver = _irreconcilable
+    # MIGRATED 2026-08-14 (M3-D §2.1, Ruling-14 form), old line verbatim:
+    #     ~~core.sbsre.resolver = _irreconcilable~~
+    # THE RULING MOVED THE MECHANISM, so the INJECTION POINT follows it.
+    # The episode-driven chamber calls `self._echonet_resolver` directly;
+    # SBSRE no longer holds the coherence check. **NO ASSERTION MOVED** -
+    # this scenario still drives the same exit for the same reason.
+    core._echonet_resolver = _irreconcilable
     for i in range(120):
         core.scar_core.form_scar(origin=f"seed-{i}", name=f"s{i}",
                                  type="structural", weight=1.0)
@@ -157,7 +163,13 @@ def _drive_every_reachable_exit():
     exits[OutputPath.COLLAPSE_PASSED] = AureaCore().process_input("The sky is blue.")
 
     core = AureaCore()
-    core.sbsre.resolver = _irreconcilable
+    # MIGRATED 2026-08-14 (M3-D §2.1, Ruling-14 form), old line verbatim:
+    #     ~~core.sbsre.resolver = _irreconcilable~~
+    # THE RULING MOVED THE MECHANISM, so the INJECTION POINT follows it.
+    # The episode-driven chamber calls `self._echonet_resolver` directly;
+    # SBSRE no longer holds the coherence check. **NO ASSERTION MOVED** -
+    # this scenario still drives the same exit for the same reason.
+    core._echonet_resolver = _irreconcilable
     exits[OutputPath.COLLAPSE_DETECTED] = core.process_input(CONTRADICTION)
 
     exits[OutputPath.PARADOX_SUSPENDED] = AureaCore().process_input(
@@ -169,7 +181,13 @@ def _drive_every_reachable_exit():
         AureaCore(), 26.0, "Anything at all.")
 
     core = AureaCore()
-    core.sbsre.resolver = _irreconcilable
+    # MIGRATED 2026-08-14 (M3-D §2.1, Ruling-14 form), old line verbatim:
+    #     ~~core.sbsre.resolver = _irreconcilable~~
+    # THE RULING MOVED THE MECHANISM, so the INJECTION POINT follows it.
+    # The episode-driven chamber calls `self._echonet_resolver` directly;
+    # SBSRE no longer holds the coherence check. **NO ASSERTION MOVED** -
+    # this scenario still drives the same exit for the same reason.
+    core._echonet_resolver = _irreconcilable
     for i in range(120):
         core.scar_core.form_scar(origin=f"seed-{i}", name=f"s{i}",
                                  type="structural", weight=1.0)

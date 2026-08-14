@@ -14,9 +14,10 @@ from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 # THE ENUM, NOT A STRING. `countability.name == "COUNTED"` would avoid the import
 # and would be exactly what `Countability`'s docstring refuses: "a state selected
 # by string is a state nothing type-checks."
-from src.filtration.episode_record import EpisodeRecord
+from src.filtration.episode_record import (EpisodeOutcome, EpisodeRecord,
+                                           ShapingActKind)
 from src.filtration.net_evidence import Countability
-from src.filtration.obligation_ledger import ObligationLedger
+from src.filtration.obligation_ledger import ObligationLedger, TargetKind
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
@@ -38,7 +39,8 @@ from src.expansion.nova import (NovaEngine, FermentationStatus, StoreFragment,
                                 UngroundedEchoViolation,
                                 UngroundedFragmentViolation)
 from src.reflex.reflex_grid import ReflexGrid, UngatedReflexViolation
-from src.reflex.sbsre import SBSRE, LoopOutcome
+from src.reflex.sbsre import (SBSRE, ANCHOR_COLLAPSE_DEGREES,
+                              FLOOR as SBSRE_FLOOR, compute_loop_limit)
 from src.identity.compass import ANCHOR_DRIFT_CAP, CompassStabilityEngine
 from src.identity.ril import RIL
 from src.identity.psi import PSI
@@ -1327,42 +1329,32 @@ class AureaCore:
                 # This is the difference between a system that PROCESSES contradiction and one
                 # that BEARS it.
                 self._current_collapse = collapse_result
-                thread = self.sbsre.process(
-                    echo.content,
-                    scar_weight=min(collapse_result.pressure_generated * 2.0, 5.0),
-                    # REAL compass reading (CSE). This replaces a fabricated proxy
-                    # (`1 - system_pressure`) that was a different quantity wearing the
-                    # compass's name, and which silently drove every loop limit to the floor.
-                    # Drift SHORTENS the leash: a system that does not know which way is up
-                    # does not get more cycles to grind on a contradiction.
-                    compass_stability=reading.stability,
-                    reflex_load=1.0 + len(self.reflex_grid.racm.deferred),
-                    compass_drift=reading.drift,
-                    # RULING 76 (2026-08-05): `claim_id` joins `echo_id` here.
-                    # The chamber carries both into its scar REQUEST, so the
-                    # scar records the claim it descends from and the RAW
-                    # pressure that formed it - the two facts that make the
-                    # echo->scar edge a DERIVATION rather than runtime-only
-                    # history (Ruling 75's measured finding, closed).
-                    context={'echo_id': echo.id,
-                             'claim_id': echo.claim_id,
-                             'collapse_pressure': collapse_result.pressure_generated},
-                )
+                # M3-D §2.1 (Ruling M3-D-alpha): the episode-driven chamber.
+                #
+                #     ~~thread = self.sbsre.process(echo.content, ...)~~
+                #
+                # SUPERSEDED IN PLACE. The cadence is identical - same three
+                # inputs, same `compute_loop_limit`, same overrides, same
+                # consequences - and the record moved from an in-memory
+                # recursion thread to a durable obligation + episode. The
+                # Ruling 76 join (`claim_id`, `collapse_pressure`) rides in the
+                # same context dict and reaches the scar REQUEST unchanged.
+                carried = self._carry_contradiction(echo, collapse_result, reading)
                 self.stats['contradictions_carried'] += 1
-                result['sbsre'] = {
-                    'thread_id': thread.id,
-                    'loop_limit': thread.loop_limit,
-                    'cycles_carried': thread.cycles_run,
-                    'outcome': thread.outcome.value,
-                    'reason': thread.reason,
-                    'exhausted': thread.exhausted,
-                }
+                # RENAMED from `result['sbsre']`, and the rename is the honest
+                # move rather than churn: the block no longer describes SBSRE,
+                # and a key that names a retired decision path is false
+                # documentation in the surface consumers read. The census found
+                # ZERO logic readers of the old key, so nothing needed
+                # migrating - a DECLARED movement of the result shape.
+                result['contradiction'] = carried['record']
 
                 # --- What the chamber decided ---
-                if thread.outcome is LoopOutcome.COLLAPSE:
+                if carried['disposition'] is EpisodeOutcome.COLLAPSED:
                     # The contradiction was PROVEN not to resolve. That is not a failure.
-                    # That is a scar. SBSRE requested it; Scar Logic Core wrote it.
-                    scar = self.scar_core.get_scar(thread.scar_id) if thread.scar_id else None
+                    # That is a scar. The episode requested it; Scar Logic Core wrote it.
+                    scar = (self.scar_core.get_scar(carried['scar_id'])
+                            if carried['scar_id'] else None)
                     if scar is not None:
                         result['scar_formed'] = scar
                         self.stats['scars_formed'] += 1
@@ -1379,38 +1371,57 @@ class AureaCore:
                         # is what the identity threads accumulate (Scarline/Origin).
                         self.ril.ingest_scar(scar)
 
-                elif thread.outcome in (LoopOutcome.ABORT, LoopOutcome.ROUTE):
-                    # Carried to exhaustion without resolving. SBSRE has already stored the
-                    # PARTIAL THREAD in CSA - the unfinished shape of the contradiction is
-                    # what survives, and it is not discarded just because it did not close.
-                    entry_id = getattr(thread.csa_entry, 'id', None)
+                elif carried['disposition'] is None:
+                    # DUPLICATE: an obligation for this claim is already
+                    # standing, so no episode opened. The REJECTION RECORD is
+                    # the suppression - durable and legible where SBSRE's
+                    # in-memory `suppressed` set was neither.
                     return self._emit(
                         result, OutputPath.SBSRE_CARRIED,
                         content=(
-                            f"[CARRIED {thread.cycles_run} cycles, unresolved - "
-                            f"partial thread held in CSA: {entry_id}]"),
+                            f"[ALREADY CARRIED - a standing obligation covers "
+                            f"this contradiction: {carried['record']['reason']}]"),
                         collapse_verdict=collapse_result.verdict,
-                        evidence_refs=(echo.id, thread.id),
-                        unresolved=tuple(x for x in (entry_id,) if x),
+                        evidence_refs=(echo.id,),
+                        unresolved=(carried['record']['obligation_id'],),
                     )
 
-                elif thread.outcome is LoopOutcome.MIRROR:
-                    # Whisper Reflex: speaking this would be symbolic betrayal. Reflect it back
-                    # as unclaimed rather than assert something AUREA has not earned.
-                    #
-                    # UNREACHABLE TODAY, and deliberately left that way: MIRROR
-                    # requires ctx["symbolic_betrayal"] (sbsre.py:290) and the
-                    # context dict built above never sets it. Nothing in the
-                    # tree emits that flag. The path is WIRED so it is correct
-                    # the day a betrayal detector arrives; inventing a trigger
-                    # for it here would be faking the condition, not building
-                    # the consumer. Verified unreachable by dump, 2026-07-26.
+                elif carried['mirror']:
                     return self._emit(
                         result, OutputPath.SBSRE_MIRRORED,
                         content=f"[MIRRORED - unclaimed contradiction: {echo.content}]",
                         collapse_verdict=collapse_result.verdict,
                     )
-            
+
+                elif carried['disposition'] in (EpisodeOutcome.SUSPENDED,
+                                                EpisodeOutcome.UNRESOLVED_AT_BOUND):
+                    # Carried without resolving. The PARTIAL SHAPE is held in
+                    # CSA - the unfinished contradiction is what survives, and
+                    # it is not discarded just because it did not close.
+                    entry_id = carried['csa_entry_id']
+                    return self._emit(
+                        result, OutputPath.SBSRE_CARRIED,
+                        content=(
+                            f"[CARRIED {carried['record']['passes']} cycles, "
+                            f"unresolved - partial thread held in CSA: {entry_id}]"),
+                        collapse_verdict=collapse_result.verdict,
+                        evidence_refs=(echo.id, carried['record']['episode_id']),
+                        unresolved=tuple(x for x in (entry_id,) if x),
+                    )
+
+                # Whisper Reflex (the `carried['mirror']` branch above): speaking
+                # this would be symbolic betrayal, so it is reflected back as
+                # unclaimed rather than asserting something AUREA has not earned.
+                #
+                # STILL UNREACHABLE TODAY, and deliberately left that way: the
+                # mirror flag needs `ctx["symbolic_betrayal"]` and the context
+                # dict `_carry_contradiction` builds never sets it. Nothing in
+                # the tree emits that flag. The path is WIRED so it is correct
+                # the day a betrayal detector arrives; inventing a trigger for
+                # it would be faking the condition, not building the consumer.
+                # Verified unreachable by dump 2026-07-26, carried across the
+                # M3-D rewrite unchanged in reachability.
+
             # Step 4: Check for cascade risk
             if self.pressure_monitor.check_cascade_risk():
                 # Trigger GSR for cascade prevention
@@ -1974,6 +1985,250 @@ class AureaCore:
                 'timestamp': datetime.now().isoformat(),
             })
     
+    def _carry_contradiction(self, echo, collapse_result, reading):
+        """THE CONTRADICTION CHAMBER, driven by the episode record (M3-D §2.1).
+
+        Ruling M3-D-alpha. This REPLACES `SBSRE.process` as the decision path and
+        keeps its cadence exactly: the same three inputs derive the same bound
+        through the same `compute_loop_limit`, the same overrides cut the same
+        consideration short, and the same consequences follow. **What changed is
+        WHERE THE RECORD LIVES.** A recursion thread was an in-memory object that
+        died with the process; an episode is a durable, append-only record of
+        what was owed, how deeply it was considered, and how it ended.
+
+        THE BOUND IS FIXED AT OPEN AND THE EARLY STOP IS RECORDED - which is
+        why census §4 subsumes invariant 21 rather than deleting it. PSI used to
+        SHRINK a live loop limit (`_tighten`, monotonically decreasing); the
+        episode's bound is immutable, so strain now ends the consideration
+        EARLY and says so on the record. **Fixed-at-open plus a recorded early
+        termination is strictly stronger than shrink-only**: the old bound was
+        unforgeable only because one function was careful, and the new one
+        cannot be edited at all while the stopping is legible instead of
+        implicit in a number nobody kept.
+
+        **THE PASSES ARE SHAPING ACTS, NOT PRESSURE.** Internal re-consideration
+        is not an L12 pressure class, and recording it as pressure would be
+        weak-pressure farming (K11) - a claim could accumulate "survivals" by
+        being thought about. Consequence, stated as a FACT rather than left as a
+        gap: no PRESSURE_APPLIED record is written here, so the store's `>=`
+        forcing stays dormant on this path (applied count 0 < bound) and the
+        bound is honored by THIS loop's own iteration count. Real pressure
+        records arrive at M3-E. **SURVIVED is therefore unproducible here**, and
+        that is K11 working rather than a hole: nothing survives without an
+        identifiable completed pressure episode.
+        """
+        ctx = {'echo_id': echo.id,
+               'claim_id': echo.claim_id,
+               'collapse_pressure': collapse_result.pressure_generated}
+        scar_weight = min(collapse_result.pressure_generated * 2.0, 5.0)
+        compass_stability = reading.stability
+        compass_drift = reading.drift
+        reflex_load = 1.0 + len(self.reflex_grid.racm.deferred)
+        identity_strain = 0.0
+        doctrine_thread = None
+
+        # ---- 1. ADMIT -------------------------------------------------
+        # The contradiction is owed about the CLAIM that produced it, which is
+        # what §1.2 widened the vocabulary for. `claim_id` is guaranteed here by
+        # Ruling 76's join.
+        admission = self.obligations.admit(
+            source="aurea_core.collapse",
+            target_kind=TargetKind.CLAIM,
+            target_id=echo.claim_id,
+            claim_text=(f"collapse contradiction carried from claim "
+                        f"'{echo.claim_id}': {collapse_result.reason or 'unresolved'}"),
+        )
+        if not admission.admitted:
+            # **THE REJECTION RECORD IS THE SUPPRESSION.** SBSRE kept an
+            # in-memory `suppressed` set of input signatures; a re-entry of a
+            # silenced contradiction was refused by a set that died with the
+            # process and was readable by nobody. The DUPLICATE rejection is
+            # the same refusal made DURABLE and LEGIBLE - it says which
+            # standing obligation already covers this, and it survives a
+            # restart. **A DECLARED BEHAVIORAL MOVEMENT.**
+            return {
+                'record': {
+                    'obligation_id': admission.obligation_id,
+                    'episode_id': None,
+                    'bound': None,
+                    'passes': 0,
+                    'disposition': None,
+                    'admission': admission.outcome.value,
+                    'rejection_kind': admission.rejection_kind.value,
+                    'reason': admission.reason,
+                },
+                'disposition': None,
+                'scar_id': None,
+                'csa_entry_id': None,
+                'mirror': False,
+            }
+
+        # ---- 2. OPEN --------------------------------------------------
+        bound = compute_loop_limit(scar_weight, compass_stability, reflex_load)
+        episode_id = self.episodes.open_episode([admission.obligation_id], bound)
+        self.obligations.mark_episode_opened(admission.obligation_id, episode_id)
+
+        # ---- 3. THE BOUNDED CONSIDERATION -----------------------------
+        # `live_limit` reproduces PSI's shrink EXACTLY (monotonically decreasing,
+        # floor-bounded, never raised) while leaving the episode's recorded
+        # bound untouched. Nothing here can raise it, and it starts clamped, so
+        # termination is structural exactly as Ruling 4 requires.
+        live_limit = bound
+        passes = 0
+        disposition = None
+        reason = ""
+        mirror = False
+        scar_id = None
+        csa_entry_id = None
+        last_scar_weight = scar_weight
+        last_flags: List[str] = []
+
+        while passes < live_limit:
+            index = passes
+            passes += 1
+
+            # The cycle facts SBSRE's CycleTrace carried, verbatim in
+            # derivation. They ride the shaping-act record rather than an
+            # object that dies with the process.
+            proximity = float(ctx.get("scar_proximity", 0.0))
+            pass_scar_weight = scar_weight + (proximity * (index + 1) * 0.1)
+            flags: List[str] = []
+            if identity_strain > 0.5:
+                flags.append("PSI:strained")
+            if compass_drift > ANCHOR_COLLAPSE_DEGREES:
+                flags.append("ANCHOR_COLLAPSE:breach")
+            if float(ctx.get("integrity_breach", 0.0)) > 0.9:
+                flags.append("ICA:breach")
+            if ctx.get("symbolic_betrayal"):
+                flags.append("WHISPER:betrayal")
+            if ctx.get("doctrine_repressure"):
+                flags.append("DRPE:fermentation")
+            identity_survives = identity_strain < 1.0
+            last_scar_weight = pass_scar_weight
+            last_flags = flags
+
+            self.episodes.record_shaping_act(
+                episode_id, ShapingActKind.ATTENTION, "aurea_core.collapse",
+                (f"pass {index}: scar_weight={pass_scar_weight:.4f} "
+                 f"drift={compass_drift:.4f} flags={flags} "
+                 f"identity_survives={identity_survives} "
+                 f"doctrine_thread={doctrine_thread}"))
+
+            # ---- 4. PROTECTIVE INTERRUPTS -----------------------------
+            # They END the consideration early; they never prolong it.
+            interrupt = None
+            if "ICA:breach" in flags:
+                interrupt = "ICA hard abort: structural contradiction exceeds integrity"
+            elif "ANCHOR_COLLAPSE:breach" in flags:
+                interrupt = (f"Anchor Collapse: compass pulls diverge beyond "
+                             f"{ANCHOR_COLLAPSE_DEGREES}")
+            elif "WHISPER:betrayal" in flags:
+                interrupt = ("Whisper Reflex: recursion would produce symbolic "
+                             "betrayal - mirror instead")
+                mirror = True
+            elif not identity_survives:
+                interrupt = "RIL: identity thread did not survive the pass - route to CSA"
+
+            if interrupt is not None:
+                self.episodes.record_shaping_act(
+                    episode_id, ShapingActKind.ESCALATION, "aurea_core.collapse",
+                    f"protective interrupt at pass {index}: {interrupt}")
+                disposition = EpisodeOutcome.SUSPENDED
+                reason = interrupt
+                break
+
+            # PSI: strain does not abort, it SHORTENS - and the shortening is
+            # RECORDED rather than hidden in a mutated bound.
+            if identity_strain > 0.5 and live_limit > SBSRE_FLOOR:
+                live_limit -= 1
+                self.episodes.record_shaping_act(
+                    episode_id, ShapingActKind.ESCALATION, "PSI",
+                    f"identity strain shortened the consideration to {live_limit} "
+                    f"passes (bound {bound} is FIXED and unchanged)")
+
+            # ---- Coherence? Then we are done, and only then. ----------
+            verdict = self._echonet_resolver(echo.content, None)
+            if verdict == "emerge":
+                disposition = EpisodeOutcome.REVISED
+                reason = "symbolic coherence found"
+                break
+            if verdict == "irreconcilable":
+                disposition = EpisodeOutcome.COLLAPSED
+                reason = "contradiction irreconcilable - collapse"
+                break
+
+        if disposition is None:
+            # BASE CASE - the bound was reached without resolution. The quiet
+            # grinder dies here, and the record says WHY it stopped rather than
+            # leaving an exhausted thread indistinguishable from a settled one.
+            disposition = EpisodeOutcome.UNRESOLVED_AT_BOUND
+            reason = "loop limit exhausted"
+
+        # ---- 5. CONSEQUENCES ------------------------------------------
+        if disposition is EpisodeOutcome.COLLAPSED:
+            # Ruling 1: the episode machinery REQUESTS; the owner writes. The
+            # Ruling 76 passthrough is VERBATIM - `claim_id` and
+            # `origin_pressure` are neither coined nor derived here.
+            formed = self.scar_core.form_scar(
+                origin=f"EPISODE/{episode_id}",
+                type="recursive_contradiction",
+                weight=last_scar_weight,
+                description=(f"Contradiction carried {passes} cycles without "
+                             f"resolution"),
+                linked_doctrines=[doctrine_thread] if doctrine_thread else [],
+                claim_id=ctx.get("claim_id"),
+                origin_pressure=ctx.get("collapse_pressure"),
+            )
+            scar_id = getattr(formed, "id", None)
+        elif disposition in (EpisodeOutcome.SUSPENDED,
+                             EpisodeOutcome.UNRESOLVED_AT_BOUND):
+            # The abort-class consequences SURVIVE: the partial shape is held
+            # in CSA, the contradiction keeps fermenting in Nova rather than
+            # being declared closed, and the Grid still sources `sbsre_abort`
+            # for RACM to arbitrate. **That fire needs no separate admission -
+            # the obligation already exists** (§1.3's ruling).
+            # NO `claim_id` HERE, and its absence is a RULING rather than an
+            # oversight: CLAUDE.md's Ruling 84 row records that CSA and the
+            # Veiled Thread take no `claim_id` today - only the Black Sphere's
+            # pipeline door does - and that widening them "is the state a future
+            # ruling would widen, not a gap this one left." Passing one raises
+            # `TypeError`, which is how this was caught: by running it.
+            entry = self.csa.suspend(
+                content=str(echo.content),
+                pressure=1.0 if disposition is EpisodeOutcome.UNRESOLVED_AT_BOUND else 0.9,
+                reason=f"Recursive Overload - {reason} after {passes} cycles",
+            )
+            csa_entry_id = getattr(entry, "id", None)
+            if hasattr(self.nova, "fork_echo"):
+                self.nova.fork_echo({"origin": episode_id,
+                                     "contradiction": echo.content,
+                                     "cycles_carried": passes})
+            self.reflex_grid.evaluate_pressure(
+                source_module="SBSRE",
+                pressure_type="sbsre_abort",
+                pressure_level=1.0,
+                metadata={"episode_id": episode_id, "reason": reason,
+                          "cycles": passes},
+            )
+
+        self.episodes.disposition(episode_id, disposition)
+        return {
+            'record': {
+                'obligation_id': admission.obligation_id,
+                'episode_id': episode_id,
+                'bound': bound,
+                'passes': passes,
+                'disposition': disposition.value,
+                'admission': admission.outcome.value,
+                'reason': reason,
+                'exhausted': disposition is EpisodeOutcome.UNRESOLVED_AT_BOUND,
+            },
+            'disposition': disposition,
+            'scar_id': scar_id,
+            'csa_entry_id': csa_entry_id,
+            'mirror': mirror,
+        }
+
     def _echonet_resolver(self, contradiction, cycle):
         """SBSRE's coherence check. Delegated to EchoNet's VERDICT - never guessed.
 
