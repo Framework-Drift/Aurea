@@ -218,7 +218,23 @@ pytest tests/invariants/ -v
 
 **Run this before you start and before you finish. Every session. No exceptions.**
 **Baseline as of 2026-07-31: 27 passed, 0 failed, 0 skipped.** Anything less is a regression.
-**Full suite baseline (`pytest tests/`): 1523 passed, 0 xfailed.**
+**Full suite baseline (`pytest tests/`): 1725 passed, 0 xfailed.** ~~1523~~ — the
+M3 pivot's construction passes: **1523 → 1612** (M3-A, the K2/K3 substrate, +89)
+→ **1680** (M3-B typed defeaters +39, M3-C standing profiles +28, +1 follow-up)
+→ **1707** (M3-D commit 1, the admission seam +27) → **1725** (M3-D commit 2, the
+episode path +18). **Invariants have stood at 27/27 throughout.**
+
+**A SECOND STALE BASELINE, AND IT WAS THE INVARIANT COUNT ITSELF (2026-08-13, M3-D).**
+The M3-D handoff and `M3_D_CENSUS.md` both stated **invariants 39**; the tree measured
+**27**, and 27 is right. The census's own line shows how it happened — *"M3-A's +12
+raised the live total to 39"* — but M3-A added its 89 pins to `tests/test_m3a.py`, not
+to `tests/invariants/`. **`tests/invariants/` IS THE INVARIANT LEDGER; PINS ARE PINS**,
+and counting constitutional pins as invariants inflates the one number §4 exists to
+make un-fudgeable. The handoff's own text had already caught this and said so; the
+measurement confirmed it. **The suite figure in that same handoff (1568) was likewise
+stale against a measured 1680 at the same commit** — the hash matched exactly, so only
+the counts had drifted. *A baseline that reads high trains the next session to explain
+away a surplus, which is the one reading that makes the number worthless.*
 
 **A STALE BASELINE WAS FOUND AND CORRECTED ON THE RECORD (2026-08-11, Batch 84).** This line and §1's read **1500** while the tree measured **1502** at `5d9483d` — the Batch 80 FOLLOW-UP commit ("close the two gaps the mutation slate found") added exactly two pins and did not update either. Small, and worth naming, because **a stale baseline makes the next session's mandatory before-you-start run report an unexplained surplus**, which is the one reading that trains an agent to ignore the number. Batch 84 is therefore `1502 + 21 = 1523`, not `1500 + 21`.
 
