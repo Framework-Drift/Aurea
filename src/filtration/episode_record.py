@@ -101,6 +101,8 @@ __all__ = [
     "ShapingActKind",
     "PressureClass",
     "EpisodeOutcome",
+    "DefeaterKind",
+    "REQUIRED_INTERPRETATION_FIELDS",
     "LEGAL_OUTCOMES_AT_BOUND",
     "EpisodeRecord",
     "EpisodeLogUnreadable",
@@ -110,6 +112,9 @@ __all__ = [
     "SurvivalWithoutPressure",
     "EpisodeAlreadyDisposed",
     "UnknownEpisode",
+    "MalformedInterpretation",
+    "PrecedenceProofFailed",
+    "UnknownDefeater",
 ]
 
 
@@ -166,6 +171,31 @@ class UnknownEpisode(Exception):
     """No EPISODE_OPENED record for this id in this log."""
 
 
+class MalformedInterpretation(Exception):
+    """A defeater registered without the fields its KIND requires.
+
+    Distinct from `ClosedVocabularyViolation` on purpose (Ruling 29): that one
+    means the KIND is not a member, this one means the kind is fine and its
+    INTERPRETATION is incomplete. One type for both would make "you named a
+    defeater class that does not exist" indistinguishable from "you named a
+    real one and did not say what it means."
+    """
+
+
+class PrecedenceProofFailed(Exception):
+    """The prediction's criteria do not PREDATE its outcome on the record.
+
+    A defeater built on a prediction whose criteria cannot be shown to precede
+    its outcome is a defeater built on a prediction that may have been written
+    to fit what happened - which is the exact thing Ruling 61 exists to make
+    unwritable, arriving one layer up as an unprovable citation.
+    """
+
+
+class UnknownDefeater(Exception):
+    """A `defeater_ref` naming no DEFEATER_REGISTERED record on this episode."""
+
+
 # =====================================================================
 # VOCABULARY - v1, GOVERNED CONTENT
 # =====================================================================
@@ -175,6 +205,7 @@ class EpisodeRecordType(str, Enum):
     SHAPING_ACT = "shaping_act"
     PRESSURE_APPLIED = "pressure_applied"
     PRESSURE_DEBT = "pressure_debt"
+    DEFEATER_REGISTERED = "defeater_registered"
     DISPOSITION = "disposition"
 
 
@@ -211,6 +242,56 @@ class EpisodeOutcome(str, Enum):
     CARRIED_CONTRADICTION = "carried_contradiction"
 
 
+class DefeaterKind(str, Enum):
+    """M3-B: WHAT KIND OF THING DEFEATS A CLAIM. Closed v1, governed content.
+
+    **INTERPRETATION IS FIXED AT REGISTRATION**, which is this vocabulary's
+    whole point. A defeater whose meaning is settled after the outcome is
+    known is a defeater shaped to the outcome - Ruling 61's law (a prediction
+    that was not committed before its outcome is not a prediction) applied to
+    the thing that does the defeating.
+    """
+    FAILED_PRECOMMITTED_PREDICTION = "failed_precommitted_prediction"
+    REPRODUCED_COUNTEREXAMPLE = "reproduced_counterexample"
+    PRIMARY_SOURCE_CONTRADICTION = "primary_source_contradiction"
+    DEMONSTRATED_INCOMPATIBILITY = "demonstrated_incompatibility"
+
+
+# WHAT EACH KIND MUST SAY ABOUT ITSELF, validated AT REGISTRATION - before any
+# outcome exists to shape it. A key that is PRESENT but null records ABSENT
+# honestly (Ruling 58's three states); a key that is MISSING is malformed,
+# because "nobody was asked" and "asked and there is none" are different facts.
+REQUIRED_INTERPRETATION_FIELDS = {
+    DefeaterKind.FAILED_PRECOMMITTED_PREDICTION: ("prediction_id",),
+    DefeaterKind.REPRODUCED_COUNTEREXAMPLE: ("reproduction_recipe",
+                                             "observed_result"),
+    DefeaterKind.PRIMARY_SOURCE_CONTRADICTION: ("source_ref", "fetch_record"),
+    DefeaterKind.DEMONSTRATED_INCOMPATIBILITY: ("derivation_text",
+                                                "standing_refs"),
+}
+
+# Fields that must carry a real non-empty string, not merely be addressed. The
+# rest may be explicitly null and are recorded as absent.
+#
+# `fetch_record` IS DELIBERATELY NOT HERE - BOOTSTRAP-SHAPED, era honesty
+# FORWARD. The M4 acquisition boundary will populate it from real acquisition
+# records; until that exists a registration carries what exists and **absent
+# stays absent**. Requiring it now would force every pre-M4 caller to invent an
+# acquisition record, which is the fabrication class this house has closed
+# twice (Rulings 58 and 70).
+SUBSTANTIVE_INTERPRETATION_FIELDS = {
+    DefeaterKind.FAILED_PRECOMMITTED_PREDICTION: ("prediction_id",),
+    DefeaterKind.REPRODUCED_COUNTEREXAMPLE: ("reproduction_recipe",
+                                             "observed_result"),
+    DefeaterKind.PRIMARY_SOURCE_CONTRADICTION: ("source_ref",),
+    DefeaterKind.DEMONSTRATED_INCOMPATIBILITY: ("derivation_text",),
+}
+
+# DEMONSTRATED_INCOMPATIBILITY names EXACTLY TWO standings - an incompatibility
+# is a relation between two things, and one or three of them is not one.
+INCOMPATIBILITY_STANDING_COUNT = 2
+
+
 # THE COUNTING RULE'S LEGAL SET. At bound, these three and nothing else.
 LEGAL_OUTCOMES_AT_BOUND: frozenset = frozenset({
     EpisodeOutcome.UNRESOLVED_AT_BOUND,
@@ -243,16 +324,26 @@ class EpisodeRecord:
     """Append-only episode log. One file, typed records, never rewritten."""
 
     ID_PREFIX = "EPI-"
+    DEFEATER_PREFIX = "DEF-"
 
     def __init__(
         self,
         log_path: str = "data/runtime/episodes/episodes.jsonl",
         peer_paths: Optional[Sequence[str]] = None,
+        prediction_ledger: Any = None,
     ):
         # Ruling 31 / Ruling 39: an `__init__` DEFAULT under `data/runtime/`.
         self.log_path = Path(log_path)
         self.peer_paths: Tuple[Path, ...] = tuple(
             Path(p) for p in (peer_paths or ()))
+        # M3-B: a READ-ONLY handle, DUCK-TYPED AND NEVER IMPORTED. Not importing
+        # `PredictionLedger` keeps this module's import set stdlib + utils + the
+        # shared clock, so the enforcement-by-scope pins stay exact - and the
+        # handle is used for `read_all` ONLY. **`commit` and `resolve` are
+        # AST-forbidden here**, the same guard M3-A put on `retrieve` after
+        # finding it was not a read: a store handed to a reader for one question
+        # is a store it can be talked into answering others with.
+        self.prediction_ledger = prediction_ledger
         self.entries: List[Dict[str, Any]] = []
         # RULING 69: THERE IS NO `self._seq`.
 
@@ -369,6 +460,166 @@ class EpisodeRecord:
                         {"defeater": defeater, "incurred_by": pclass.value})
         return seq
 
+    def register_defeater(self, episode_id: str, kind: Any,
+                          interpretation: Any) -> str:
+        """M3-B: register a TYPED defeater, INTERPRETED AT REGISTRATION.
+
+        **A DEFEATER ALONE OBLIGATES NOTHING.** Registration writes its own
+        record and does nothing else: no disposition, no status change, no
+        write anywhere else. Cognition PRESSURES and evidence DISPOSES, and
+        both are acts on the record - so a registered defeater becomes a
+        disposition only when the disposition door is invoked with it.
+
+        THE INTERPRETATION IS FIXED HERE AND HAS NO AMEND SURFACE. Every field
+        the kind requires is validated PRESENT before any outcome exists to
+        shape it - which is the whole reason the validation lives at
+        registration rather than at disposition.
+        """
+        self._require_open(episode_id)
+        defeater_kind = self._member(DefeaterKind, kind, "defeater kind")
+        if not isinstance(interpretation, dict):
+            raise MalformedInterpretation(
+                f"a {defeater_kind.value} defeater's interpretation must be a "
+                f"mapping of its required fields; got "
+                f"{type(interpretation).__name__}.")
+
+        recorded = dict(interpretation)
+        required = REQUIRED_INTERPRETATION_FIELDS[defeater_kind]
+        missing = [name for name in required if name not in recorded]
+        if missing:
+            raise MalformedInterpretation(
+                f"a {defeater_kind.value} defeater requires "
+                f"{list(required)}; missing {missing}. A key that is PRESENT "
+                f"but null records ABSENT honestly - a key that is MISSING "
+                f"means nobody was asked, and those are different facts.")
+
+        for name in SUBSTANTIVE_INTERPRETATION_FIELDS[defeater_kind]:
+            value = recorded.get(name)
+            if not isinstance(value, str) or not value.strip():
+                raise MalformedInterpretation(
+                    f"a {defeater_kind.value} defeater's `{name}` must be a "
+                    f"non-empty string; got {value!r}.")
+
+        if defeater_kind is DefeaterKind.DEMONSTRATED_INCOMPATIBILITY:
+            refs = _ids(recorded.get("standing_refs"), "standing_refs")
+            if len(set(refs)) != INCOMPATIBILITY_STANDING_COUNT:
+                raise MalformedInterpretation(
+                    f"a demonstrated incompatibility names EXACTLY "
+                    f"{INCOMPATIBILITY_STANDING_COUNT} DISTINCT standings - an "
+                    f"incompatibility is a relation between two things, and one "
+                    f"or three of them is not one; got {list(refs)}.")
+            recorded["standing_refs"] = list(refs)
+
+        if defeater_kind is DefeaterKind.FAILED_PRECOMMITTED_PREDICTION:
+            recorded.update(self._precommitment_proof(recorded["prediction_id"]))
+
+        with mint_lock(self.log_path):
+            seq = derive_max_ordinal(self.log_path, self.DEFEATER_PREFIX)
+            if seq is None:
+                raise EpisodeLogUnreadable(
+                    f"the episode log at '{self.log_path}' exists and cannot be "
+                    f"read, so the next {self.DEFEATER_PREFIX} ordinal is "
+                    f"UNKNOWN.")
+            defeater_id = f"{self.DEFEATER_PREFIX}{seq + 1:04d}"
+            clock = mint_seq_token(self._clock_paths())
+            self._append({
+                "record_type": EpisodeRecordType.DEFEATER_REGISTERED.value,
+                "episode_id": episode_id,
+                "defeater_id": defeater_id,
+                "seq": clock,
+                "wall": datetime.now().isoformat(),
+                "defeater_kind": defeater_kind.value,
+                "interpretation": recorded,
+            })
+        return defeater_id
+
+    def _precommitment_proof(self, prediction_id: Any) -> Dict[str, Any]:
+        """THE PRECEDENCE PROOF - the premium evidence engine earning its keep.
+
+        **THE PREDICTION LEDGER RECORDS NO ORDINAL, AND THE PROOF IS BUILT ON
+        WHAT IT DOES RECORD.** A `PredictionCommitment` carries `prediction_id`
+        and a wall-clock `committed_at`; a `PredictionResolution` carries a
+        REFERENCE plus a wall-clock `resolved_at`. There is no logical-time
+        field on either - the `SEQ-` clock is this slice's, on obligations and
+        episodes, and it was never stamped on a `PRD-` record.
+
+        So precedence is read from **APPEND ORDER**, which is the ledger's own
+        recorded fact and the structural heart of Ruling 61: the resolution is a
+        SEPARATE APPEND and the commitment line was written before it, so the
+        file reads as a history rather than a state. **The wall clock is NOT
+        used**, and not merely as a preference - M3-A pinned that no logic path
+        reads a clock, and a proof of precedence resting on `resolved_at` would
+        be a timestamp join in the one place that must not have one.
+
+        Ruling 61 already makes the ordinary path unwritable in the wrong order
+        (`resolve` refuses an unknown id). This proves it from the RECORD rather
+        than trusting it from the writer, because the file outlives the code
+        that wrote it and a hand-edited or torn ledger can carry anything.
+        """
+        if self.prediction_ledger is None:
+            raise MalformedInterpretation(
+                f"a failed_precommitted_prediction defeater cites "
+                f"'{prediction_id}', and no prediction ledger was supplied to "
+                f"resolve it against. An unresolvable citation is not evidence; "
+                f"supply the ledger or register a different kind of defeater.")
+
+        commitment_index: Optional[int] = None
+        resolution_index: Optional[int] = None
+        outcome: Any = None
+        criterion: Any = None
+        commitment: Any = None
+        # DUCK-TYPED on purpose (see `__init__`): a resolution carries an
+        # `outcome`, a commitment carries an `expected_result`.
+        for index, entry in enumerate(self.prediction_ledger.read_all()):
+            if getattr(entry, "prediction_id", None) != prediction_id:
+                continue
+            if hasattr(entry, "outcome"):
+                if resolution_index is None:
+                    resolution_index = index
+                    outcome = getattr(entry.outcome, "value", entry.outcome)
+                    criterion = entry.criterion
+            elif commitment_index is None:
+                commitment_index = index
+                commitment = entry
+
+        if commitment_index is None:
+            raise MalformedInterpretation(
+                f"no commitment '{prediction_id}' is recorded in the supplied "
+                f"prediction ledger. A defeater cannot cite a prediction that "
+                f"was never made.")
+        if resolution_index is None:
+            raise PrecedenceProofFailed(
+                f"'{prediction_id}' carries NO resolution, so there is no "
+                f"outcome for its criteria to predate. An unresolved prediction "
+                f"has not failed - it has not been settled.")
+        if commitment_index >= resolution_index:
+            raise PrecedenceProofFailed(
+                f"'{prediction_id}' has its resolution at append position "
+                f"{resolution_index} and its commitment at {commitment_index}, "
+                f"so the criteria DO NOT PREDATE the outcome on the record. "
+                f"Criteria written after the result they judge are criteria "
+                f"shaped to it, and this defeater cannot rest on them.")
+
+        # COPIED VERBATIM FROM THE LEDGER RECORD, not restated by the caller.
+        # The resolution names WHICH criterion it met; the value copied is the
+        # one fixed at COMMIT time, which is the fact worth carrying.
+        criteria_field = commitment.criterion(criterion)
+        return {
+            "resolution_criteria": {"criterion": criterion,
+                                    "recorded": criteria_field.as_dict()},
+            "recorded_outcome": outcome,
+            "precedence_proof": {"commitment_index": commitment_index,
+                                 "resolution_index": resolution_index,
+                                 "basis": "prediction_ledger_append_order"},
+        }
+
+    def defeaters(self, episode_id: str) -> Tuple[Dict[str, Any], ...]:
+        """Every defeater registered on this episode, in append order."""
+        return tuple(record for record in self.read_all()
+                     if record.get("episode_id") == episode_id
+                     and record.get("record_type")
+                     == EpisodeRecordType.DEFEATER_REGISTERED.value)
+
     def disposition(self, episode_id: str, outcome: Any,
                     defeater_ref: Optional[str] = None) -> str:
         """Settle the episode. ONE per episode, ever.
@@ -401,6 +652,20 @@ class EpisodeRecord:
                     f"'{EpisodeOutcome.CARRIED_CONTRADICTION.value}'. Running "
                     f"out of room is not the same as withstanding testing, and "
                     f"this record must be able to tell them apart later.")
+
+        # M3-B: a cited defeater must RESOLVE, and to THIS episode's own
+        # register. A dangling citation on a permanent disposition is worse
+        # than no citation, because the record reads as though the reasoning
+        # was grounded and nothing can afterwards say what it pointed at.
+        if defeater_ref is not None:
+            known = {record.get("defeater_id")
+                     for record in self.defeaters(episode_id)}
+            if defeater_ref not in known:
+                raise UnknownDefeater(
+                    f"'{defeater_ref}' is not a defeater registered on "
+                    f"'{episode_id}'. Registered here: {sorted(k for k in known if k)}. "
+                    f"A disposition may cite only a defeater whose "
+                    f"interpretation was fixed on this episode before it.")
 
         if result is EpisodeOutcome.SURVIVED and applied == 0:
             raise SurvivalWithoutPressure(
