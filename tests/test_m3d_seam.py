@@ -465,3 +465,41 @@ def test_e_the_core_holds_no_scheduler_for_either_store():
                 assert parents == [], (
                     f"an episode door is driven from a `while` loop at line "
                     f"{node.lineno} - the substrate never runs itself")
+
+
+# =====================================================================
+# F. GAPS FOUND BY THE MUTATION SLATE (M3-D follow-up)
+# =====================================================================
+
+def test_f_an_unplaceable_trigger_is_refused_before_the_arithmetic():
+    """PIN F1 - FOUND BY SURVIVOR C1-09, and it was a REAL GAP.
+
+    C5 above drives a no-cycle trigger against events that ALSO carry no cycle,
+    so the per-event `isinstance` filter empties the list and the function
+    returns False for a reason unrelated to the guard under test. Deleting the
+    guard therefore survived. The configuration that separates them is a
+    no-cycle TRIGGER against events that DO carry cycles - where the missing
+    guard makes `None - int` raise `TypeError` inside a protective reflex.
+    """
+    gsr = GSR()
+    for cycle in range(4):
+        gsr.cascade_events.append({"cycle": cycle, "pressure": 0.9})
+    unplaceable = ReflexTrigger(reflex_id="GSR", trigger_type="cascade",
+                                pressure_level=0.9, source_module="t",
+                                metadata={})
+    assert gsr.detect_cascade(unplaceable) is False, (
+        "an unplaceable trigger must report NO detectable cascade - and it "
+        "must not raise inside a protective reflex to do it")
+
+
+def test_f_the_surviving_status_surface_reports_the_clamp():
+    """PIN F2 - FOUND BY SURVIVOR R-03. The retirement narrowed `status()` to
+    the one thing still true; nothing asserted it still says anything."""
+    from src.reflex.sbsre import BASELINE, CEILING, FLOOR, SBSRE
+    status = SBSRE().status()
+    assert status == {"clamp": {"baseline": BASELINE, "floor": FLOOR,
+                                "ceiling": CEILING}}
+    for gone in ("threads_run", "suppressed_patterns", "outcomes"):
+        assert gone not in status, (
+            f"`{gone}` came back - its backing state is deleted, so it could "
+            f"only report a permanent zero about machinery that no longer runs")

@@ -352,3 +352,129 @@ def test_e_the_chamber_holds_no_loop_over_a_store_door():
                     assert attr not in ("open_episode", "disposition", "admit"), (
                         f"line {sub.lineno}: `{attr}` is driven from a loop - "
                         f"an episode is opened once and disposed once")
+
+
+# =====================================================================
+# F. GAPS FOUND BY THE MUTATION SLATE (M3-D follow-up)
+# =====================================================================
+
+def _captured(core, claim=CONTRADICTION):
+    """Run one pass and keep the arguments the chamber was handed."""
+    box = {}
+    original = core._carry_contradiction
+
+    def _capture(echo, collapse_result, reading):
+        box.update(echo=echo, collapse_result=collapse_result, reading=reading)
+        return original(echo, collapse_result, reading)
+
+    core._carry_contradiction = _capture
+    core.process_input(claim)
+    assert box, "the chamber was never reached"
+    return original, box
+
+
+def test_f_the_bound_equals_the_clamp_of_this_pass_own_inputs():
+    """PIN F1 - FOUND BY SURVIVOR C2-02, and it was a REAL GAP.
+
+    B1 asserted only `FLOOR <= bound <= CEILING`, so replacing the derivation
+    with the literal `5` passed - 5 IS the ceiling. The bound must equal
+    `compute_loop_limit` applied to THIS pass's own three inputs, which is the
+    binding census §4 names for invariant 14.
+    """
+    from src.reflex.sbsre import compute_loop_limit
+    core = AureaCore()
+    _, box = _captured(core)
+    expected = compute_loop_limit(
+        min(box["collapse_result"].pressure_generated * 2.0, 5.0),
+        box["reading"].stability,
+        1.0 + len(core.reflex_grid.racm.deferred))
+    opened = [r for r in core.episodes.read_all()
+              if r["record_type"] == EpisodeRecordType.EPISODE_OPENED.value][0]
+    assert opened["bound"] == expected, (
+        "the recorded bound is not the clamp of this pass's own inputs - the "
+        "derivation was bypassed")
+
+
+def test_f_the_episode_is_actually_disposed_in_the_store():
+    """PIN F2 - FOUND BY SURVIVOR C2-08, a REAL GAP.
+
+    C1 asserted the disposition on the RETURNED dict, which is set whether or
+    not the store call happened - so deleting `self.episodes.disposition(...)`
+    survived. An episode with no DISPOSITION record derives as still OPEN
+    forever, which is precisely the crash-honesty state M3-A built the
+    derivation for, arriving here as a lie about a pass that finished.
+    """
+    core = AureaCore()
+    result = core.process_input(CONTRADICTION)
+    episode = _episode_of(core, result)
+    recorded = [r for r in core.episodes.read_all()
+                if r["episode_id"] == episode
+                and r["record_type"] == EpisodeRecordType.DISPOSITION.value]
+    assert len(recorded) == 1
+    assert recorded[0]["outcome"] == result["contradiction"]["disposition"]
+
+
+def test_f_a_refused_admission_opens_no_episode():
+    """PIN F3 - FOUND BY SURVIVOR C2-09, and forcing it SHARPENED D1's finding.
+
+    **THE DUPLICATE BRANCH IS DOUBLY UNREACHABLE THROUGH THE CHAMBER**, and the
+    second reason was found by writing this pin rather than by reasoning. D1
+    records the first: claim ids are unique per perception, so two identical
+    texts are two targets. The second is that every admission here is
+    immediately followed by `mark_episode_opened`, which takes the obligation
+    OUT of the standing set - and the duplicate check consults exactly that set.
+    So even a re-carry of the SAME echo is admitted, because the first
+    obligation is no longer standing by the time the second arrives.
+
+    Neither is a defect in the ledger: `open_items()` folding out worked
+    obligations is M3-A's ruled behaviour, and DUPLICATE is meant to catch a
+    claim owed and WAITING. It does mean the suppression SBSRE used to perform
+    has no successor on this path, which is the movement D1 declares.
+
+    Driven by planting a genuine standing duplicate first - the only
+    configuration that reaches the branch at all.
+    """
+    core = AureaCore()
+    original, box = _captured(core)
+    claim_id = box["echo"].claim_id
+    reason = box["collapse_result"].reason or "unresolved"
+    planted = core.obligations.admit(
+        source="aurea_core.collapse", target_kind=TargetKind.CLAIM,
+        target_id=claim_id,
+        claim_text=(f"collapse contradiction carried from claim "
+                    f"'{claim_id}': {reason}"))
+    assert planted.admitted, "the plant itself was refused - fixture is wrong"
+    episodes_before = len(core.episodes.read_all())
+
+    again = original(box["echo"], box["collapse_result"], box["reading"])
+    assert again["disposition"] is None, "the duplicate was admitted"
+    assert again["record"]["rejection_kind"] == "duplicate"
+    assert again["record"]["episode_id"] is None
+    assert len(core.episodes.read_all()) == episodes_before, (
+        "a refused admission opened an episode anyway")
+
+
+def test_f_the_strain_input_is_constant_and_the_shrink_branch_is_dead():
+    """PIN F4 - SURVIVOR C2-11, EQUIVALENT TODAY, AND THE FINDING IS THE POINT.
+
+    Inverting the PSI shrink to a LENGTHEN survived every pin, because
+    `identity_strain` is a hardcoded `0.0` in `_carry_contradiction`, so the
+    branch never executes.
+
+    **THIS IS PRE-EXISTING, NOT INTRODUCED BY THE REWRITE.** `aurea_core` never
+    passed `identity_strain` to `SBSRE.process` either - it took the parameter's
+    `0.0` default - so PSI tightening has never fired on the wired path. The
+    rewrite preserved a branch that was already dead and inherited its
+    deadness exactly.
+
+    Pinned as a FACT rather than repaired: wiring a real strain source is a
+    decision with an owner, and inventing one here would be faking a trigger.
+    **The day it is wired this pin reddens**, and whoever wires it must then
+    confirm the shrink direction - which is the half census §4 says is
+    subsumed by fixed-at-open, and which no live input currently exercises.
+    """
+    source = CORE_SRC.read_text(encoding="utf-8")
+    assert "identity_strain = 0.0" in source, (
+        "identity strain became a real input - the PSI shrink branch is live "
+        "now, so assert its DIRECTION (it may only ever shorten) rather than "
+        "its deadness")
