@@ -544,7 +544,17 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     """
     from scripts.soak import _injection_table
     class_attrs, init_defaults = _injection_table()
-    assert len(class_attrs) + len(init_defaults) == 29
+    #
+    # ~~assert len(class_attrs) + len(init_defaults) == 29~~
+    #
+    # MIGRATED 2026-08-13 (M3-A), old text kept verbatim above. **THE SUBJECT OF
+    # THIS PIN IS UNCHANGED AND IS ASSERTED BELOW**: the divergence log is still
+    # registered, still at its ruled relative path. What moved is the TABLE it
+    # counts - M3-A registered the obligation ledger and the episode record, its
+    # own two ruled movements (29 -> 31). The total is kept exact rather than
+    # relaxed to `>=`, because a `>=` would absorb an UNRULED movement silently,
+    # which is the whole thing this count exists to prevent.
+    assert len(class_attrs) + len(init_defaults) == 31
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

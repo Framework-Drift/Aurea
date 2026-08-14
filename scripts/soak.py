@@ -113,6 +113,8 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.goals.goal_activation import ActivationLayer
     from src.goals.goal_arbitration import GoalArbiter
     from src.goals.goal_ledger import GoalLedger
+    from src.filtration.episode_record import EpisodeRecord
+    from src.filtration.obligation_ledger import ObligationLedger
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -186,6 +188,12 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         (Codex, "runtime_path", "doctrines.json"),
         (ScarLogicCore, "runtime_path", "scars.json"),
         (EchoMemory, "runtime_path", "echoes.jsonl"),
+        # M3-A (kernels K2/K3/K11) - the pivot's first two Kernel stores. Both
+        # are SUBSTRATE with zero internal callers, so a soak must show ZERO
+        # lines from either: nothing in the pipeline opens an obligation or an
+        # episode, and a line appearing here would itself be the finding.
+        (ObligationLedger, "ledger_path", "obligations/obligations.jsonl"),
+        (EpisodeRecord, "log_path", "episodes/episodes.jsonl"),
     ]
     return class_attrs, init_defaults
 

@@ -450,8 +450,18 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # The assertion is unchanged in kind and still exact: a count is what makes
     # the verdict mean something, and a `>=` here would have absorbed the
     # movement silently instead of forcing this edit.
-    assert audit["configured_paths"] == 29
-    assert first_run["isolation"]["configured_paths"] == 29
+    #
+    # ~~assert audit["configured_paths"] == 29~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 29~~
+    #
+    # MIGRATED AGAIN 2026-08-13 (M3-A), old text kept verbatim above. The
+    # obligation ledger and the episode record are the TWO ruled table movements
+    # of that pass (29 -> 31), declared in its handoff for the same reason: any
+    # OTHER movement is a STOP. Both stores are substrate with zero internal
+    # callers, so a soak must still show ZERO lines from either - the count moves
+    # because the paths are REGISTERED, not because anything writes them.
+    assert audit["configured_paths"] == 31
+    assert first_run["isolation"]["configured_paths"] == 31
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1154,9 +1164,16 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # this assertion is what made that edit mandatory rather than optional. The
     # test's SUBJECT is unchanged: the EVALUATION INSTRUMENT still registers no
     # store of its own; what moved is the table it counts, by another ruling.
+    #
+    # ~~assert len(class_attrs) + len(init_defaults) == 29~~
+    #
+    # MIGRATED AGAIN 2026-08-13 (M3-A), old text kept verbatim above, and for
+    # the SAME reason a third time: M3-A added two durable paths in `src/`, and
+    # this assertion is what made registering them mandatory rather than
+    # optional. The evaluation instrument still registers no store of its own.
     from scripts.soak import _injection_table
     class_attrs, init_defaults = _injection_table()
-    assert len(class_attrs) + len(init_defaults) == 29
+    assert len(class_attrs) + len(init_defaults) == 31
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

@@ -371,9 +371,16 @@ def test_c_every_routed_site_is_still_a_site():
     """PIN (c). THE COUNT, so a silently DELETED append is not read as a
     successfully routed one.
 
-    Twelve modules held an append when this ruling opened and twelve hold a
-    call to the funnel now. A census that only FORBIDS raw appends is equally
-    satisfied by a store that stopped recording altogether.
+    Twelve modules held an append when this ruling opened and twelve held a
+    call to the funnel at its close. A census that only FORBIDS raw appends is
+    equally satisfied by a store that stopped recording altogether.
+
+    **FOURTEEN AS OF M3-A (2026-08-13), old count kept in the sentence above.**
+    The obligation ledger and the episode record are the thirteenth and
+    fourteenth - the two Kernel stores of the pivot's first construction. This
+    is the "A NEW one is fine and welcome" branch of the message below, taken
+    exactly as written: the count moved because two records started being kept,
+    not because one stopped.
     """
     callers = set()
     for path in _src_files():
@@ -382,11 +389,11 @@ def test_c_every_routed_site_is_still_a_site():
             if (isinstance(node, ast.Call)
                     and getattr(node.func, "id", None) == "durable_append_text"):
                 callers.add(path.relative_to(REPO).as_posix())
-    assert len(callers) == 12, (
-        "twelve append sites were routed by Ruling 78; the tree now has " +
-        str(len(callers)) + ": " + repr(sorted(callers)) + ". A NEW one is "
-        "fine and welcome - update this count. A MISSING one means a record "
-        "stopped being kept.")
+    assert len(callers) == 14, (
+        "fourteen append sites are routed through Ruling 78's funnel; the tree "
+        "now has " + str(len(callers)) + ": " + repr(sorted(callers)) + ". A "
+        "NEW one is fine and welcome - update this count. A MISSING one means a "
+        "record stopped being kept.")
 
 
 # =====================================================================

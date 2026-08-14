@@ -28,12 +28,20 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-SIX PATHS: six resolved from class attributes,
-twenty from `__init__` defaults. If you add a twenty-seventh and do not add it
+THIS FIXTURE COVERS TWENTY-EIGHT PATHS: six resolved from class attributes,
+twenty-two from `__init__` defaults. If you add a twenty-ninth and do not add it
 here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS TWENTY-SIX PATHS: six resolved from class attributes,
+    twenty from `__init__` defaults.~~
 
     ~~THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class
     attributes, twenty from `__init__` defaults.~~
+
+**UPDATED 2026-08-13 (M3-A), old text kept above verbatim.** The obligation
+ledger and the episode record are the twenty-seventh and twenty-eighth, both
+`__init__` defaults, both added in the SAME commit as the stores. The mechanism
+worked again: the pass that added the paths is the pass that updated the number.
 
 **CORRECTED 2026-08-09 (Ruling 79), old text kept above verbatim.** The
 divergence report (`AureaCore.DIVERGENCE_LOG_PATH`) is the twenty-sixth, and it
@@ -133,6 +141,8 @@ from src.expansion.sae import SAE
 from src.identity.ril import RIL
 from src.reflex.racm import RACM
 from src.expansion.tether.session_governor import TetherProtocol
+from src.filtration.episode_record import EpisodeRecord
+from src.filtration.obligation_ledger import ObligationLedger
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import GSR
@@ -356,6 +366,20 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # redirect protects against the day that stops being true, and against
         # tests that build a layer DIRECTLY.
         (ActivationLayer, "log_path", "goal_activations.jsonl"),
+        # M3-A (kernels K2/K3/K11): the obligation ledger and the episode
+        # record - the pivot's first two Kernel stores. Both are SUBSTRATE and
+        # deliberately unwired this pass (zero internal callers anywhere in
+        # `src/`), so like the prediction and goal ledgers these redirects
+        # protect tests that build one DIRECTLY, and they land in the SAME
+        # COMMIT as the stores per Ruling 31's standing rule.
+        #
+        # `peer_paths` is NOT redirected and needs no entry: it defaults to
+        # EMPTY rather than to a path, so an unredirected instance reads only
+        # its own file. That is deliberate - a peer default pointing at the
+        # real `data/runtime/` would make the shared clock read shared state
+        # from inside an isolated test.
+        (ObligationLedger, "ledger_path", "obligations.jsonl"),
+        (EpisodeRecord, "log_path", "episodes.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 
