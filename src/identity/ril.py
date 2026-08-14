@@ -198,7 +198,8 @@ class RIL:
     def __init__(self, codex: Any = None, scar_core: Any = None,
                  black_sphere: Any = None, csa: Any = None,
                  reflex_grid: Any = None,
-                 runtime_path: str = "data/runtime/ril_threads.json"):
+                 runtime_path: str = "data/runtime/ril_threads.json",
+                 obligation_ledger: Any = None):
         self.codex = codex               # doctrine content OWNER; RIL is a reader
         self.scar_core = scar_core       # scar OWNER; RIL is a reader, never form_scar
         self.black_sphere = black_sphere  # paradox suspension; RIL routes as a REQUEST
@@ -223,6 +224,16 @@ class RIL:
         self.quarantined: List[Dict[str, Any]] = []
         # Ruling 11's `flush_failures` shape: the observer never gates the observed.
         self.persist_failures: List[Dict[str, Any]] = []
+
+        # M3-D §1.3 - THE ADMISSION SEAM. K2's ledger, held as a REQUESTER.
+        # `None` is the honest default: a bare RIL admits nothing, so
+        # constructing one incidentally never writes an obligation.
+        self.obligation_ledger = obligation_ledger
+        # ADMISSION FAILURES ARE RECORDED, NEVER RAISED (Ruling 11's line, and
+        # the reason this surface exists): an identity fracture must fire even
+        # if the obligation cannot be written. A recorded failure is not a
+        # silent loss; a gated protective reflex is a defect.
+        self.admission_failures: List[Dict[str, Any]] = []
 
         self.load()
         self._restore_constitutional_origin()
@@ -367,6 +378,13 @@ class RIL:
         evaluate_pressure, reading its RETURN VALUE (never last_arbitration - Ruling 6).
         RIL sources; RACM arbitrates. RIL never calls .trigger() and never inspects or
         sets output_blocked itself."""
+        # M3-D §1.3: ADMIT THE OBLIGATION FIRST, then fire. ADDITIVE - the
+        # reflex path below is byte-unchanged - and BEST-EFFORT: the admission
+        # is wrapped so that NO failure here can stop an identity fracture from
+        # reaching the Grid. Ruling 11's line exactly: the observer never gates
+        # the observed, and this is a protective response.
+        self._admit_fracture(doctrine, ancestor_id, ruling)
+
         if self.reflex_grid is None:
             return []
         return self.reflex_grid.evaluate_pressure(
@@ -379,6 +397,43 @@ class RIL:
                 "ruling_reason": ruling.reason,
             },
         )
+
+    def _admit_fracture(self, doctrine: Doctrine, ancestor_id: str,
+                        ruling: EligibilityRuling) -> None:
+        """Admit the identity fracture as an OBLIGATION. Best-effort, always.
+
+        M3-D §1.3. RIL is a REQUESTER at K2's door exactly as it is at the
+        scar owner's: it calls `admit(...)` and never writes the ledger itself.
+
+        **THE ADMISSION NEVER GATES THE REFLEX.** Every failure - no ledger, an
+        unwritable file, a refused admission, anything at all - lands on
+        `admission_failures` and the fracture fires regardless. An identity
+        fracture is a protective response, and Ruling 11's rule about a logging
+        failure never disabling a safety suppression binds here in the same
+        words. The broad `except` is deliberate and is the ONE place in this
+        module where that is correct.
+
+        A REJECTED admission is not a failure and is not recorded here: the
+        ledger wrote a REJECTED record, which is the outcome, and duplicate
+        suppression of a repeated fracture is the ledger working.
+        """
+        if self.obligation_ledger is None:
+            return
+        try:
+            self.obligation_ledger.admit(
+                source="RIL",
+                target_kind="doctrine",
+                target_id=doctrine.id,
+                claim_text=(
+                    f"identity fracture: '{doctrine.id}' descends from fallen "
+                    f"ancestor '{ancestor_id}' - {ruling.reason}"),
+            )
+        except Exception as exc:                      # noqa: BLE001 - see docstring
+            self.admission_failures.append({
+                "doctrine_id": doctrine.id,
+                "ancestor_id": ancestor_id,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
 
     # =================================================================
     # INBOUND REQUESTS (SPECULATIVE - no live caller today)

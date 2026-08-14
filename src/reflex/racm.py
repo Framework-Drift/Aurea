@@ -252,7 +252,8 @@ class RACM:
     def __init__(self, rb_system: Optional[RBSystem] = None,
                  tcaml: Optional[TCAMLPort] = None,
                  smc: Any = None,
-                 runtime_path: str = "data/runtime/racm_queue.json"):
+                 runtime_path: str = "data/runtime/racm_queue.json",
+                 obligation_ledger: Any = None):
         # Ruling 42 / Ruling 39: an `__init__` DEFAULT under `data/runtime/`,
         # redirected by name in `tests/conftest.py`. SAE's shape.
         self.runtime_path = Path(runtime_path)
@@ -286,6 +287,12 @@ class RACM:
         # Ruling 42 taxonomy + best-effort persistence (Ruling 11's shape).
         self.load_report: Optional[LoadReport] = None
         self.persist_failures: List[Dict[str, Any]] = []
+        # M3-D §1.3 - THE ADMISSION SEAM. K2's ledger, held as a REQUESTER.
+        # `None` is the honest default: a bare RACM admits nothing.
+        self.obligation_ledger = obligation_ledger
+        # Ruling 11's shape again: an admission failure is RECORDED, never
+        # raised, so it can never gate the protective record it accompanies.
+        self.admission_failures: List[Dict[str, Any]] = []
         # Ruling 23's word, applied to a boundary rather than a queue cap:
         # UNRESOLVED PRESSURE NEVER LEAVES SILENTLY. A queue that could not be
         # restored is a DECLARED LOSS, recorded here and on the RB channel.
@@ -1074,7 +1081,52 @@ class RACM:
             },
             durable=True,
         )
+        # M3-D §1.3 - THE ADMISSION SEAM. ADDITIVE: the RB record above is
+        # BYTE-UNCHANGED and is written FIRST, so the forensic entry exists
+        # whatever happens next. `divergence_trigger_eligible` stays
+        # declared-unread (Ruling 34-A) - nothing here reads or sets it.
+        #
+        # ONE ADMISSION PER UNSETTLED LINEAGE. A saturated epoch is not one
+        # owed thing: it is one owed thing PER lineage SAE touched and could
+        # not settle, and collapsing them into a single obligation would lose
+        # exactly the fact the epoch is saturated ABOUT.
+        self._admit_saturation(epoch, blocked_cycles, horizon, unsettled_lineages)
         return entry.id
+
+    def _admit_saturation(self, epoch: int, blocked_cycles: int, horizon: int,
+                          unsettled_lineages: List[str]) -> None:
+        """Admit one obligation per unsettled lineage. Best-effort, always.
+
+        RACM is a REQUESTER at K2's door. **THE ADMISSION NEVER GATES THE
+        PROTECTIVE RECORD** - the RB entry is already written when this runs,
+        and every failure lands on `admission_failures` rather than raising.
+        Ruling 11's line: a logging failure must not disable a suppression, and
+        an admission failure must not disable the record of a locked ceiling.
+
+        SOURCE IS `"SAE"`: the condition is SAE's, and Ruling 2's one-way
+        authority is why the source names the module that SOURCED it rather
+        than the arbiter that routed it.
+        """
+        if self.obligation_ledger is None:
+            return
+        for lineage in unsettled_lineages or ():
+            try:
+                self.obligation_ledger.admit(
+                    source="SAE",
+                    target_kind="doctrine",
+                    target_id=lineage,
+                    claim_text=(
+                        f"saturated symbolic epoch {epoch}: mutation blocked "
+                        f"for {blocked_cycles} consecutive cycles past the "
+                        f"{horizon}-cycle horizon with lineage '{lineage}' "
+                        f"unsettled"),
+                )
+            except Exception as exc:              # noqa: BLE001 - see docstring
+                self.admission_failures.append({
+                    "epoch": epoch,
+                    "lineage": lineage,
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
 
     # -- direct suppression path (2b pseudo: RACM.suppress_reflex(trigger_id)) --
 

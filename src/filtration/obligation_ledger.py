@@ -260,10 +260,20 @@ class TargetKind(str, Enum):
 
     Mirrors `tca_core.NodeType`'s referents on purpose and is NOT derived from
     it - see the census in the module docstring.
+
+    **WIDENED BY ONE MEMBER AT M3-D**, by the sixty-eighth manifest entry and
+    never by a caller's string: `CLAIM`. GOVERNED CONTENT, exactly as the rest
+    of this file's vocabularies are - `_member`'s closed-vocabulary guard is
+    untouched, so an unruled fifth member is still unwritable.
+
+    CLAIM is what the collapse path needs: a contradiction is owed about the
+    CLAIM that produced it, and until now the vocabulary could only name the
+    structures a claim BEARS ON.
     """
     DOCTRINE = "doctrine"
     SCAR = "scar"
     SUSPENSION = "suspension"
+    CLAIM = "claim"
 
 
 class TargetResolution(str, Enum):
@@ -340,6 +350,7 @@ class ObligationLedger:
         codex: Any = None,
         scar_core: Any = None,
         suspension_systems: Optional[Sequence[Any]] = None,
+        ancestry_ledger: Any = None,
     ):
         # Ruling 31 / Ruling 39: an `__init__` DEFAULT under `data/runtime/` -
         # one of exactly two shapes `tests/conftest.py` and `scripts/soak.py`
@@ -356,6 +367,11 @@ class ObligationLedger:
         self.codex = codex
         self.scar_core = scar_core
         self.suspension_systems: Tuple[Any, ...] = tuple(suspension_systems or ())
+        # M3-D §1.2: the claim-ancestry ledger (Rulings 58/60), READ-ONLY.
+        # Its read surface was censused before wiring: `read_all` opens mode
+        # "r" and `get` folds over it - no mint, no stamp, no write. It obeys
+        # this module's standing AST pin exactly as the other three resolvers do.
+        self.ancestry_ledger = ancestry_ledger
         # In-memory mirror of what THIS PROCESS appended. NOT the ledger: the
         # file is the ledger. Nothing reads this back into a decision.
         self.entries: List[Dict[str, Any]] = []
@@ -429,6 +445,21 @@ class ObligationLedger:
             # Ruling 22: `get_scar` returns a DEEP COPY, so this cannot hand
             # the ledger a live record even by accident.
             if self.scar_core.get_scar(target_id) is not None:
+                return TargetResolution.RESOLVED
+            return TargetResolution.UNRESOLVED
+
+        if target_kind == TargetKind.CLAIM:
+            if self.ancestry_ledger is None:
+                return TargetResolution.UNCHECKED
+            # **A RECORDED CLAIM ALWAYS RESOLVES** - the fossil-resolves rule's
+            # sibling. Claims are never erased (Ruling 58's ledger is
+            # append-only and its records are permanent), so membership is the
+            # whole question and there is no "was it retired" to ask.
+            #
+            # `get` is a pure fold over `read_all`, which opens mode "r". No
+            # mutating verb is named here, exactly as `retrieve` is barred for
+            # the suspension resolver.
+            if self.ancestry_ledger.get(target_id) is not None:
                 return TargetResolution.RESOLVED
             return TargetResolution.UNRESOLVED
 

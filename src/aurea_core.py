@@ -14,7 +14,9 @@ from src.filtration.echonet import EchoNet, Verdict as EchoVerdict
 # THE ENUM, NOT A STRING. `countability.name == "COUNTED"` would avoid the import
 # and would be exactly what `Countability`'s docstring refuses: "a state selected
 # by string is a state nothing type-checks."
+from src.filtration.episode_record import EpisodeRecord
 from src.filtration.net_evidence import Countability
+from src.filtration.obligation_ledger import ObligationLedger
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
@@ -376,7 +378,46 @@ class AureaCore:
         self.csa = CSA()
         self.veiled_thread = VeiledThread()
         self.black_sphere = BlackSphere()
-        
+
+        # =============================================================
+        # M3-D §1.1 - THE K2/K3 SUBSTRATE, COMPOSED
+        # =============================================================
+        #
+        # ONE obligation ledger and ONE episode store, held as members.
+        # **COMPOSITION ONLY**: no scheduler, no loop, and no internal caller
+        # that admits or opens on its own initiative. Invariant 27's needle -
+        # admission is neither arbitration nor execution - and Ruling 74's
+        # rule that composing a layer is not invoking one.
+        #
+        # CONSTRUCTED HERE, AFTER THE RESOLVERS, and the position is the point:
+        # the ledger resolves DOCTRINE through the Codex, SCAR through the scar
+        # owner, SUSPENSION through the three systems above, and CLAIM through
+        # the ancestry ledger. Building it any earlier would hand it a `None`
+        # for a resolver it will be asked about, and Docket H's cut would then
+        # record UNCHECKED forever for a structure that was there all along.
+        #
+        # EVERY RESOLVER IS READ-ONLY. The suspension handles are membership
+        # surfaces only (`retrieve` mutates and is AST-barred in the ledger),
+        # and the ancestry read surface was censused before wiring: `read_all`
+        # opens mode "r" and `get` folds over it.
+        self.obligations = ObligationLedger(
+            codex=self.codex,
+            scar_core=self.scar_core,
+            suspension_systems=(self.black_sphere, self.csa, self.veiled_thread),
+            ancestry_ledger=self.ancestry,
+        )
+        # The two stores share ONE logical clock by being wired as a PAIR -
+        # M3-A left the coordinator unbuilt and named this as where it lands.
+        self.episodes = EpisodeRecord(
+            peer_paths=[str(self.obligations.ledger_path)],
+        )
+        self.obligations.peer_paths = (Path(self.episodes.log_path),)
+        # M3-D §1.3: RACM becomes a REQUESTER at K2's door. Injected rather
+        # than constructor-passed because the Grid owns RACM's construction and
+        # runs before the resolvers above exist; a ledger built early enough to
+        # pass in would be a ledger that could never resolve a suspension.
+        self.reflex_grid.racm.obligation_ledger = self.obligations
+
         # Initialize Topological Constellation Architecture
         self.tca = TCAIntegration()
 
@@ -449,6 +490,9 @@ class AureaCore:
             black_sphere=self.black_sphere,
             csa=self.csa,
             reflex_grid=self.reflex_grid,
+            # M3-D §1.3: RIL admits the identity fracture it is about to fire.
+            # Best-effort - the admission can never gate the reflex.
+            obligation_ledger=self.obligations,
         )
         # PSI (Ruling 8): the Personal Scar Identity reflex. Registered HERE, not in
         # the Grid's argless _init_core_reflexes slot, because PSI needs the injected

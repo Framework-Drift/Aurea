@@ -115,6 +115,7 @@ __all__ = [
     "MalformedInterpretation",
     "PrecedenceProofFailed",
     "UnknownDefeater",
+    "OutcomeDoesNotDefeat",
 ]
 
 
@@ -194,6 +195,18 @@ class PrecedenceProofFailed(Exception):
 
 class UnknownDefeater(Exception):
     """A `defeater_ref` naming no DEFEATER_REGISTERED record on this episode."""
+
+
+class OutcomeDoesNotDefeat(Exception):
+    """The cited prediction's recorded outcome cannot ground this defeater kind.
+
+    M3-D §1.5. DISTINCT FROM `PrecedenceProofFailed` on purpose, and the
+    distinction is Ruling 29's: that one means the record cannot show the
+    criteria PREDATED the outcome - an ordering fact about the file. This one
+    means the ordering is fine and the OUTCOME IS THE WRONG ONE. A caller told
+    "precedence failed" about a perfectly well-ordered CONFIRMED prediction
+    would go looking for a corrupted ledger and find nothing wrong with it.
+    """
 
 
 # =====================================================================
@@ -599,6 +612,27 @@ class EpisodeRecord:
                 f"so the criteria DO NOT PREDATE the outcome on the record. "
                 f"Criteria written after the result they judge are criteria "
                 f"shaped to it, and this defeater cannot rest on them.")
+
+        # THE FALSIFIED GATE - M3-D §1.5, the sixty-seventh entry's ruling.
+        #
+        # **THE KIND'S NAME IS ITS INTERPRETATION.** A defeater declared
+        # FAILED_PRECOMMITTED_PREDICTION and resting on a prediction the ledger
+        # records as CONFIRMED is a record that contradicts itself, and M3-B
+        # left this FLAGGED rather than decided precisely so it could be ruled
+        # rather than assumed. It is ruled: registration REFUSES.
+        #
+        # Ruling 66's law at the registration door - a record either holds what
+        # was presented or refuses it; there is no third thing where it holds
+        # something else. Recording the outcome verbatim (which M3-B does, and
+        # which stays) makes the mismatch VISIBLE; refusing makes it UNWRITABLE.
+        if outcome != "falsified":
+            raise OutcomeDoesNotDefeat(
+                f"'{prediction_id}' is recorded as '{outcome}', not "
+                f"'falsified', so it cannot ground a "
+                f"{DefeaterKind.FAILED_PRECOMMITTED_PREDICTION.value} "
+                f"defeater. A prediction that held is not a defeater of "
+                f"anything - the kind's name IS its interpretation, and this "
+                f"citation would make the record contradict itself.")
 
         # COPIED VERBATIM FROM THE LEDGER RECORD, not restated by the caller.
         # The resolution names WHICH criterion it met; the value copied is the

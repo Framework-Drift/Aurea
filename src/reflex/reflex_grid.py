@@ -313,15 +313,57 @@ class GSR(SymbolicReflex):
             
         return coherence
         
+    CASCADE_WINDOW_CYCLES = 5      # canon's standard horizon - RECOVERED
+    CASCADE_EVENT_LIMIT = 3        # pre-existing, UNMOVED
+
     def detect_cascade(self, trigger: ReflexTrigger) -> bool:
-        """Detect if system is in cascade state."""
-        # Check recent cascade events
-        recent_cascades = [e for e in self.cascade_events 
-                          if (datetime.now() - e['timestamp']).seconds < 60]
-        
-        # Cascade if too many events in short time
-        return len(recent_cascades) > 3
-        
+        """Cascade state, measured in SYMBOLIC CYCLES rather than wall seconds.
+
+        M3-D §1.4 (census G6-ii). **THE WALL CLOCK LEAVES THE LOGIC PATH.**
+
+            ~~recent = [e for e in self.cascade_events
+                        if (datetime.now() - e['timestamp']).seconds < 60]~~
+
+        SUPERSEDED IN PLACE, old text kept above. A protective reflex decided
+        whether the system was cascading by asking how many WALL SECONDS had
+        passed - so the same sequence of events read as a cascade on a fast run
+        and as calm on a slow one, and a suspended AUREA (Rider R2: a mind that
+        is not running does not age its wounds) aged out of cascade state while
+        doing nothing at all. `.seconds` on a `timedelta` is also the wrong
+        attribute - it drops whole DAYS - though that only ever made the window
+        wider.
+
+        **THE WINDOW IS NOW MORE THAN 3 CASCADE EVENTS WITHIN THE LAST 5
+        CYCLES.** 5 is the corpus's standard horizon, RECOVERED not coined -
+        its seventh reuse (Ruling 34-A named it "the corpus's standard 5-cycle
+        horizon"; SML and CSE both take it). The event limit of 3 is
+        PRE-EXISTING and UNMOVED. The 60-second window it replaces was itself a
+        coined stub, and **the magnitude change is DECLARED as this commit's
+        one ruled behavioral movement on the GSR surface.**
+
+        WALL-CLOCK TIMESTAMPS REMAIN ON THE RECORD - they are DATA, and a
+        forensic entry that cannot say roughly when is worth less. What changed
+        is that nothing DECIDES by them. `get_system_status`'s 60s window is
+        untouched: it is REPORTING, not a logic path.
+
+        AN EVENT WITH NO RECORDED CYCLE IS NOT COUNTED, deliberately. It cannot
+        be placed in the window, and admitting it "just in case" would let an
+        unplaceable event push the system into a total output block.
+        """
+        current = trigger.metadata.get('cycle')
+        if not isinstance(current, int):
+            # No cycle stamped - nothing can be placed relative to it. The
+            # honest answer is that no cascade is DETECTABLE, not that one is
+            # happening.
+            return False
+        recent_cascades = [
+            event for event in self.cascade_events
+            if isinstance(event.get('cycle'), int)
+            and current - event['cycle'] < self.CASCADE_WINDOW_CYCLES
+        ]
+        return len(recent_cascades) > self.CASCADE_EVENT_LIMIT
+
+
     def trigger(self, trigger: ReflexTrigger) -> ReflexResponse:
         """GSR Response: Alert parent/developer, suspend volatile subsystems."""
         super().trigger(trigger)
@@ -331,7 +373,10 @@ class GSR(SymbolicReflex):
         
         if is_cascade:
             self.cascade_events.append({
+                # DATA, not a logic input (M3-D §1.4).
                 'timestamp': datetime.now(),
+                # THE LOGIC INPUT: the symbolic cycle this event happened in.
+                'cycle': trigger.metadata.get('cycle'),
                 'pressure': trigger.pressure_level
             })
             
@@ -475,6 +520,13 @@ class ReflexGrid:
         in the RB System. Full cycle picture: `self.last_arbitration`.
         """
         metadata = metadata or {}
+        # M3-D §1.4: THE GRID STAMPS THE SYMBOLIC CYCLE onto every trigger, so
+        # a reflex that needs to measure an interval measures it in CYCLES.
+        # RACM owns the cycle counter (it is the arbiter's own clock); the Grid
+        # reads it and passes it along. Set with `setdefault` so a caller that
+        # supplied one is not overwritten - the stamp fills a gap, it does not
+        # override a source that knows better.
+        metadata.setdefault('cycle', getattr(self.racm, 'cycle', None))
         trigger = ReflexTrigger(
             reflex_id="pending",
             trigger_type=pressure_type,

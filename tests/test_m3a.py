@@ -646,11 +646,27 @@ def test_j_no_mutating_verb_is_named_on_a_resolver():
 # K. ZERO INTERNAL CALLERS / ONE WRITER
 # =====================================================================
 
-def test_k_nothing_in_src_imports_either_class():
-    """PIN K1. SUBSTRATE. Both stores are externally invoked ONLY.
+def test_k_only_the_ruled_consumer_imports_either_class():
+    """PIN K1. SUBSTRATE, with exactly ONE ruled consumer.
 
-    Goes RED the day something wires one - which is exactly when that wiring
-    needs its own ruling (Ruling 72's pin, same shape and same reason).
+        ~~def test_k_nothing_in_src_imports_either_class():
+            "PIN K1. SUBSTRATE. Both stores are externally invoked ONLY.
+             Goes RED the day something wires one - which is exactly when that
+             wiring needs its own ruling (Ruling 72's pin, same shape and same
+             reason)."
+            ...
+            assert consumers == []~~
+
+    **MIGRATED 2026-08-13 (M3-D §1.1), old text kept verbatim above. THE PIN
+    DID EXACTLY WHAT IT PROMISED**: it went RED the day something wired a
+    store, and that day arrived WITH its ruling rather than without one. This
+    is Ruling 72's pin migrating at Ruling 73 - one docket later, same shape,
+    same reason.
+
+    **NARROWED, NOT WEAKENED.** The consumer set is exact, so an UNRULED second
+    consumer still reddens this. What `aurea_core` may DO with the handles is
+    held by other pins: composition is not invocation, and the
+    no-internal-caller property is asserted separately below.
     """
     consumers = []
     for path in _src_files():
@@ -661,9 +677,10 @@ def test_k_nothing_in_src_imports_either_class():
                 for alias in node.names:
                     if alias.name in ("ObligationLedger", "EpisodeRecord"):
                         consumers.append(path.relative_to(REPO).as_posix())
-    assert consumers == [], (
-        f"{consumers} consume a K2/K3 store. The substrate stores DIRECTION and "
-        f"moves nothing; a consumer is an executive and needs its own ruling.")
+    assert sorted(set(consumers)) == ["src/aurea_core.py"], (
+        f"{sorted(set(consumers))} consume a K2/K3 store. `aurea_core` is the "
+        f"ONE ruled consumer (M3-D §1.1); any other is an executive and needs "
+        f"its own ruling.")
 
 
 def test_k_the_episode_module_imports_the_clock_not_the_ledger_class():
