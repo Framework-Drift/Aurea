@@ -233,8 +233,20 @@ M3 pivot's construction passes: **1523 → 1612** (M3-A, the K2/K3 substrate, +8
 → **1680** (M3-B typed defeaters +39, M3-C standing profiles +28, +1 follow-up)
 → **1707** (M3-D commit 1, the admission seam +27) → **1725** (M3-D commit 2, the
 episode path +18) → **1730** (the M3-D retirement: **−1** for invariant 21 retiring,
-**+6** pins closing the owed slates' survivors). **Invariants stood at 27/27 from
-Ruling 42 Slice 2 until the retirement, which took them to 26** — see §4.
+**+6** pins closing the owed slates' survivors) → **1734** (M3-E, the acceptance, +4).
+**Invariants stood at 27/27 from Ruling 42 Slice 2 until the retirement, which took
+them to 26** — see §4.
+
+**HEADING §13 ITEMS 1, 2 AND 4 ARE DEMONSTRATED, NOT ASSERTED** (M3-E, 2026-08-14,
+`tests/test_m3e_acceptance.py`): a contradiction cannot be silently dropped and the
+rejection log answers for the unadmitted one (§13.1); a carried contradiction has a
+committed discriminating prediction whose criteria predate its outcome **by append
+order, never the clock** (§13.4); and **a scar formed under genuine pressure
+demonstrably alters a later disposition** — the control speaks the claim, the scarred
+instance carries it (§13.2). Every assertion re-reads the stores FROM DISK, and each
+segment is RED-first watched. **The §13.2 mechanism is the RESONANCE NET, not
+`_threshold`** — the first attribution was wrong and the RED-first watch is what caught
+it, which is the whole reason that instrument is mandatory here.
 
 **A SECOND STALE BASELINE, AND IT WAS THE INVARIANT COUNT ITSELF (2026-08-13, M3-D).**
 The M3-D handoff and `M3_D_CENSUS.md` both stated **invariants 39**; the tree measured
