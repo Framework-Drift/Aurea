@@ -789,3 +789,164 @@ def test_i_the_store_is_registered_in_both_isolation_tables():
     default = init.args.defaults[-1]
     assert isinstance(default, ast.Constant)
     assert default.value.startswith("data/runtime/")
+
+
+# =====================================================================
+# (j) THE CHAOS CASE THAT IS ALPHA'S OWN - heading item 13.5
+# =====================================================================
+#
+# 13.5 asks for an interrupt AT AN ACQUISITION POINT with the divergence
+# detector reading CLEAN across the restart. **THIS CASE IS ENTIRELY M4-alpha's
+# AND DEPENDS ON NOTHING FROM M4-beta**: it interrupts the boundary record
+# itself, not any wall-clock mint. The rest of the chaos family - the replay
+# comparison in particular - is beta's and is STOPPED with it; see the pass's
+# record for the measured reason.
+
+def test_j_a_torn_acquisition_line_survives_an_unclean_restart(tmp_path):
+    """Interrupt at an acquisition point; restart WITHOUT a checkpoint.
+
+    **NO `save_state` IS CALLED ANYWHERE HERE**, deliberately: Ruling 78 made
+    every durable write eager precisely so a restart needs no cooperation, and
+    calling the checkpoint would test the checkpoint instead of the law.
+
+    The last line is TORN - bytes on disk, unparseable - which is what a crash
+    mid-append leaves. Three properties across the boundary:
+      1. the readable arrivals survive and the torn one contributes nothing;
+      2. THE TORN LINE'S ORDINAL IS STILL BURNED, so the resumed process cannot
+         reissue it (Ruling 69 res.2: the scan is over RAW TEXT);
+      3. the ancestry join still resolves for every claim that completed.
+    """
+    acq_path = tmp_path / "acquisitions.jsonl"
+    clm_path = tmp_path / "claim_ancestry.jsonl"
+
+    first = AureaCore(acquisitions=AcquisitionLedger(ledger_path=str(acq_path)),
+                      ancestry=ClaimAncestryLedger(ledger_path=str(clm_path)))
+    for text in ("first arrival", "second arrival"):
+        first.process_input(text)
+    assert len(_lines(first.acquisitions)) == 2
+
+    # THE INTERRUPT: a third arrival lands half-written and the process dies.
+    with open(acq_path, "a", encoding="utf-8") as handle:
+        handle.write('{"acquisition_id": "ACQ-0003", "channel": "user_inp')
+    del first
+
+    # THE RESTART. A fresh core over the same paths, no checkpoint, no repair.
+    resumed = AureaCore(acquisitions=AcquisitionLedger(ledger_path=str(acq_path)),
+                        ancestry=ClaimAncestryLedger(ledger_path=str(clm_path)))
+
+    survived = resumed.acquisitions.read_all()
+    assert [r.acquisition_id for r in survived] == ["ACQ-0001", "ACQ-0002"], (
+        "the torn line contributes nothing (floor semantics) and the readable "
+        "arrivals are untouched")
+
+    result = resumed.process_input("after the crash")
+    assert result["claim_id"] is not None
+    claim = resumed.ancestry.get(result["claim_id"])
+    assert claim.acquisition_ref == "ACQ-0004", (
+        "ACQ-0003's bytes reached disk, so its ordinal is BURNED and never "
+        "reissued - a gap is fine, a forged id is not (Ruling 69 res.2)")
+
+    # ------------------------------------------------------------------
+    # A MEASURED FINDING, PINNED RATHER THAN REPAIRED - and it is NOT this
+    # store's, it is EVERY append-only ledger's in the tree.
+    # ------------------------------------------------------------------
+    # A torn append leaves bytes with NO TRAILING NEWLINE, so the next append
+    # concatenates onto them and **the first record written after a crash is
+    # SWALLOWED into the torn line and is unreadable to every reader.** Its id
+    # is minted and its bytes are on disk - the MINT is safe, which is the half
+    # Ruling 69 res.2 designed for - but the RECORD is lost.
+    #
+    # REPRODUCED ON LEDGERS THIS PASS DID NOT TOUCH (`claim_ancestry`, Ruling
+    # 58; `cae`, Ruling 45), so it is a property of the shared append shape and
+    # not of this store.
+    #
+    # **NOT REPAIRED HERE, BY CITATION.** Ruling 78 res.2 rules that THE CALLER
+    # SUPPLIES THE NEWLINE, in terms: "appending a separator would be choosing
+    # something about CONTENT, and a line separator belongs to the ledger's
+    # owner." Every candidate remedy - a leading newline in the funnel, a
+    # ends-with-newline check, a per-caller guard - moves that resolution across
+    # eight ledgers, which is a manifest decision and not a build lane's.
+    #
+    # PINNED AS MEASURED so a later pass that closes it must come and say why
+    # (Ruling 75's `paradox_void` form). When it is closed, this assertion
+    # inverts and the one below it becomes redundant.
+    assert resumed.acquisitions.get("ACQ-0004") is None, (
+        "MEASURED FINDING (M4-alpha): the record written immediately after a "
+        "torn append is swallowed by it. If this now resolves, the torn-append "
+        "seam has been ruled on - update this pin and cite the ruling.")
+
+    # THE LOSS IS BOUNDED AT EXACTLY ONE RECORD, and that is the half that makes
+    # the finding survivable: the ledger recovers on the very next append.
+    resumed.process_input("and the one after that")
+    assert [r.acquisition_id for r in resumed.acquisitions.read_all()] == [
+        "ACQ-0001", "ACQ-0002", "ACQ-0005"]
+
+    # THE JOIN STILL RESOLVES for every arrival that survived the tear.
+    survivors = {r.acquisition_id for r in resumed.acquisitions.read_all()}
+    for claim in resumed.ancestry.read_all():
+        if claim.acquisition_ref in survivors:
+            assert resumed.acquisitions.get(claim.acquisition_ref) is not None
+
+
+def test_j_the_divergence_detector_reads_clean_across_the_interrupt(tmp_path):
+    """13.5's own sentence: the detector reads CLEAN across an unclean restart.
+
+    It runs at EVERY construction (Ruling 79, AST-pinned to `__init__`'s last
+    act), so the resumed core below has already run it by the time this asserts.
+    A torn boundary line is honest crash residue that Ruling 78's ordering law
+    already adjudicated - **not** a cross-store disagreement - so a finding here
+    would mean the detector had started reporting the survivable.
+    """
+    acq_path = tmp_path / "acquisitions.jsonl"
+    clm_path = tmp_path / "claim_ancestry.jsonl"
+
+    first = AureaCore(acquisitions=AcquisitionLedger(ledger_path=str(acq_path)),
+                      ancestry=ClaimAncestryLedger(ledger_path=str(clm_path)))
+    first.process_input("an arrival before the crash")
+    assert first.divergence_findings == [], "clean before the interrupt"
+
+    with open(acq_path, "a", encoding="utf-8") as handle:
+        handle.write('{"acquisition_id": "ACQ-0002", "chan')
+    del first
+
+    resumed = AureaCore(acquisitions=AcquisitionLedger(ledger_path=str(acq_path)),
+                        ancestry=ClaimAncestryLedger(ledger_path=str(clm_path)))
+    assert resumed.divergence_findings == [], (
+        f"the detector reported {resumed.divergence_findings} across an "
+        f"unclean restart. Crash residue at the boundary is survivable and "
+        f"already adjudicated; a finding here is a REPORT of the normal.")
+    assert resumed.divergence_log_failures == []
+
+
+def test_j_the_torn_append_finding_is_not_this_stores_and_the_proof_is_executable():
+    """THE FINDING'S SCOPE, MEASURED ON LEDGERS THIS PASS DID NOT TOUCH.
+
+    A claim that a defect is "pre-existing and shared" is worth exactly as much
+    as its evidence, so the evidence is here rather than in a sentence: the same
+    interrupt is driven against `claim_ancestry` (Ruling 58) and `cae`
+    (Ruling 45), and both swallow the record written after the tear.
+
+    **THIS IS WHY THE REMEDY IS A MANIFEST DECISION AND NOT A BUILD LANE'S:**
+    the seam is Ruling 78 res.2's caller-supplies-the-newline resolution, and it
+    is shared by every append-only ledger in the tree.
+    """
+    from src.doctrine.cae import CAE
+    import tempfile
+
+    root = Path(tempfile.mkdtemp(prefix="m4_torn_scope_"))
+    for build, mint, torn in (
+        (lambda p: ClaimAncestryLedger(ledger_path=str(p)),
+         lambda L: L.record(OriginDeclaration()), '{"claim_id": "X", "part'),
+        (lambda p: CAE(ledger_path=str(p)),
+         lambda L: L.record(event="e", target="T"), '{"cae_id": "X", "part'),
+    ):
+        path = root / f"{id(build)}.jsonl"
+        ledger = build(path)
+        mint(ledger)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(torn)
+        mint(ledger)
+        assert len(ledger.read_all()) == 1, (
+            f"{type(ledger).__name__} did NOT swallow the post-tear record. If "
+            f"the seam has been ruled on, this pin and the ACQ one above both "
+            f"need updating with the citation.")
