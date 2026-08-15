@@ -44,3 +44,13 @@ data/runtime/
 # it is read-only input with no writer, and CI holds its blob hash
 # byte-for-byte beside the four identity seeds.
 reports/
+
+# M4-alpha (2026-08-15) - THE ORDERED HOUSEKEEPING, discharged.
+# `.claude/settings*.json` is TOOL CONFIGURATION for a coding agent's harness -
+# per-machine, per-operator, and about the WORKSHOP rather than about AUREA.
+# It is not a seed (nothing reads it), not runtime state (she never writes it),
+# and not an instrument report; it belongs to none of the three categories this
+# file already governs, which is exactly why it needed its own line rather than
+# a glob someone stretched to fit.
+.claude/settings.json
+.claude/settings.local.json
