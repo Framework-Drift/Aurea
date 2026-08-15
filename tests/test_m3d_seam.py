@@ -45,9 +45,26 @@ GRID_SRC = REPO / "src" / "reflex" / "reflex_grid.py"
 # =====================================================================
 
 def test_a_claim_is_the_fourth_member_and_the_vocabulary_is_closed():
-    """PIN A1. Widened by ONE, by ruling - never by a caller's string."""
+    """PIN A1. Widened by ONE, by ruling - never by a caller's string.
+
+    CHANGED BY A RULING, 2026-08-15 (M6-γ) - the Ruling-14 precedent, and this
+    pin did EXACTLY what it exists for. Recorded verbatim:
+
+        OLD (M3-D, 2026-08-13):
+            assert {m.value for m in TargetKind} == {
+                "doctrine", "scar", "suspension", "claim"}
+        NEW (M6-γ):
+            ... the same four PLUS "world_proposition"
+
+    **NOTHING WAS WEAKENED - A NAME WAS ADDED TO A CLOSED SET BY A RULING**, and
+    the assertion is still EXACT rather than a superset check, which is what made
+    the widening arrive as a deliberate edit here instead of slipping in. The
+    eighty-first manifest entry rules it: a world-model inconsistency is a
+    conflict candidate routed into L4, and it is owed about the PROPOSITION that
+    carries it. M6-γ's own pins live in `tests/test_m6_worldmodel.py`.
+    """
     assert {m.value for m in TargetKind} == {
-        "doctrine", "scar", "suspension", "claim"}
+        "doctrine", "scar", "suspension", "claim", "world_proposition"}
 
 
 def test_a_a_recorded_claim_resolves(tmp_path):

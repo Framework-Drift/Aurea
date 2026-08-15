@@ -269,11 +269,25 @@ class TargetKind(str, Enum):
     CLAIM is what the collapse path needs: a contradiction is owed about the
     CLAIM that produced it, and until now the vocabulary could only name the
     structures a claim BEARS ON.
+
+    **WIDENED BY ONE MEMBER AGAIN AT M6-γ**, by the eighty-first manifest entry
+    and never by a caller's string: `WORLD_PROPOSITION`. The M3-D precedent
+    verbatim - GOVERNED CONTENT, `_member`'s closed-vocabulary guard untouched,
+    so an unruled sixth member is still unwritable.
+
+    WORLD_PROPOSITION is what the World Model needs: **a world-model
+    inconsistency is a conflict candidate routed into L4**, and it is owed about
+    the PROPOSITION that carries it. The resolver is read-only against the
+    proposition ledger and a recorded proposition always resolves, exactly as a
+    recorded claim does - neither store erases, so membership is the whole
+    question. The point of the routing is that the world model gets NO private
+    truth machinery: its conflicts stand in the same court as everything else.
     """
     DOCTRINE = "doctrine"
     SCAR = "scar"
     SUSPENSION = "suspension"
     CLAIM = "claim"
+    WORLD_PROPOSITION = "world_proposition"
 
 
 class TargetResolution(str, Enum):
@@ -351,6 +365,7 @@ class ObligationLedger:
         scar_core: Any = None,
         suspension_systems: Optional[Sequence[Any]] = None,
         ancestry_ledger: Any = None,
+        proposition_ledger: Any = None,
     ):
         # Ruling 31 / Ruling 39: an `__init__` DEFAULT under `data/runtime/` -
         # one of exactly two shapes `tests/conftest.py` and `scripts/soak.py`
@@ -372,6 +387,11 @@ class ObligationLedger:
         # "r" and `get` folds over it - no mint, no stamp, no write. It obeys
         # this module's standing AST pin exactly as the other three resolvers do.
         self.ancestry_ledger = ancestry_ledger
+        # M6-γ: the proposition ledger (M6-α), READ-ONLY. Its read surface was
+        # censused before wiring: `resolves` folds over a mode-"r" read and
+        # returns a BOOL - no mint, no stamp, no write, and no content. It obeys
+        # this module's standing AST pin exactly as the other four resolvers do.
+        self.proposition_ledger = proposition_ledger
         # In-memory mirror of what THIS PROCESS appended. NOT the ledger: the
         # file is the ledger. Nothing reads this back into a decision.
         self.entries: List[Dict[str, Any]] = []
@@ -460,6 +480,17 @@ class ObligationLedger:
             # mutating verb is named here, exactly as `retrieve` is barred for
             # the suspension resolver.
             if self.ancestry_ledger.get(target_id) is not None:
+                return TargetResolution.RESOLVED
+            return TargetResolution.UNRESOLVED
+
+        if target_kind == TargetKind.WORLD_PROPOSITION:
+            if self.proposition_ledger is None:
+                return TargetResolution.UNCHECKED
+            # **A RECORDED PROPOSITION ALWAYS RESOLVES** - the claim-resolves
+            # rule's sibling, and for the same reason: that ledger is append-only
+            # and never erases, so membership is the whole question. `resolves`
+            # is a pure identity read that returns NO CONTENT.
+            if self.proposition_ledger.resolves(target_id):
                 return TargetResolution.RESOLVED
             return TargetResolution.UNRESOLVED
 
