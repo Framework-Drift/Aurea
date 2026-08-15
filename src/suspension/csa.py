@@ -24,7 +24,14 @@ class CSA(SuspensionSystem):
     - Reflexes abort processing
     - Symbolic toxicity identified
     """
-    
+
+    # M4-beta' (2026-08-15): the mint's prefix, unchanged from the wall-clock
+    # era. **CSA HAS TWO REMOVAL DOORS OF ITS OWN** - `emergency_purge` and
+    # `update_dormancy`'s auto-purge - plus the inherited `purge_old_entries`,
+    # which `suspend` itself calls at capacity (below). A mint derived from
+    # surviving entries would reissue after any of the three.
+    ID_PREFIX = "CSA-"
+
     def __init__(self, capacity: int = 50, filepath: str = "data/runtime/suspension/csa.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.CSA
@@ -64,8 +71,12 @@ class CSA(SuspensionSystem):
         q_level = self._determine_quarantine_level(pressure)
         
         # Create entry
+        #
+        # M4-beta': the id is MINTED from the high-water mark, which the purge
+        # two lines above cannot lower. Under the wall clock this was unique by
+        # accident of microsecond resolution; it is now unique by record.
         entry = SuspensionEntry(
-            id=f"CSA-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+            id=self._mint_id(),
             content=str(content),  # Convert to string for safety
             suspension_type=SuspensionType.CSA,
             pressure_level=pressure,
@@ -247,17 +258,32 @@ class CSA(SuspensionSystem):
         # Rider R3 (2026-07-29): ATOMIC. A whole-file rebuild per save (see
         # `black_sphere.save_to_file`): carried-but-rerouted contradiction is
         # suspended state, and losing it resolves it by accident.
-        atomic_write_json(self.filepath, data, indent=2)
-            
+        #
+        # M4-beta' (2026-08-15) - THE ENVELOPE. **THE SCHEMA CHANGE, DECLARED**:
+        # this file was a BARE JSON LIST and is now
+        # `{"high_water": N, "entries": [...]}`. The counter rides in the SAME
+        # atomic write as the entries it numbers (Ruling 81's form), so the two
+        # can never disagree - and a crash between mint and save loses both
+        # halves together, which is why a burnt ordinal cannot outlive the
+        # record it was burnt for.
+        atomic_write_json(self.filepath, self._envelope(data), indent=2)
+
     def load_from_file(self):
-        """Load CSA entries from disk."""
+        """Load CSA entries from disk.
+
+        M4-beta': BOTH SHAPES LOAD FOREVER. `_absorb_envelope` reads the
+        envelope's `high_water` when present and derives it ONCE from present
+        ids when the file predates the envelope - and a pure-legacy CSA file
+        holds only wall-clock ids, which do not parse as ordinals, so it starts
+        at 0 and `CSA-0001` cannot collide with anything already in it.
+        """
         if not self.filepath.exists():
             return
-            
+
         with open(self.filepath, 'r') as f:
             data = json.load(f)
-            
-        for entry_dict in data:
+
+        for entry_dict in self._absorb_envelope(data):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],

@@ -663,11 +663,13 @@ def run_soak(cycles: int = 200, claim_every: int = 5, seed: int = 42,
     # rather than asserted: quiet cycles perceive nothing, so a count that
     # tracked `cycles` instead of `claim_cycles` would be the finding.
     acquisitions = _acquisition_census(core)
+    # M4-β' (2026-08-15) - THE ENVELOPE CENSUS, A DECLARED SCHEMA MOVEMENT.
+    suspensions = _suspension_census(core)
 
     summary = _summarize(root, configured, records, failures, cae_ids,
                          quarantine_seen, seeds_before, seeds_after,
                          shared_before, shared_after,
-                         cycles, claim_every, seed, acquisitions)
+                         cycles, claim_every, seed, acquisitions, suspensions)
 
     out_path = Path(out) if out else (root / "summary.json")
     _refuse_if_shared_out(out_path)
@@ -718,9 +720,31 @@ def _acquisition_census(core) -> Dict[str, Any]:
     }
 
 
+def _suspension_census(core) -> Dict[str, Any]:
+    """M4-β'. The high-water envelope on each suspension store.
+
+    **`high_water` IS THE COUNT OF IDS EVER ISSUED, AND `entries` IS WHAT
+    SURVIVES** - so the pair is exactly the thing the ruling exists to keep
+    apart. A census where they always matched would be measuring a store that
+    never removes anything; a `high_water` BELOW `entries` would be the defect.
+    """
+    out: Dict[str, Any] = {}
+    for name, store in (("csa", core.csa), ("veiled_thread", core.veiled_thread),
+                        ("black_sphere", core.black_sphere)):
+        ids = sorted(store.entries)
+        out[name] = {
+            "high_water": store.high_water,
+            "entries": len(store.entries),
+            "first_id": ids[0] if ids else None,
+            "last_id": ids[-1] if ids else None,
+        }
+    return out
+
+
 def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
                seeds_before, seeds_after, shared_before, shared_after,
-               cycles, claim_every, seed, acquisitions=None) -> Dict[str, Any]:
+               cycles, claim_every, seed, acquisitions=None,
+               suspensions=None) -> Dict[str, Any]:
     monotonic = all(b >= a for a, b in zip(cae_ids, cae_ids[1:]))
     strictly_rising = [b for a, b in zip(cae_ids, cae_ids[1:]) if b < a]
 
@@ -787,6 +811,10 @@ def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
         # so a comparison against an earlier report reads it as ADDED rather
         # than as a headline that changed shape.
         "acquisitions": acquisitions,
+        # M4-β': the same, for the high-water envelope. `high_water` counts ids
+        # EVER ISSUED and `entries` counts what SURVIVES; the two diverging is
+        # the mechanism working rather than a finding.
+        "suspensions": suspensions,
         # RULING 54's stability witness: EMPTY means nothing eroded.
         "lineage_erosion": eroded,
         "lineage_first": first_lineage,

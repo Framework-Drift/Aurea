@@ -339,24 +339,47 @@ def test_c_a_new_black_sphere_file_carries_no_source_key(tmp_path):
 
 def test_c_a_new_csa_file_carries_no_source_key(tmp_path):
     """PIN (c). CSA's door takes no `claim_id` today (Ruling 76 populated only
-    the Black Sphere's pipeline door), so this asserts the deletion alone."""
+    the Black Sphere's pipeline door), so this asserts the deletion alone.
+
+    CHANGED BY A RULING, 2026-08-15 (M4-β') - the Ruling-14 precedent, and it is
+    the SHAPE THIS PIN REACHES THROUGH that moved, not the property it asserts.
+    Recorded verbatim:
+
+        OLD (Ruling 84, 2026-08-11):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            assert "source" not in payload[0]
+        NEW (M4-β'):
+            ... assert "source" not in payload["entries"][0]
+
+    **NO ASSERTION MOVED.** M4-β' wraps this store's bare JSON list in the
+    high-water envelope (`{"high_water": N, "entries": [...]}`), so the entry
+    dict this pin has always examined now sits one key deeper. The claim - a
+    newly serialized entry carries no `source` key - is unchanged and is still
+    read from the FILE. The Black Sphere's twin above needed no migration
+    because that store already wrote a dict.
+    """
     path = tmp_path / "csa.json"
     store = CSA(filepath=str(path))
     entry = store.suspend(content="volatile", pressure=0.8, reason="test")
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert "source" not in payload[0]
+    assert "source" not in payload["entries"][0]
     assert CSA(filepath=str(path)).entries[entry.id].content == "volatile"
 
 
 def test_c_a_new_veiled_thread_file_carries_no_source_key(tmp_path):
-    """PIN (c)."""
+    """PIN (c). Migrated with its CSA twin above (M4-β', Ruling-14 form) - the
+    envelope moved the entry one key deeper and no assertion moved.
+
+        OLD: assert "source" not in payload[0]
+        NEW: assert "source" not in payload["entries"][0]
+    """
     path = tmp_path / "vt.json"
     store = VeiledThread(filepath=str(path))
     entry = store.suspend(content="unresolved", pressure=0.6, reason="test")
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert "source" not in payload[0]
+    assert "source" not in payload["entries"][0]
     assert VeiledThread(filepath=str(path)).entries[entry.id].content == "unresolved"
 
 

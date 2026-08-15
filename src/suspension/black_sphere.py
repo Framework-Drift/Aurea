@@ -28,7 +28,23 @@ class BlackSphere(SuspensionSystem):
     Unlike CSA or Veiled Thread, Black Sphere content NEVER resolves.
     It orbits perpetually, exerting gravitational influence on nearby processing.
     """
-    
+
+    # M4-beta' (2026-08-15): the mint's prefix, unchanged from the wall-clock
+    # era.
+    #
+    # **THIS STORE HAS NO REMOVAL DOOR OF ITS OWN - AND IT GETS THE ENVELOPE
+    # ANYWAY.** Paradoxes are permanent and `suspend` REFUSES at capacity
+    # rather than purging, so a derive-from-survivors mint would be safe here
+    # today. It would be safe only BY CURRENT CALLERS: `purge_old_entries` is
+    # inherited from `SuspensionSystem` and is callable on this class right
+    # now. Safe-by-current-callers is exactly the class that rots (Ruling 35's
+    # vacuous guard; Ruling 32's "nothing prevented it but that no test happened
+    # to do it"), and a store whose correctness rests on nobody calling an
+    # inherited public method is one line away from the defect. Uniformity
+    # removes the contingency, and here it costs one key on a dict this store
+    # already writes.
+    ID_PREFIX = "BS-"
+
     def __init__(self, capacity: int = 30, filepath: str = "data/runtime/suspension/black_sphere.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.BLACK_SPHERE
@@ -80,8 +96,13 @@ class BlackSphere(SuspensionSystem):
             raise Exception(f"Black Sphere at capacity ({self.capacity}). Cannot suspend more paradoxes.")
             
         # Create entry
+        #
+        # M4-beta': MINTED from the high-water mark. A paradox node's id reaches
+        # the topology (`place_paradox`) and `result['pass_nodes']`, so it is a
+        # referent other records point at - which is why uniqueness here has to
+        # be a property of the record rather than of the clock's resolution.
         entry = SuspensionEntry(
-            id=f"BS-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+            id=self._mint_id(),
             content=str(content),  # Convert to string for safety
             suspension_type=SuspensionType.BLACK_SPHERE,
             pressure_level=pressure,
@@ -284,11 +305,13 @@ class BlackSphere(SuspensionSystem):
         """Save Black Sphere entries to disk."""
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        data = {
-            'entries': [],
-            'paradox_families': {k: list(v) for k, v in self.paradox_families.items()}
-        }
-        
+        # M4-beta': the entry list is built here and WRAPPED by `_envelope`
+        # below, which adds `high_water` and carries `paradox_families` through
+        # unchanged. For this store the schema change is ONE KEY on a dict it
+        # already wrote - CSA's and VT's bare lists are the ones that change
+        # shape.
+        data = []
+
         for entry in self.entries.values():
             entry_dict = {
                 'id': entry.id,
@@ -314,25 +337,38 @@ class BlackSphere(SuspensionSystem):
                 # store carried it through.
                 'claim_id': entry.claim_id,
             }
-            data['entries'].append(entry_dict)
-            
+            data.append(entry_dict)
+
+
         # Rider R3 (2026-07-29): ATOMIC. This method REBUILDS the whole file from
         # `self.entries` on every save, so mode "w" put every contradiction she
         # has ever set down at risk to record one more. The Black Sphere is where
         # she puts what she cannot hold - §10.G names it as outside her own
         # revision - and it was the least atomic write in the tree.
-        atomic_write_json(self.filepath, data, indent=2)
-            
+        atomic_write_json(
+            self.filepath,
+            self._envelope(
+                data,
+                paradox_families={k: list(v)
+                                  for k, v in self.paradox_families.items()}),
+            indent=2)
+
     def load_from_file(self):
-        """Load Black Sphere entries from disk."""
+        """Load Black Sphere entries from disk.
+
+        M4-beta': a legacy file is a dict WITHOUT `high_water`, which
+        `_absorb_envelope` treats exactly as it treats a bare list - derive
+        once, from ids that (being wall-clock) do not parse, so 0. Both shapes
+        load forever and neither is rewritten in place.
+        """
         if not self.filepath.exists():
             return
-            
+
         with open(self.filepath, 'r') as f:
             data = json.load(f)
-            
+
         # Load entries
-        for entry_dict in data.get('entries', []):
+        for entry_dict in self._absorb_envelope(data):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],

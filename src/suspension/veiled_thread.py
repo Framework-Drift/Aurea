@@ -24,7 +24,13 @@ class VeiledThread(SuspensionSystem):
     - Cross-domain paradoxes that might resolve with time
     - Resonant content lacking structural support
     """
-    
+
+    # M4-beta' (2026-08-15): the mint's prefix, unchanged from the wall-clock
+    # era. **TWO REMOVAL DOORS OF ITS OWN** - `extract_emerged` and
+    # `_purge_low_potential_entries` - plus the inherited `purge_old_entries`.
+    # (`check_emergence` is NOT one: it returns a bool and removes nothing.)
+    ID_PREFIX = "VT-"
+
     def __init__(self, capacity: int = 100, filepath: str = "data/runtime/suspension/veiled_thread.json"):
         super().__init__(capacity)
         self.suspension_type = SuspensionType.VEILED
@@ -57,8 +63,14 @@ class VeiledThread(SuspensionSystem):
             self._purge_low_potential_entries()
             
         # Create entry
+        #
+        # M4-beta': MINTED from the high-water mark. **THIS STORE IS THE ONE
+        # THE STOP WAS WITNESSED ON**: `extract_emerged` is the Veiled Thread's
+        # own success path - content ferments and emerges - and it removes the
+        # entry, so a mint derived from survivors reissued the id of something
+        # that had just succeeded. The purge two lines above does it too.
         entry = SuspensionEntry(
-            id=f"VT-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+            id=self._mint_id(),
             content=content,
             suspension_type=SuspensionType.VEILED,
             pressure_level=pressure,
@@ -299,17 +311,28 @@ class VeiledThread(SuspensionSystem):
         # Rider R3 (2026-07-29): ATOMIC. A whole-file rebuild per save (see
         # `black_sphere.save_to_file`). The Veiled Thread is "where a
         # contradiction goes to keep being real"; a torn write ends that.
-        atomic_write_json(self.filepath, data, indent=2)
-            
+        #
+        # M4-beta' (2026-08-15) - THE ENVELOPE. **THE SCHEMA CHANGE, DECLARED**:
+        # a BARE JSON LIST becomes `{"high_water": N, "entries": [...]}`. The
+        # counter rides in the same atomic write as the entries it numbers, so
+        # an emergence that removes an entry cannot take the record of its id
+        # with it.
+        atomic_write_json(self.filepath, self._envelope(data), indent=2)
+
     def load_from_file(self):
-        """Load Veiled Thread entries from disk."""
+        """Load Veiled Thread entries from disk.
+
+        M4-beta': BOTH SHAPES LOAD FOREVER - see `_absorb_envelope`. A legacy
+        file's wall-clock ids do not parse as ordinals, so it starts at 0 and
+        `VT-0001` cannot collide with a twenty-digit id already in it.
+        """
         if not self.filepath.exists():
             return
-            
+
         with open(self.filepath, 'r') as f:
             data = json.load(f)
-            
-        for entry_dict in data:
+
+        for entry_dict in self._absorb_envelope(data):
             entry = SuspensionEntry(
                 id=entry_dict['id'],
                 content=entry_dict['content'],

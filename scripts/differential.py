@@ -35,16 +35,40 @@ IT IMPORTS THE SOAK'S ISOLATION MACHINERY RATHER THAN COPYING IT. `isolate`,
 free to drift from the first, and the drift would be invisible precisely because
 both would look right in isolation.
 
-THE WALL-CLOCK NORMALIZATION IS REPORTED, NOT HIDDEN
+THE WALL-CLOCK NORMALIZATION IS REPORTED, NOT HIDDEN - AND AS OF M4-β' IT HAS
+NOTHING LEFT TO NORMALIZE
 -------------------------------------------------------------------------------
-`Echo` and `CSA` ids are minted from `datetime.now()`, so two runs of the SAME
-tree differ by construction. Comparison therefore normalizes any
-`<PREFIX>-<12+ digits>` token to a positional placeholder. That is a WORKAROUND
-for a carried defect (Echo wall-clock id minting, elevated on THE PATH), not a
-property of the system, and it is named here so no future reader mistakes a
-normalized diff for a deterministic one. **The identity run exists to prove the
-normalization is sufficient**: run a tree against itself first, and if that is
-not clean, the harness is not trustworthy and neither is the comparison.
+    ~~`Echo` and `CSA` ids are minted from `datetime.now()`, so two runs of the
+    SAME tree differ by construction. Comparison therefore normalizes any
+    `<PREFIX>-<12+ digits>` token to a positional placeholder. That is a
+    WORKAROUND for a carried defect (Echo wall-clock id minting, elevated on
+    THE PATH), not a property of the system, and it is named here so no future
+    reader mistakes a normalized diff for a deterministic one.~~
+
+**SUPERSEDED 2026-08-15 (M4-β'), old text kept verbatim because it is the record
+of the era it describes - and because a note that has stopped describing the tree
+is documentation of a system that does not exist (Docket E's class).**
+
+THE DEFECT IT WORKED AROUND IS GONE. Ruling 75 killed the `Echo` mint at its
+source; M4-β' killed the last three (`CSA-`/`BS-`/`VT-`), which now mint
+`{PREFIX}{n:04d}` from a high-water mark carried in their own snapshots. **A
+FOUR-DIGIT ORDINAL NEVER MATCHED THE 12+-DIGIT SHAPE**, so the narrowing needed
+no edit to the pattern below: the ids simply stopped being the thing it caught.
+A census of `src/` at this commit finds NO live wall-clock id mint anywhere -
+the one remaining `strftime` id is inside a struck-through docstring recording
+what Ruling 75 deleted.
+
+THE PATTERN STAYS, INERT, AND THAT IS DELIBERATE. It is retained rather than
+deleted for one reason: a 12+-digit token can still appear in recorded CONTENT (a
+claim quoting an id), and removing a normalization is a change to what the
+instrument compares, which the identity run would have to re-establish rather
+than merely confirm. An inert guard that is documented as inert costs nothing; a
+deleted one has to be re-argued the day something reintroduces a clock.
+
+**The identity run still exists to prove the normalization is sufficient**: run a
+tree against itself first, and if that is not clean, the harness is not
+trustworthy and neither is the comparison. As of M4-β' it proves something
+stronger - that the comparison no longer DEPENDS on the normalization at all.
 
 USAGE
 -------------------------------------------------------------------------------
