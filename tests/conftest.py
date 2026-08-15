@@ -28,9 +28,12 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-NINE PATHS: six resolved from class attributes,
-twenty-three from `__init__` defaults. If you add a thirtieth and do not add it
+THIS FIXTURE COVERS THIRTY PATHS: six resolved from class attributes,
+twenty-four from `__init__` defaults. If you add a thirty-first and do not add it
 here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS TWENTY-NINE PATHS: six resolved from class attributes,
+    twenty-three from `__init__` defaults.~~
 
     ~~THIS FIXTURE COVERS TWENTY-EIGHT PATHS: six resolved from class
     attributes, twenty-two from `__init__` defaults.~~
@@ -139,6 +142,7 @@ import pytest
 
 from src.aurea_core import AureaCore
 from src.external.acquisition_ledger import AcquisitionLedger
+from src.worldmodel.proposition_ledger import PropositionLedger
 from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex
 from src.doctrine.dee import DMW
@@ -343,6 +347,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # so this MUST be redirected before anything constructs a core or a test
         # run appends to the real record of everything AUREA has ever received.
         (AcquisitionLedger, "ledger_path", "acquisitions.jsonl"),
+        # M6-α: the proposition ledger - the World Model domain's first
+        # member. NOTHING in the pipeline constructs one (zero writers,
+        # pinned), so like the prediction and goal ledgers this redirect
+        # protects tests that build one DIRECTLY - and it lands in the
+        # SAME COMMIT as the store, per Ruling 31's standing rule.
+        (PropositionLedger, "ledger_path", "propositions.jsonl"),
         # Ruling 61: the prediction ledger. Append-only forensics recording what
         # AUREA committed to BEFORE an outcome, which is the one record whose
         # value depends entirely on not having been written afterwards. NOTHING

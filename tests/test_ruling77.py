@@ -471,8 +471,14 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # way that matters here** - the core constructs it by default and writes to
     # it on every perceived arrival, so the soak's census gains real ACQ lines
     # rather than the zero-line property the two Kernel stores keep.
-    assert audit["configured_paths"] == 32
-    assert first_run["isolation"]["configured_paths"] == 32
+    #
+    # ~~assert audit["configured_paths"] == 32~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 32~~
+    #
+    # MIGRATED AGAIN 2026-08-15 (M6-α). The proposition ledger is THE ONE ruled
+    # table movement of that pass (32 -> 33); any OTHER movement is a STOP.
+    assert audit["configured_paths"] == 33
+    assert first_run["isolation"]["configured_paths"] == 33
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1190,7 +1196,11 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # registers no store of its own, and never has.
     from scripts.soak import _injection_table
     class_attrs, init_defaults = _injection_table()
-    assert len(class_attrs) + len(init_defaults) == 32
+    # MIGRATED AGAIN 2026-08-15 (M6-α), same reason a fifth time: M6 added a
+    # durable path in `src/` and this assertion is what made registering it
+    # mandatory. THE SUBJECT IS UNCHANGED - the evaluation instrument registers
+    # no store of its own, and never has.
+    assert len(class_attrs) + len(init_defaults) == 33
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

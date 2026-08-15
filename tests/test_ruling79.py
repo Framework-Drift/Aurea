@@ -563,7 +563,15 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # ONE RULED MOVEMENT OF THAT PASS (31 -> 32), declared in its handoff
     # precisely so that any other movement is a STOP. Exact, not `>=`, for the
     # reason the paragraph above gives.
-    assert len(class_attrs) + len(init_defaults) == 32
+    #
+    # ~~assert len(class_attrs) + len(init_defaults) == 32~~
+    #
+    # MIGRATED 2026-08-15 (M6-α), old text kept verbatim above. **THE SUBJECT IS
+    # STILL UNCHANGED** and still asserted below. What moved is again the TABLE:
+    # M6-α registered the proposition ledger, THE ONE RULED MOVEMENT of that
+    # pass (32 -> 33), declared in its handoff precisely so any other movement
+    # is a STOP. Exact, not `>=`, for the reason the paragraph above gives.
+    assert len(class_attrs) + len(init_defaults) == 33
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

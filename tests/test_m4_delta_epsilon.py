@@ -44,6 +44,8 @@ from src.goals.goal_ledger import (GoalKind, GoalLedger, GoalLevel,
                                    GoalProvenance)
 from src.utils.atomic_write import _ends_mid_line, durable_append_text
 from src.utils.echo_memory import EchoMemory
+from src.worldmodel.proposition_ledger import (PropositionKind,
+                                               PropositionLedger)
 
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src"
@@ -156,6 +158,17 @@ LEDGERS = [
     ("episode", _episode,
      lambda E: E.open_episode(["OBL-0001"], 3),
      "src/filtration/episode_record.py", lambda E: E.read_all()),
+    # M6-α MIGRATION (2026-08-15), Ruling-14 form. NO ASSERTION MOVED - one row
+    # added, so every claim in this file now also binds the proposition ledger.
+    # **THE STANDING DERIVATION ABOVE FOUND IT WITHOUT BEING TOLD**, which is
+    # exactly what the M4 census correction bought: the pin reddened on the new
+    # store's first commit rather than covering it by omission.
+    #
+    # UNGROUNDED, deliberately: a proposition with zero references admits, so
+    # this row needs no resolvers and exercises the write path alone.
+    ("proposition", lambda p: PropositionLedger(ledger_path=str(p)),
+     lambda L: L.record(PropositionKind.STATE, "a world proposition"),
+     "src/worldmodel/proposition_ledger.py", lambda L: L.summaries()),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -175,10 +188,11 @@ def test_the_ledger_population_is_derived_and_matches_this_table():
         f"the funnel-appending, minting population is {sorted(derived)} but "
         f"this file covers {sorted(covered)}. Add the row - a ledger absent "
         f"from it makes every claim below TRUE BY OMISSION for that store.")
-    assert len(covered) == 10, (
-        "TEN, not the handoff's nine - `aurea_core` imports the mint helper for "
-        "a FLOOR READ and appends only forensic logs, and the M3-A stores were "
-        "never in Ruling 69's battery list")
+    assert len(covered) == 11, (
+        "ELEVEN as of M6-α (the proposition ledger). ~~TEN, not the handoff's "
+        "nine~~ - `aurea_core` imports the mint helper for a FLOOR READ and "
+        "appends only forensic logs, and the M3-A stores were never in Ruling "
+        "69's battery list")
 
 
 # =====================================================================

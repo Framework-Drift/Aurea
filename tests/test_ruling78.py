@@ -411,11 +411,16 @@ def test_c_every_routed_site_is_still_a_site():
     call to the funnel at its close. A census that only FORBIDS raw appends is
     equally satisfied by a store that stopped recording altogether.
 
-    **FIFTEEN AS OF M4-alpha (2026-08-15), old counts kept above.** The
+    **SIXTEEN AS OF M6-α (2026-08-15).** The proposition ledger is the
+    sixteenth - the World Model domain's first member. Same branch of the
+    message below, taken as written: the count moved because a record started
+    being kept.
+
+    ~~**FIFTEEN AS OF M4-alpha (2026-08-15), old counts kept above.** The
     acquisition ledger is the fifteenth - the boundary record, and the first
     store whose append is on the pipeline's own hot path since the ancestry
     ledger's. Same branch of the message below, taken exactly as written: the
-    count moved because a record started being kept.
+    count moved because a record started being kept.~~
 
     ~~**FOURTEEN AS OF M3-A (2026-08-13), old count kept in the sentence
     above.** The obligation ledger and the episode record are the thirteenth and
@@ -431,8 +436,8 @@ def test_c_every_routed_site_is_still_a_site():
             if (isinstance(node, ast.Call)
                     and getattr(node.func, "id", None) == "durable_append_text"):
                 callers.add(path.relative_to(REPO).as_posix())
-    assert len(callers) == 15, (
-        "fifteen append sites are routed through Ruling 78's funnel; the tree "
+    assert len(callers) == 16, (
+        "sixteen append sites are routed through Ruling 78's funnel; the tree "
         "now has " + str(len(callers)) + ": " + repr(sorted(callers)) + ". A "
         "NEW one is fine and welcome - update this count. A MISSING one means a "
         "record stopped being kept.")

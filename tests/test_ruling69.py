@@ -28,6 +28,8 @@ from pathlib import Path
 import pytest
 
 from src.doctrine.cae import CAE, LedgerUnreadable
+from src.worldmodel.proposition_ledger import (
+    PropositionKind, PropositionLedger, PropositionLedgerUnreadable)
 from src.external.acquisition_ledger import (AcquisitionChannel,
                                              AcquisitionLedger,
                                              AcquisitionLedgerUnreadable)
@@ -218,6 +220,16 @@ LEDGERS = [
      lambda L: L.record("an arrival",
                         channel=AcquisitionChannel.USER_INPUT).acquisition_id,
      "ACQ-", "ACQ-0001", AcquisitionLedgerUnreadable),
+    # M6-α MIGRATION (2026-08-15), Ruling-14 form. NO ASSERTION MOVED - one row
+    # added, so every parametrized claim in this file now also binds the
+    # proposition ledger, the shared mint's SEVENTH consumer.
+    #
+    # UNGROUNDED, so the row needs no kernel resolvers: a proposition citing
+    # nothing admits, which is M6-α's own ABSENT-is-a-real-answer rule and makes
+    # this the second-shallowest row after the echo store's.
+    ("proposition", lambda p: PropositionLedger(ledger_path=str(p)),
+     lambda L: L.record(PropositionKind.STATE, "a world proposition").wmp_id,
+     "WMP-", "WMP-0001", PropositionLedgerUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -457,7 +469,14 @@ _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
                    # property set at the `ACQ-` prefix. This list backs claims
                    # quantified over EVERY ledger, so one absent from it makes
                    # those claims TRUE BY OMISSION.
-                   "src/external/acquisition_ledger.py")
+                   "src/external/acquisition_ledger.py",
+                   # M6-α MIGRATION (2026-08-15), Ruling-14 form. NO ASSERTION
+                   # MOVED - the proposition ledger is the shared mint's SEVENTH
+                   # consumer and inherits Ruling 69's whole property set at the
+                   # `WMP-` prefix. This list backs claims quantified over EVERY
+                   # ledger, so one absent from it makes those claims TRUE BY
+                   # OMISSION.
+                   "src/worldmodel/proposition_ledger.py")
 
 
 def _seq_assignments(tree) -> list:

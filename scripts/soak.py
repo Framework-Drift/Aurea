@@ -109,6 +109,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.sae import SAE
     from src.expansion.tether.session_governor import TetherProtocol
     from src.external.acquisition_ledger import AcquisitionLedger
+    from src.worldmodel.proposition_ledger import PropositionLedger
     from src.external.claim_ancestry import ClaimAncestryLedger
     from src.external.prediction_ledger import PredictionLedger
     from src.goals.goal_activation import ActivationLayer
@@ -156,6 +157,13 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # input history to the real acquisition record: the contamination class
         # this table exists to make unexecutable.
         (AcquisitionLedger, "ledger_path", "logs/acquisitions.jsonl"),
+        # M6-α (2026-08-15). THE ONE RULED TABLE MOVEMENT OF THIS PASS
+        # (32 -> 33) - any other movement is a STOP. Zero writers today,
+        # so a soak must show ZERO proposition lines; the path is
+        # redirected anyway because the coverage self-audit re-derives
+        # the injectable set from `src/` and REFUSES a run whose table
+        # has fallen behind.
+        (PropositionLedger, "ledger_path", "worldmodel/propositions.jsonl"),
         # Ruling 61. Nothing in the pipeline commits predictions yet, so the
         # soak must show ZERO prediction lines - but the path is redirected
         # anyway, because the coverage self-audit re-derives the injectable set
@@ -665,11 +673,14 @@ def run_soak(cycles: int = 200, claim_every: int = 5, seed: int = 42,
     acquisitions = _acquisition_census(core)
     # M4-β' (2026-08-15) - THE ENVELOPE CENSUS, A DECLARED SCHEMA MOVEMENT.
     suspensions = _suspension_census(core)
+    # M6-α (2026-08-15) - THE WORLD MODEL CENSUS, DECLARED.
+    worldmodel = _worldmodel_census(root)
 
     summary = _summarize(root, configured, records, failures, cae_ids,
                          quarantine_seen, seeds_before, seeds_after,
                          shared_before, shared_after,
-                         cycles, claim_every, seed, acquisitions, suspensions)
+                         cycles, claim_every, seed, acquisitions, suspensions,
+                         worldmodel)
 
     out_path = Path(out) if out else (root / "summary.json")
     _refuse_if_shared_out(out_path)
@@ -756,10 +767,25 @@ def _suspension_census(core) -> Dict[str, Any]:
     return out
 
 
+def _worldmodel_census(root) -> Dict[str, Any]:
+    """M6-α. What the World Model store holds after the run.
+
+    **READ FROM THE FILE AT THE RUN'S OWN ROOT, because `AureaCore` constructs
+    NO proposition ledger** - M6 wires zero writers, and the Executive owns that
+    at M7. So the expected census is ZERO, and a nonzero one would itself be the
+    finding: something wrote a world proposition that no ruling authorizes yet.
+    """
+    path = Path(root) / "worldmodel" / "propositions.jsonl"
+    if not path.exists():
+        return {"file_present": False, "lines": 0}
+    lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return {"file_present": True, "lines": len(lines)}
+
+
 def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
                seeds_before, seeds_after, shared_before, shared_after,
                cycles, claim_every, seed, acquisitions=None,
-               suspensions=None) -> Dict[str, Any]:
+               suspensions=None, worldmodel=None) -> Dict[str, Any]:
     monotonic = all(b >= a for a, b in zip(cae_ids, cae_ids[1:]))
     strictly_rising = [b for a, b in zip(cae_ids, cae_ids[1:]) if b < a]
 
@@ -830,6 +856,9 @@ def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
         # EVER ISSUED and `entries` counts what SURVIVES; the two diverging is
         # the mechanism working rather than a finding.
         "suspensions": suspensions,
+        # M6-α: the World Model domain's first member. ZERO is the
+        # expected reading - nothing in `src/` writes a proposition.
+        "worldmodel": worldmodel,
         # RULING 54's stability witness: EMPTY means nothing eroded.
         "lineage_erosion": eroded,
         "lineage_first": first_lineage,
