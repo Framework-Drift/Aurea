@@ -21,7 +21,7 @@ only the empty files that impersonated them.
 | Domain | One line |
 |---|---|
 | **Kernel** | The collapse core — perception, filtration, scars, doctrine, reflex arbitration, suspension. What survives contradiction and what it costs her to hold it. |
-| **World Model** | What she holds about the world and where it came from — claim ancestry, source genealogy, predictions, record projection, topology. |
+| **World Model** | What she holds about the world and where it came from — claim ancestry, source genealogy, predictions, record projection, topology, **and as of M6 the PROPOSITION LEDGER (`src/worldmodel/`): a persistent typed representation of what she thinks is happening outside herself, whose propositions reference kernel records and derive standing from them rather than manufacturing any.** |
 | **Executive** | What she is trying to do and what she is allowed to spend on it — goals, arbitration, activation, delegation, scheduling. |
 | **Capability Plane** | Typed ingress and typed egress — how external material becomes a claim, and how an authorized action reaches the world through the Action Gateway. |
 | **Foundry** | The external evaluation surface — candidate models measured against structured cases, with no authority over her. |

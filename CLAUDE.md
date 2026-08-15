@@ -176,7 +176,7 @@ The architectural frame around the ownership table above: every subsystem sits i
 | Domain | What it answers | |
 |---|---|---|
 | **Kernel** | what may mean what | The existing build. **PASSIVE — nothing loops.** |
-| **World Model** | what seems to exist | `record_projection` is the seed. **A VIEW, NEVER A SOURCE** — which is Ruling 64's own finding, not a softening of it. |
+| **World Model** | what seems to exist | **THE DOMAIN HAS A MEMBER AS OF M6 (2026-08-15): `src/worldmodel/` — the proposition ledger, the standing derivation, the contradiction surface.** `record_projection` remains the seed and remains **A VIEW, NEVER A SOURCE** (Ruling 64's own finding). The new store is the other thing: a persistent typed representation of what she thinks is happening outside herself — and **it manufactures no truth.** Propositions REFERENCE kernel epistemic records (resolved at write, refused typed) and DERIVE standing from the kernel; a world-model inconsistency is a conflict candidate routed into L4, where the loop M3 built adjudicates it. **The domain has no private truth machinery.** |
 | **Executive** | what receives cognition | **FUTURE (M7). It LOOPS, and it is CONSTITUTIONALLY DISPOSABLE.** |
 | **Capability Plane** | what cognition/action can be used | `model_provider` · `spl` · `hail`/`srg`. **ROLES, NOT BRANDS.** |
 | **Foundry** | what capabilities actually do | The AUREA-Foundry repo — **OUTSIDE the system.** |
@@ -228,8 +228,8 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 1873 passed, 0 xfailed.** ~~1523~~ ~~1725~~
-~~1730~~ ~~1785~~ ~~1841~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
+**Full suite baseline (`pytest tests/`): 1954 passed, 0 xfailed.** ~~1523~~ ~~1725~~
+~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
 (M3-D commit 2, the episode path +18) → **1730** (the M3-D retirement: **−1** for
@@ -239,16 +239,24 @@ invariant 21 retiring, **+6** pins closing the owed slates' survivors) → **173
 → **1785** (the M4-α chaos follow-up, +3) → **1821** (M4-β′, the high-water
 envelope, +36) → **1841** (M4-γ, replay and the chaos family, +20) → **1873**
 (M4-δ + M4-ε, the column-zero law and the declaration fields, +32).
-**M4 CLOSES HERE.**
+**M4 CLOSED THERE.** → **1920** (M6-α, the proposition ledger: **+9** inherited
+battery rows and **+38** new pins) → **1954** (M6-β + M6-γ, the standing
+derivation and the L4 routing, +34).
 **Invariants stood at 27/27 from Ruling 42 Slice 2 until the retirement, which took
-them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ and M4-ε added none.** For the acquisition
+them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ, M4-ε, M6-α, M6-β and M6-γ added none.** For the acquisition
 ledger the reason is CAE's verbatim: the Ruling-1 scanner keys on an ATTRIBUTE
 NAME, and the ledger is a FILE whose `entries` is a per-process mirror nothing
 reads back into a decision. For the three suspension stores the reason is that
 they are not `STORE_OWNERS` members and β′ did not make them ones — it changed
 how they MINT and SERIALIZE, not who writes them. δ and ε add no store at all:
 δ is a ONE-SITE law inside a helper that owns nothing, and ε is a field on a
-record that already had an owner.
+record that already had an owner. **M6 reserved a row for the proposition ledger
+and the condition was NOT met** — the premise was true (one writer module), but
+the Ruling-1 scanner needs a SCANNABLE UNIQUE ATTRIBUTE and the store's only
+in-memory collection is `entries`, which three suspension stores already assign
+to (measured by AST). Registering it would flag correct code, which is Ruling 1's
+own warning and the invariant file's own `history` precedent. What guards the
+store instead is that `record()` is the only write path, pinned.
 
 **THE HEADLINE CORRECTION THE SEVENTY-SECOND ENTRY ORDERED IS DISCHARGED HERE
 (2026-08-15), and the drift it names is worth stating rather than just fixing.**
