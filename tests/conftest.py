@@ -28,15 +28,25 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS TWENTY-EIGHT PATHS: six resolved from class attributes,
-twenty-two from `__init__` defaults. If you add a twenty-ninth and do not add it
+THIS FIXTURE COVERS TWENTY-NINE PATHS: six resolved from class attributes,
+twenty-three from `__init__` defaults. If you add a thirtieth and do not add it
 here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS TWENTY-EIGHT PATHS: six resolved from class
+    attributes, twenty-two from `__init__` defaults.~~
 
     ~~THIS FIXTURE COVERS TWENTY-SIX PATHS: six resolved from class attributes,
     twenty from `__init__` defaults.~~
 
     ~~THIS FIXTURE COVERS TWENTY-FIVE PATHS: five resolved from class
     attributes, twenty from `__init__` defaults.~~
+
+**UPDATED 2026-08-15 (M4-alpha), old text kept above verbatim.** The acquisition
+ledger is the twenty-ninth, an `__init__` default, added in the SAME commit as
+the store. It is the first addition since M3-A that the CORE CONSTRUCTS BY
+DEFAULT and WRITES TO on every perceived arrival, so an omission here would not
+have been latent - it would have appended a line to the real record of
+everything AUREA has ever received, on the first test that processed an input.
 
 **UPDATED 2026-08-13 (M3-A), old text kept above verbatim.** The obligation
 ledger and the episode record are the twenty-seventh and twenty-eighth, both
@@ -128,6 +138,7 @@ import inspect
 import pytest
 
 from src.aurea_core import AureaCore
+from src.external.acquisition_ledger import AcquisitionLedger
 from src.doctrine.cae import CAE
 from src.doctrine.codex import Codex
 from src.doctrine.dee import DMW
@@ -326,6 +337,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # constructs a core, or a test run appends to the real record of what
         # AUREA has been asked.
         (ClaimAncestryLedger, "ledger_path", "claim_ancestry.jsonl"),
+        # M4-alpha: the acquisition ledger. THE ANCESTRY LEDGER'S SITUATION
+        # EXACTLY, not the prediction ledger's - `AureaCore` constructs one BY
+        # DEFAULT and `process_input` writes to it on every perceived arrival,
+        # so this MUST be redirected before anything constructs a core or a test
+        # run appends to the real record of everything AUREA has ever received.
+        (AcquisitionLedger, "ledger_path", "acquisitions.jsonl"),
         # Ruling 61: the prediction ledger. Append-only forensics recording what
         # AUREA committed to BEFORE an outcome, which is the one record whose
         # value depends entirely on not having been written afterwards. NOTHING

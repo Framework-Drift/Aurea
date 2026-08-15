@@ -108,6 +108,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.expansion.nova import NovaEngine
     from src.expansion.sae import SAE
     from src.expansion.tether.session_governor import TetherProtocol
+    from src.external.acquisition_ledger import AcquisitionLedger
     from src.external.claim_ancestry import ClaimAncestryLedger
     from src.external.prediction_ledger import PredictionLedger
     from src.goals.goal_activation import ActivationLayer
@@ -148,6 +149,13 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # Ruling 58. Added AFTER the coverage self-audit refused a run without
         # it - the guard firing in development is exactly what it is for.
         (ClaimAncestryLedger, "ledger_path", "logs/claim_ancestry.jsonl"),
+        # M4-alpha (2026-08-15). THE ONE RULED TABLE MOVEMENT OF THIS PASS
+        # (31 -> 32) - any other movement is a STOP. `AureaCore` constructs one
+        # by default and `process_input` writes to it on every perceived
+        # arrival, so an unredirected path here would append the soak's entire
+        # input history to the real acquisition record: the contamination class
+        # this table exists to make unexecutable.
+        (AcquisitionLedger, "ledger_path", "logs/acquisitions.jsonl"),
         # Ruling 61. Nothing in the pipeline commits predictions yet, so the
         # soak must show ZERO prediction lines - but the path is redirected
         # anyway, because the coverage self-audit re-derives the injectable set
@@ -647,10 +655,19 @@ def run_soak(cycles: int = 200, claim_every: int = 5, seed: int = 42,
     seeds_after = _seed_hashes()
     shared_after = _shared_runtime_listing()
 
+    # M4-alpha (2026-08-15) - THE ACQUISITION CENSUS, A DECLARED SCHEMA
+    # MOVEMENT. Read from the OWNER's own path rather than from a relative
+    # literal, so it cannot drift from the injection table above.
+    #
+    # **ONE ACQ LINE PER CLAIM CYCLE IS THE PROPERTY**, and it is measured here
+    # rather than asserted: quiet cycles perceive nothing, so a count that
+    # tracked `cycles` instead of `claim_cycles` would be the finding.
+    acquisitions = _acquisition_census(core)
+
     summary = _summarize(root, configured, records, failures, cae_ids,
                          quarantine_seen, seeds_before, seeds_after,
                          shared_before, shared_after,
-                         cycles, claim_every, seed)
+                         cycles, claim_every, seed, acquisitions)
 
     out_path = Path(out) if out else (root / "summary.json")
     _refuse_if_shared_out(out_path)
@@ -675,9 +692,35 @@ def _refuse_if_shared_out(out_path: Path) -> None:
 # P4 - END-OF-RUN GUARANTEES. Asserted here, reported, never fixed.
 # =====================================================================
 
+def _acquisition_census(core) -> Dict[str, Any]:
+    """M4-alpha. What the boundary recorded, read from the ledger FILE.
+
+    Counts, the id range, and the channel spread - facts, no verdict. The
+    `channels` map is what would make a fabricated channel visible in a census
+    rather than only in a pin: a soak drives `process_input` directly, so every
+    line must read `user_input` and a `model_exchange` appearing here would mean
+    something declared a door the soak never opened.
+    """
+    records = core.acquisitions.read_all()
+    channels: Dict[str, int] = {}
+    for record in records:
+        channels[record.channel.value] = channels.get(record.channel.value, 0) + 1
+    return {
+        "lines": len(records),
+        "first_id": records[0].acquisition_id if records else None,
+        "last_id": records[-1].acquisition_id if records else None,
+        "channels": channels,
+        # THE JOIN, counted: every claim should carry the arrival it came from.
+        "claims_carrying_an_arrival": sum(
+            1 for claim in core.ancestry.read_all()
+            if claim.acquisition_ref is not None),
+        "claim_lines": len(core.ancestry.read_all()),
+    }
+
+
 def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
                seeds_before, seeds_after, shared_before, shared_after,
-               cycles, claim_every, seed) -> Dict[str, Any]:
+               cycles, claim_every, seed, acquisitions=None) -> Dict[str, Any]:
     monotonic = all(b >= a for a, b in zip(cae_ids, cae_ids[1:]))
     strictly_rising = [b for a, b in zip(cae_ids, cae_ids[1:]) if b < a]
 
@@ -739,6 +782,11 @@ def _summarize(root, configured, records, failures, cae_ids, quarantine_seen,
             "persist_failures": last.get("persist_failures"),
             "cae_entries_minted": (max(cae_ids) if cae_ids else 0),
         },
+        # M4-alpha: THE DECLARED CENSUS ADDITION. One block, at the top level
+        # beside the other census surfaces rather than folded into `headline`,
+        # so a comparison against an earlier report reads it as ADDED rather
+        # than as a headline that changed shape.
+        "acquisitions": acquisitions,
         # RULING 54's stability witness: EMPTY means nothing eroded.
         "lineage_erosion": eroded,
         "lineage_first": first_lineage,

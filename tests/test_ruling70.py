@@ -73,18 +73,37 @@ class _Spy:
     verbatim text and the never-called property are facts about what CROSSED
     THE BOUNDARY, and re-deriving them from downstream state would measure
     SPL's strip instead of the adapter's fidelity.
+
+    CHANGED BY A RULING, 2026-08-15 (M4-alpha) - and it is a TEST DOUBLE that
+    drifted from the collaborator it stands in for, which is the Ruling 60
+    precedent exactly (`tests/test_docket_n.py`'s SPL double, when SPL gained a
+    keyword-only `claim_id`). Recorded verbatim:
+
+        OLD (Ruling 70, 2026-08-02):
+            def __call__(self, raw_input, *, origin=None):
+        NEW (M4-alpha):
+            ... plus `channel=None, correlation_id=None`, both RECORDED
+
+    **NO ASSERTION MOVED.** `process_input` gained the two acquisition keywords
+    and the adapter now declares `MODEL_EXCHANGE` through them, so a double that
+    refused them was no longer `process_input`-shaped. Capturing rather than
+    swallowing them is what keeps this class honest about its own docstring:
+    the channel declaration is now part of WHAT CROSSED THE BOUNDARY, so a spy
+    that dropped it would stop witnessing the thing it exists to witness.
     """
 
     def __init__(self, ledger=None):
         self.calls = []
         self._ledger = ledger
 
-    def __call__(self, raw_input, *, origin=None):
+    def __call__(self, raw_input, *, origin=None, channel=None,
+                 correlation_id=None):
         claim_id = None
         if self._ledger is not None:
             claim_id = self._ledger.record(origin).claim_id
         self.calls.append({"raw_input": raw_input, "origin": origin,
-                           "claim_id": claim_id})
+                           "claim_id": claim_id, "channel": channel,
+                           "correlation_id": correlation_id})
         return {"claim_id": claim_id, "spy": True}
 
 
@@ -489,7 +508,9 @@ def test_b_the_adapter_adds_nothing_to_the_result_and_removes_nothing():
     """
     sentinel = {"claim_id": "CLM-0009", "spy": True}
 
-    def collaborator(raw_input, *, origin=None):
+    # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
+    def collaborator(raw_input, *, origin=None, channel=None,
+                     correlation_id=None):
         return sentinel
 
     returned = ingest_model_assertion(collaborator, "A claim.", IDENTITY)
@@ -507,7 +528,9 @@ def test_b_the_adapter_calls_process_input_with_origin_keyword_only():
     """
     captured = {}
 
-    def collaborator(raw_input, *, origin=None):
+    # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
+    def collaborator(raw_input, *, origin=None, channel=None,
+                     correlation_id=None):
         captured["raw_input"] = raw_input
         captured["origin"] = origin
         return {}
@@ -888,7 +911,9 @@ def test_h_any_process_input_shaped_callable_is_accepted():
     """
     seen = []
 
-    def collaborator(raw_input, *, origin=None):
+    # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
+    def collaborator(raw_input, *, origin=None, channel=None,
+                     correlation_id=None):
         seen.append((raw_input, origin.kind))
         return {"routed": True}
 

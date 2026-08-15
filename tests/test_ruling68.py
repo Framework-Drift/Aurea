@@ -283,10 +283,29 @@ def test_the_type_gate_sits_between_the_suspension_gate_and_the_mint():
     above; structurally the ordering is exact, and a refactor that hoisted the
     type gate above suspension would change what a suspended AUREA reports
     without failing any behavioural pin that did not think to check.
+
+    CHANGED BY A RULING, 2026-08-15 (M4-alpha) - the one legitimate reason a
+    pinned test moves (the Ruling-14 precedent). Recorded verbatim:
+
+        OLD (Ruling 68, 2026-08-02):
+            mint = src.index("self.ancestry.record(origin)")
+        NEW (M4-alpha):
+            mint = src.index("self.ancestry.record(")
+
+    **NO ASSERTION MOVED** - `suspension < type_gate < mint` is byte-identical,
+    and it is still the only thing this test claims. What moved is the LOCATOR:
+    the mint site gained `acquisition_ref=` (the claim now carries the arrival
+    that became it), so the full-call substring stopped naming the call it was
+    written to find. The narrower locator names the mint site itself and is
+    robust to its argument list, which is what a locator should have been.
+
+    The acquisition write sits between the type gate and this mint, and is
+    pinned in `tests/test_m4_acquisition.py` - BOTH gates still sit above BOTH
+    writes, which is the property res.1 rules and M4-alpha extends.
     """
     src = inspect.getsource(AureaCore.process_input)
     suspension = src.index("if self.processing_suspended:")
     type_gate = src.index("if not isinstance(raw_input, str):")
-    mint = src.index("self.ancestry.record(origin)")
+    mint = src.index("self.ancestry.record(")
     assert suspension < type_gate < mint, (
         "res.1 rules the order: suspension gate, then type gate, then mint")

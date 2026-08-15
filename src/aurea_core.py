@@ -21,6 +21,9 @@ from src.filtration.obligation_ledger import ObligationLedger, TargetKind
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
+from src.external.acquisition_ledger import (AcquisitionChannel,
+                                             AcquisitionLedger,
+                                             AcquisitionLedgerUnreadable)
 from src.external.claim_ancestry import (AncestryLedgerUnreadable,
                                          ClaimAncestryLedger, OriginDeclaration)
 # RULING 61 (2026-08-01). Imported for the taxonomy ONLY - `AureaCore`
@@ -159,6 +162,18 @@ STRUCTURAL_VIOLATIONS = (
     # verdict with no establishable ancestry id means a gate meant to be
     # unpassable was passed.
     AncestryLedgerUnreadable,
+    # M4-alpha (2026-08-15). The acquisition ledger exists and its mint could
+    # not be derived, so the next `ACQ-` ordinal is unknown. Structural on this
+    # tuple's own criterion, and the sharpest instance of it: that ordinal is
+    # the BOUNDARY'S CLOCK, so a reissued id is two moments of logical time
+    # wearing one name - and Phase 4's determinism claim is a claim about
+    # exactly this record existing and being unique.
+    #
+    # It GATES the arrival for the reason `AncestryLedgerUnreadable` gates
+    # perception: boundary facts cannot be reconstructed later.
+    #
+    # Membership here is a DECISION. This line records that it was made.
+    AcquisitionLedgerUnreadable,
     # RULING 61 (2026-08-01). The prediction ledger exists and its mint could
     # not be derived, so the next `PRD-` ordinal is unknown. Structural on this
     # tuple's own criterion: two commitments wearing one id are two sets of
@@ -274,7 +289,8 @@ class AureaCore:
     DIVERGENCE_LOG_PATH = "data/runtime/logs/divergence.jsonl"
 
     def __init__(self, config: Dict[str, Any] = None,
-                 ancestry: Optional[ClaimAncestryLedger] = None):
+                 ancestry: Optional[ClaimAncestryLedger] = None,
+                 acquisitions: Optional[AcquisitionLedger] = None):
         """
         Initialize AUREA core systems.
         
@@ -358,6 +374,17 @@ class AureaCore:
         # `is None` check that would become the soft return CAE's own history
         # warns about. ONE shared instance; `record()` is the only write path.
         self.ancestry = ancestry or ClaimAncestryLedger()
+
+        # M4-alpha (2026-08-15): THE ACQUISITION LEDGER. The same
+        # default-by-construction idiom and for the same reason - there is no
+        # "acquisitions absent" state for any path to special-case, so
+        # `process_input` records the arrival unconditionally rather than behind
+        # an `is None` check that would become a soft return.
+        #
+        # CONSTRUCTED BESIDE THE ANCESTRY LEDGER because the two are written in
+        # one breath at the top of `process_input`: the arrival first, then the
+        # claim it becomes, carrying the arrival's id.
+        self.acquisitions = acquisitions or AcquisitionLedger()
 
         # SML (Ruling 37): the DECAY OWNER, and the sender that finally makes an
         # epoch closeable. Constructed after SAE because it EMITS to it - SML
@@ -917,7 +944,9 @@ class AureaCore:
             self.codex.seed(doctrine)
     
     def process_input(self, raw_input: str, *,
-                      origin: Optional[OriginDeclaration] = None) -> Dict[str, Any]:
+                      origin: Optional[OriginDeclaration] = None,
+                      channel: AcquisitionChannel = AcquisitionChannel.USER_INPUT,
+                      correlation_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Process input through the complete AUREA pipeline.
 
@@ -928,6 +957,14 @@ class AureaCore:
                 (Ruling 58). `None` means the channel declared nothing, which is
                 recorded as UNDECLARED with five ABSENT fields - never as a
                 human user.
+            channel: WHICH DOOR this arrival came through (M4-alpha). This
+                method IS the user-input door, so the default is its own
+                identity rather than a guess about the caller - the model
+                adapter routes through here and declares `MODEL_EXCHANGE`.
+                Deliberately NOT derived from `origin`; see the wire below.
+            correlation_id: The `ACQ-` id of the arrival that OPENED this
+                exchange, when this one continues it. `None` means this arrival
+                opens its own, and the record correlates with itself.
 
         Returns:
             Dictionary containing processing results
@@ -1149,7 +1186,57 @@ class AureaCore:
         # O2's echo <-> claim_id linkage will need and the property the soak
         # asserts (one line per claim cycle). Rider R2's principle extends
         # cleanly: a mind that is not running does not perceive claims either.
-        result['claim_id'] = self.ancestry.record(origin).claim_id
+        #
+        # =============================================================
+        # M4-alpha (2026-08-15) - THE ACQUISITION BOUNDARY
+        # =============================================================
+        # The ARRIVAL is recorded before the CLAIM it becomes, and the claim
+        # carries the arrival's id. Two lines, one breath, in causal order.
+        #
+        # POSITION IS RULED, NOT CHOSEN, and it is Ruling 58's position for
+        # Ruling 58's reasons plus one of its own. Both gates above stay exactly
+        # where they are:
+        #
+        #   * a SUSPENDED pass records nothing (Rider R2 - a mind that is not
+        #     running does not perceive claims, and does not take up arrivals);
+        #   * a NON-`str` arrival records nothing (Ruling 68 - an arrival that
+        #     is not a claim is not perceived, and its payload is not something
+        #     this ledger could canonically hold anyway).
+        #
+        # **THE ARRIVALS THAT GO UNRECORDED ARE EXACTLY THE ARRIVALS THAT
+        # CHANGED NO STATE**, and that is what keeps M4-gamma's replay complete
+        # rather than merely convenient: both gates above return through `_emit`
+        # having written to no store, so a replay driven from the recorded
+        # arrivals reproduces the run. Recording them instead would put lines in
+        # the boundary's clock for events that did nothing - and, for the type
+        # gate, would mean minting an arrival id for a `bytearray`, which is the
+        # fabrication class one layer out from the one Ruling 68 closed.
+        #
+        # ONE ACQ LINE PER CLM LINE, which pairs with Ruling 75's one-ECH-per-
+        # claim-cycle guarantee and with Ruling 68's restored one-to-one
+        # sentence. All three gates sit above all three writes.
+        #
+        # THE CHANNEL IS THE DOOR'S OWN IDENTITY, NOT A GUESS. `process_input`
+        # IS the user-input door, so its default is USER_INPUT; the model
+        # adapter routes through here and DECLARES `MODEL_EXCHANGE` with the
+        # correlation of the request half it already recorded. **It is not
+        # derived from `origin.kind`** - that would be Ruling 30's defect (two
+        # senses of one value): `origin_kind` says WHO ASSERTED, `channel` says
+        # WHICH DOOR, and a human pasting a model's output through this door is
+        # honestly a USER_INPUT arrival of a MODEL_PREDICTION assertion.
+        #
+        # THE WRITE GATES THE ARRIVAL. `record()` raises typed and the raise
+        # PROPAGATES from here, deliberately outside the `try:` below, exactly
+        # as the ancestry mint does and for the same reason: boundary facts
+        # cannot be reconstructed later, so the record is the legitimacy of the
+        # arrival and not a receipt for it.
+        acquisition = self.acquisitions.record(
+            raw_input, channel=channel, correlation_id=correlation_id)
+        # THE CLAIM CARRIES THE ARRIVAL, never the reverse (M4-alpha; Ruling
+        # 60's forced direction): the acquisition ledger is append-only with no
+        # update family, and the arrival is recorded before this id exists.
+        result['claim_id'] = self.ancestry.record(
+            origin, acquisition_ref=acquisition.acquisition_id).claim_id
 
         # TCAML cycle advance (Ruling 27, Stage 2). One pipeline pass = one
         # TCAML cycle. Run FIRST, before anything can request a lock, for the

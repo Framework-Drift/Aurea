@@ -28,6 +28,9 @@ from pathlib import Path
 import pytest
 
 from src.doctrine.cae import CAE, LedgerUnreadable
+from src.external.acquisition_ledger import (AcquisitionChannel,
+                                             AcquisitionLedger,
+                                             AcquisitionLedgerUnreadable)
 from src.external.claim_ancestry import (AncestryLedgerUnreadable,
                                          ClaimAncestryLedger, OriginDeclaration,
                                          OriginKind)
@@ -202,6 +205,19 @@ LEDGERS = [
     ("echo", lambda p: EchoMemory(filepath=str(p)),
      lambda M: M.record("a perceived claim").id,
      "ECH-", "ECH-0001", EchoLogUnreadable),
+    # M4-alpha MIGRATION (2026-08-15), Ruling-14 form. NO ASSERTION MOVED -
+    # one row added, so every parametrized claim in this file now also binds
+    # the acquisition ledger, the shared mint's SIXTH consumer.
+    #
+    # **IT IS THE SHALLOWEST ROW OF THE SIX, AND THAT IS M4's WHOLE POINT
+    # SHOWING THROUGH:** an ARRIVAL depends on nothing at all - not a
+    # commitment, not an examination, not even a perception. It is the event
+    # every other record in this table is downstream of, and until M4 it was the
+    # one event with no record of its own.
+    ("acquisition", lambda p: AcquisitionLedger(ledger_path=str(p)),
+     lambda L: L.record("an arrival",
+                        channel=AcquisitionChannel.USER_INPUT).acquisition_id,
+     "ACQ-", "ACQ-0001", AcquisitionLedgerUnreadable),
 ]
 IDS = [row[0] for row in LEDGERS]
 
@@ -224,6 +240,24 @@ def test_interleaved_two_instance_mints_are_all_distinct(
     return distinct strings and still write colliding ones. Both are asserted,
     and the line count is asserted too, because "all distinct" is trivially true
     of a file with one line in it.
+
+    CHANGED BY A RULING, 2026-08-15 (M4-alpha) - the Ruling-14 precedent, and it
+    is the ORACLE that moved rather than any assertion. Recorded verbatim:
+
+        OLD (Ruling 69, 2026-08-02):
+            on_disk = ordinal_pattern(prefix).findall(text)
+        NEW (M4-alpha):
+            ... the same scan, DEDUPED PER LINE
+
+    **NOTHING IS WEAKENED, AND THE ORACLE IS STRICTLY MORE EXACT.** The old form
+    counted id OCCURRENCES as a proxy for RECORDS, which is the same number only
+    while every record mentions exactly one id. An acquisition record carries
+    two id references by design - its own, and a `correlation_id` that
+    self-references when the arrival opens its own exchange - so the proxy read
+    12 records as 24. Per-line deduping counts what the assertion has always
+    CLAIMED to count: one record, one ordinal. A second record wearing a live id
+    is still caught (the set spans lines), and a line carrying two DIFFERENT
+    ordinals - the two-half exchange - still contributes both.
     """
     path = tmp_path / f"{name}.jsonl"
     a, b = build(path), build(path)
@@ -236,7 +270,8 @@ def test_interleaved_two_instance_mints_are_all_distinct(
     assert len(set(returned)) == len(returned), f"duplicate ids: {returned}"
 
     text = path.read_text(encoding="utf-8")
-    on_disk = ordinal_pattern(prefix).findall(text)
+    on_disk = [ordinal for line in text.splitlines() if line.strip()
+               for ordinal in dict.fromkeys(ordinal_pattern(prefix).findall(line))]
     assert len(on_disk) == 12, f"expected 12 records, found {len(on_disk)}"
     assert len(set(on_disk)) == 12, f"duplicate ids ON DISK: {on_disk}"
     assert sorted(int(o) for o in on_disk) == list(range(1, 13)), (
@@ -415,7 +450,14 @@ _LEDGER_MODULES = ("src/doctrine/cae.py", "src/external/claim_ancestry.py",
                    # ASSERTION MOVED - the echo store is the shared mint's
                    # FIFTH consumer and inherits Ruling 69's whole property
                    # set at the `ECH-` prefix.
-                   "src/utils/echo_memory.py")
+                   "src/utils/echo_memory.py",
+                   # M4-alpha MIGRATION (2026-08-15), Ruling-14 form. NO
+                   # ASSERTION MOVED - the acquisition ledger is the shared
+                   # mint's SIXTH consumer and inherits Ruling 69's whole
+                   # property set at the `ACQ-` prefix. This list backs claims
+                   # quantified over EVERY ledger, so one absent from it makes
+                   # those claims TRUE BY OMISSION.
+                   "src/external/acquisition_ledger.py")
 
 
 def _seq_assignments(tree) -> list:

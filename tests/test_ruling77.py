@@ -460,8 +460,19 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # OTHER movement is a STOP. Both stores are substrate with zero internal
     # callers, so a soak must still show ZERO lines from either - the count moves
     # because the paths are REGISTERED, not because anything writes them.
-    assert audit["configured_paths"] == 31
-    assert first_run["isolation"]["configured_paths"] == 31
+    #
+    # ~~assert audit["configured_paths"] == 31~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 31~~
+    #
+    # MIGRATED AGAIN 2026-08-15 (M4-alpha), old text kept verbatim above. The
+    # acquisition ledger is THE ONE ruled table movement of that pass (31 -> 32),
+    # declared in its handoff for the same reason every migration above states:
+    # any OTHER movement is a STOP. **This one differs from M3-A's two in the
+    # way that matters here** - the core constructs it by default and writes to
+    # it on every perceived arrival, so the soak's census gains real ACQ lines
+    # rather than the zero-line property the two Kernel stores keep.
+    assert audit["configured_paths"] == 32
+    assert first_run["isolation"]["configured_paths"] == 32
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1171,9 +1182,15 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # the SAME reason a third time: M3-A added two durable paths in `src/`, and
     # this assertion is what made registering them mandatory rather than
     # optional. The evaluation instrument still registers no store of its own.
+    # ~~assert len(class_attrs) + len(init_defaults) == 31~~
+    # MIGRATED AGAIN 2026-08-15 (M4-alpha), old text kept verbatim above, and for
+    # the SAME reason a fourth time: M4-alpha added the acquisition ledger's path
+    # in `src/`, and this assertion is what made registering it mandatory rather
+    # than optional. THE SUBJECT IS STILL UNCHANGED - the evaluation instrument
+    # registers no store of its own, and never has.
     from scripts.soak import _injection_table
     class_attrs, init_defaults = _injection_table()
-    assert len(class_attrs) + len(init_defaults) == 31
+    assert len(class_attrs) + len(init_defaults) == 32
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

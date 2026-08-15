@@ -100,6 +100,12 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
 
+# M4-alpha: the CHANNEL VOCABULARY ONLY - a closed enum, not a ledger, not a
+# path, not a writer. Ruling 63's precedent verbatim, the same one that licenses
+# the record-vocabulary import below: IMPORTING A VOCABULARY IS NOT CONSUMING A
+# STORE. This module still names no path, opens no file and holds no handle.
+from src.external.acquisition_ledger import AcquisitionChannel
+
 # THE RECORD VOCABULARY ONLY - never the ledger, and the distinction is Ruling
 # 63's own precedent: IMPORTING A RECORD TYPE IS NOT CONSUMING A STORE. This
 # module names no path, opens no file and holds no ledger handle; the ledger is
@@ -221,6 +227,7 @@ def ingest_model_assertion(
     replication_refs: Optional[AncestryField] = None,
     connecting_assumptions: Optional[AncestryField] = None,
     defeaters: Optional[AncestryField] = None,
+    correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record a model's response as a claim and route it through the pipeline.
 
@@ -240,6 +247,33 @@ def ingest_model_assertion(
     removed from it - the adapter has no verdict of its own to contribute, and
     a result this layer decorated would be a model-shaped surface on the far
     side of the arbitration boundary.
+
+    M4-alpha (2026-08-15) - THIS IS THE `MODEL_EXCHANGE` DOOR, AND IT DECLARES
+    RATHER THAN WRITES.
+    ---------------------------------------------------------------------------
+    A model response arriving here is an acquisition on the MODEL_EXCHANGE
+    channel, and it is recorded as one: this call declares the channel, and the
+    pipeline door records the arrival at its boundary before perceiving
+    anything. Without the declaration the response would be recorded as a
+    USER_INPUT arrival - a fabricated channel fact on a durable record, which is
+    L3's class and precisely the defect Ruling 58 spent a ruling closing one
+    layer in.
+
+    **THE ADAPTER DOES NOT WRITE THE RECORD ITSELF, AND THAT IS RULING 70 HOLDING
+    RATHER THAN AN OMISSION.** M4's grounding asks for the request and response
+    halves as two records sharing one correlation. Writing the request half here
+    would mean handing this module an `AcquisitionLedger` - a store handle, a
+    write surface, and the end of "the adapter cannot reach a store it is never
+    handed" (pin (b), AST-enforced). The narrower reading is also the truer one:
+    **this module never had the request.** res.2 says in terms that it ingests a
+    response someone else obtained, so the caller that made the request is the
+    only party that holds it, and the caller records that half and passes its
+    `ACQ-` id here as `correlation_id`. The two halves then join on a recorded
+    id, exactly as the grounding asks, without this module gaining a writer.
+
+    `correlation_id` is FORWARDED VERBATIM and never inspected, minted or
+    defaulted to something invented: `None` means this arrival opens its own
+    exchange, and the boundary correlates the record with itself.
     """
     if not isinstance(response_text, str):
         raise TypeError(
@@ -258,4 +292,11 @@ def ingest_model_assertion(
     # VERBATIM (res.7). `response_text` is passed exactly as received - no
     # strip, no normalization, no truncation. A transformed assertion is a
     # different assertion.
-    return perceive(response_text, origin=declaration)
+    #
+    # M4-alpha: the channel is DECLARED here because this is the door that knows
+    # it. Nothing about the ancestry declaration is consulted to derive it - see
+    # the docstring, and `process_input`'s wire, on why deriving one from the
+    # other would collapse two senses into one value.
+    return perceive(response_text, origin=declaration,
+                    channel=AcquisitionChannel.MODEL_EXCHANGE,
+                    correlation_id=correlation_id)

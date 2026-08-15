@@ -554,7 +554,16 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # own two ruled movements (29 -> 31). The total is kept exact rather than
     # relaxed to `>=`, because a `>=` would absorb an UNRULED movement silently,
     # which is the whole thing this count exists to prevent.
-    assert len(class_attrs) + len(init_defaults) == 31
+    #
+    # ~~assert len(class_attrs) + len(init_defaults) == 31~~
+    #
+    # MIGRATED 2026-08-15 (M4-alpha), old text kept verbatim above. **THE
+    # SUBJECT OF THIS PIN IS STILL UNCHANGED** and is still asserted below. What
+    # moved is again the TABLE: M4-alpha registered the acquisition ledger, THE
+    # ONE RULED MOVEMENT OF THAT PASS (31 -> 32), declared in its handoff
+    # precisely so that any other movement is a STOP. Exact, not `>=`, for the
+    # reason the paragraph above gives.
+    assert len(class_attrs) + len(init_defaults) == 32
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

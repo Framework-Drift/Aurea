@@ -302,6 +302,25 @@ class ClaimAncestryRecord:
     connecting_assumptions: AncestryField = field(default_factory=absent)
     defeaters: AncestryField = field(default_factory=absent)
     recorded_at: str = ""
+    # M4-alpha (2026-08-15) - THE JOIN TO THE ARRIVAL THAT BECAME THIS CLAIM.
+    #
+    # A JOIN KEY, NOT AN ORIGIN FACT - `Echo.claim_id`'s and
+    # `SuspensionEntry.claim_id`'s exact class, Ruling 60's canonical key
+    # extended one layer OUT rather than in. It names the `ACQ-` record written
+    # at the acquisition boundary immediately before this claim was minted.
+    #
+    # **THE DIRECTION IS FORCED, AND BY THE SAME STRUCTURE THAT FORCED RULING
+    # 60's.** The acquisition ledger is append-only with no update family, and
+    # the arrival is recorded BEFORE the claim id exists - so the acquisition
+    # cannot carry the CLM, and the LATER artifact references the EARLIER. That
+    # is verbatim the fork Ruling 60 faced for `Echo.claim_id` and resolved the
+    # same way, for the same reason.
+    #
+    # ERA HONESTY: `None` means the claim predates the boundary record, or was
+    # minted by a caller that recorded no arrival. **There is no backfill and no
+    # inference** - a legacy line simply has no such key, `from_dict` reads it as
+    # `None`, and nothing synthesizes one.
+    acquisition_ref: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.origin_kind, OriginKind):
@@ -322,19 +341,25 @@ class ClaimAncestryRecord:
 
     @classmethod
     def from_declaration(cls, claim_id: str,
-                         declaration: Optional[OriginDeclaration]
+                         declaration: Optional[OriginDeclaration],
+                         acquisition_ref: Optional[str] = None
                          ) -> "ClaimAncestryRecord":
         """Build the record. `None` means the channel declared NOTHING.
 
         THE NEW SURFACE FABRICATES NOTHING: no declaration produces
         `UNDECLARED` plus five ABSENT fields, which is the truthful record of a
         caller that said nothing - and is what every existing call site does.
+
+        `acquisition_ref` is the same shape one layer out (M4-alpha): absent
+        means no arrival record was written for this claim, recorded as `None`
+        rather than as an invented id.
         """
         declaration = declaration or OriginDeclaration()
         return cls(
             claim_id=claim_id,
             origin_kind=declaration.kind,
             recorded_at=datetime.now().isoformat(),
+            acquisition_ref=acquisition_ref,
             **{name: getattr(declaration, name) for name in ANCESTRY_FIELDS},
         )
 
@@ -343,6 +368,9 @@ class ClaimAncestryRecord:
             "claim_id": self.claim_id,
             "origin_kind": self.origin_kind.value,
             "recorded_at": self.recorded_at,
+            # M4-alpha. Written on every new line; ABSENT from every legacy one,
+            # which is what `from_dict`'s `.get` reads as `None`.
+            "acquisition_ref": self.acquisition_ref,
         }
         for name in ANCESTRY_FIELDS:
             payload[name] = getattr(self, name).as_dict()
@@ -368,6 +396,12 @@ class ClaimAncestryRecord:
                 claim_id=str(data["claim_id"]),
                 origin_kind=kind,
                 recorded_at=str(data.get("recorded_at", "")),
+                # ERA HONESTY (M4-alpha): a line written before the acquisition
+                # boundary existed has no such key and reads as `None`. Nothing
+                # is backfilled and nothing is inferred - a claim that predates
+                # the boundary has no arrival record, and saying so is the
+                # honest answer (Ruling 68's forensic law).
+                acquisition_ref=data.get("acquisition_ref"),
                 **{name: AncestryField.from_dict(data.get(name))
                    for name in ANCESTRY_FIELDS},
             )
@@ -490,7 +524,8 @@ class ClaimAncestryLedger:
     # THE ONLY WRITE PATH
     # -----------------------------------------------------------------
 
-    def record(self, declaration: Optional[OriginDeclaration] = None
+    def record(self, declaration: Optional[OriginDeclaration] = None,
+               *, acquisition_ref: Optional[str] = None
                ) -> ClaimAncestryRecord:
         """Mint an id, append ONE line, return the record. RAISES on failure.
 
@@ -516,9 +551,10 @@ class ClaimAncestryLedger:
         # instances, or two threads, inside ONE process. OS file locking is
         # DECLARED OUT with its reopening condition named in `ledger_mint.py`.
         with mint_lock(self.ledger_path):
-            return self._mint_and_append(declaration)
+            return self._mint_and_append(declaration, acquisition_ref)
 
-    def _mint_and_append(self, declaration: Optional[OriginDeclaration]
+    def _mint_and_append(self, declaration: Optional[OriginDeclaration],
+                         acquisition_ref: Optional[str] = None
                          ) -> ClaimAncestryRecord:
         """The locked critical section: derive, mint, validate, append.
 
@@ -526,7 +562,8 @@ class ClaimAncestryLedger:
         region - the boundary is then visible in the diff of any future
         change, which is what stops an append drifting out of it.
         """
-        record = ClaimAncestryRecord.from_declaration(self._next_id(), declaration)
+        record = ClaimAncestryRecord.from_declaration(
+            self._next_id(), declaration, acquisition_ref)
         entry = record.as_dict()
 
         # RULING 66 (2026-08-02) - THE WRITER GATE. Refuse what this ledger
