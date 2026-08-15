@@ -24,7 +24,7 @@
 - `OUTPUT_GUARD` (ORE preflight) → **suspend**
 
 ### Telemetry
-JSONL at `data/collapse_logs/tether_telemetry.jsonl`.
+JSONL at `data/runtime/collapse_logs/tether_telemetry.jsonl`.
 
 ## Usage
 
