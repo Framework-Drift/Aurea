@@ -241,15 +241,51 @@ def test_b_the_caller_supplies_the_newline(tmp_path):
     boundary `atomic_write_text` draws when it writes `text` verbatim. It is
     also what makes every routed site a pure substitution, so the bytes on disk
     are identical to what the raw `open` produced.
+
+    CHANGED BY A RULING, 2026-08-15 (M4-δ) - the Ruling-14 precedent, and the
+    one that needs its reasoning read rather than skimmed. Recorded verbatim:
+
+        OLD (Ruling 78, 2026-08-09):
+            durable_append_text(target, "one")
+            durable_append_text(target, "two")
+            assert target.read_text(encoding="utf-8") == "onetwo"
+        NEW (M4-δ):
+            ... the same two appends now produce "one\\ntwo", and the pin's own
+            claim is asserted on a WELL-FORMED sequence instead.
+
+    **RES.2 IS NOT WEAKENED AND ITS CLAIM IS RE-ASSERTED BELOW, HARDER.** What
+    the old body measured was the funnel writing no separator - but it measured
+    it by appending TWO LINES THAT WERE NOT LINES, i.e. by driving the exact
+    torn-boundary state M4-δ exists to repair. The property res.2 actually
+    rules is that **the funnel adds nothing to the CALLER'S CONTENT**, and that
+    is now pinned where it means something: across well-formed appends the bytes
+    are unchanged, and the prefix can never fire.
+
+    THE LINE M4-δ DRAWS: the caller still owns the FORMAT (its own trailing
+    newline, never added here); the funnel owns the BOUNDARY (an append begins
+    at column 0). A prefix that fires only when the previous write was TORN is
+    filesystem integrity of the same standing as the `fsync` beside it - it
+    chooses nothing about any record's bytes. The torn fragment is still refused
+    by floor semantics; it simply stops taking the next record down with it.
     """
     from src.utils.atomic_write import durable_append_text
 
+    # THE CLAIM RES.2 ACTUALLY MAKES: no separator is added to the caller's
+    # content. Driven on WELL-FORMED lines, which is what every routed site
+    # writes, and asserted as exact bytes.
     target = tmp_path / "raw.log"
-    durable_append_text(target, "one")
-    durable_append_text(target, "two")
-    assert target.read_text(encoding="utf-8") == "onetwo", (
+    durable_append_text(target, "one\n")
+    durable_append_text(target, "two\n")
+    assert target.read_text(encoding="utf-8") == "one\ntwo\n", (
         "the helper appended a separator it was not given - the line format is "
         "the owner's decision, not this primitive's")
+
+    # AND WITHOUT A TRAILING NEWLINE THE CONTENT IS STILL VERBATIM: a single
+    # append to an empty file takes no prefix, so the caller's bytes are the
+    # file's bytes.
+    bare = tmp_path / "bare.log"
+    durable_append_text(bare, "no newline here")
+    assert bare.read_text(encoding="utf-8") == "no newline here"
 
 
 def test_b_the_helper_creates_its_parent_directory(tmp_path):

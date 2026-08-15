@@ -152,6 +152,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# M4-ε: the ancestry FIELD VOCABULARY ONLY - Ruling 63's precedent, the same one
+# that licenses `model_provider`'s import of it: IMPORTING A VOCABULARY IS NOT
+# CONSUMING A STORE. No ledger, no path, no handle crosses this line, and
+# `claim_ancestry` imports nothing from here, so there is no cycle.
+from src.external.claim_ancestry import ANCESTRY_FIELDS, AncestryField, absent
 from src.utils.atomic_write import durable_append_text
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
 from src.utils.record_value import validate_record_value
@@ -161,10 +166,20 @@ __all__ = [
     "AcquisitionIntegrity",
     "MethodWarrant",
     "ContentStanding",
+    "AcquisitionDeclaration",
     "AcquisitionRecord",
     "AcquisitionLedger",
     "AcquisitionLedgerUnreadable",
 ]
+
+# The four ancestry surfaces a declaring caller may carry on an arrival.
+# `asserted_by` is NOT among them and never will be: it IS the declared model
+# identity, which the block below carries in its own field, byte-identical
+# (Ruling 70 res.1). `model_provider.CALLER_DECLARABLE_FIELDS` draws the same
+# line for the same reason, and the two are derived from `ANCESTRY_FIELDS`
+# rather than spelled twice.
+DECLARABLE_FIELDS: Tuple[str, ...] = tuple(
+    name for name in ANCESTRY_FIELDS if name != "asserted_by")
 
 
 # =====================================================================
@@ -240,6 +255,80 @@ def payload_digest(payload: str) -> str:
 
 
 @dataclass(frozen=True)
+class AcquisitionDeclaration:
+    """WHAT A DECLARING CHANNEL SAID, recorded ON THE ARRIVAL. M4-ε.
+
+    **THIS CLOSES THE ONE THING M4-γ MEASURED A REPLAY COULD NOT RECONSTRUCT.**
+    An acquisition recorded the arrival - payload, channel, correlation - and the
+    ancestry DECLARATION lived only in the claim's record (Ruling 58), minted
+    afterwards. So a replay driven from the acquisition ledger re-derived every
+    state transition faithfully and replayed a declared origin as UNDECLARED.
+    γ declared that limitation rather than papering over it; ε removes it, by
+    recording on the ARRIVAL what the channel said AT the arrival.
+
+    **IT CARRIES EXACTLY WHAT THE CALLER DECLARED AND NOT ONE FIELD MORE.** The
+    identity string is recorded BYTE-IDENTICAL as declared - never verified,
+    never normalized, never parsed into parts (Ruling 70 res.1, which rides here
+    unchanged because this is the same declaration reaching a second record).
+    The four surfaces are Ruling 58's three-state vocabulary, and **ABSENT IS A
+    REAL ANSWER THAT IS RECORDED AS ONE**: a field the caller did not mention is
+    stored as ABSENT, never manufactured into a value because a slot existed to
+    hold it. That is L3's fabrication class, and it is the exact defect Ruling 58
+    was written to close one record away from here.
+
+    NO CHANNEL GATE, AND THE REASON IS A CASE THIS MILESTONE ALREADY PINNED.
+    The block is recorded wherever it is supplied rather than only on
+    MODEL_EXCHANGE, because a human pasting a model's output through the user
+    door is a USER_INPUT arrival of a MODEL_PREDICTION assertion - M4-α's own
+    Ruling-30 case - and a declaration there is honest and worth keeping. Gating
+    on channel would refuse the one case the milestone established.
+    """
+
+    model_identity: str
+    basis: AncestryField = field(default_factory=absent)
+    replication_refs: AncestryField = field(default_factory=absent)
+    connecting_assumptions: AncestryField = field(default_factory=absent)
+    defeaters: AncestryField = field(default_factory=absent)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.model_identity, str):
+            raise TypeError(
+                f"AcquisitionDeclaration.model_identity must be str, got "
+                f"{type(self.model_identity).__name__}. Ruling 70 res.1 records "
+                f"the DECLARED identity exactly as the caller gave it, and a "
+                f"non-string identity cannot be carried byte-identical.")
+        for name in DECLARABLE_FIELDS:
+            if not isinstance(getattr(self, name), AncestryField):
+                raise TypeError(
+                    f"AcquisitionDeclaration.{name} must be an AncestryField - "
+                    f"use provided(...) / declared_none() / absent(). A bare "
+                    f"value cannot say WHICH of Ruling 58's three answers it is.")
+
+    def as_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"model_identity": self.model_identity}
+        for name in DECLARABLE_FIELDS:
+            payload[name] = getattr(self, name).as_dict()
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Optional["AcquisitionDeclaration"]:
+        """Rebuild from a ledger line, or `None` if there was no block.
+
+        A line written before ε has no `declaration` key and reads as `None` -
+        era honesty, and those records go on replaying as UNDECLARED forever,
+        which stays true of them and is pinned as such.
+        """
+        if not isinstance(data, dict):
+            return None
+        try:
+            return cls(model_identity=str(data["model_identity"]),
+                       **{name: AncestryField.from_dict(data.get(name))
+                          for name in DECLARABLE_FIELDS})
+        except (KeyError, ValueError, TypeError):
+            return None
+
+
+@dataclass(frozen=True)
 class AcquisitionRecord:
     """ONE external arrival, as recorded at the boundary. Frozen.
 
@@ -262,6 +351,10 @@ class AcquisitionRecord:
     content_standing: ContentStanding = ContentStanding.PROVISIONAL_UNVALIDATED
     # RECORDED AS OBSERVATION, NEVER READ BY LOGIC (M3-A's rule). AST-pinned.
     recorded_wall: str = ""
+    # M4-ε: what the channel DECLARED about this arrival, or `None` where it
+    # declared nothing. Optional and era-honest: every line written before ε
+    # lacks the key entirely and reads as `None`.
+    declaration: Optional[AcquisitionDeclaration] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.payload, str):
@@ -285,6 +378,13 @@ class AcquisitionRecord:
                 "AcquisitionRecord.warrant_conditions must be a tuple of str - "
                 "a list would be a mutable interior on a frozen record "
                 "(Ruling 52).")
+        if (self.declaration is not None
+                and not isinstance(self.declaration, AcquisitionDeclaration)):
+            raise TypeError(
+                f"AcquisitionRecord.declaration must be an "
+                f"AcquisitionDeclaration or None, got "
+                f"{type(self.declaration).__name__}. A raw dict would let a "
+                f"caller record a declaration this ledger never typed.")
 
     @property
     def arrival_index(self) -> Optional[int]:
@@ -315,6 +415,10 @@ class AcquisitionRecord:
             "warrant_conditions": list(self.warrant_conditions),
             "content_standing": self.content_standing.value,
             "recorded_wall": self.recorded_wall,
+            # M4-ε. Written on every new line; `None` where nothing was
+            # declared, and ABSENT from every line written before ε.
+            "declaration": (self.declaration.as_dict()
+                            if self.declaration is not None else None),
         }
 
     @classmethod
@@ -340,6 +444,12 @@ class AcquisitionRecord:
                 warrant_conditions=tuple(data.get("warrant_conditions") or ()),
                 content_standing=ContentStanding(data["content_standing"]),
                 recorded_wall=str(data.get("recorded_wall", "")),
+                # M4-ε, ERA-HONEST: a pre-ε line has no such key and reads as
+                # `None`. Nothing is backfilled and nothing is inferred - a
+                # record that carried no declaration carried none, and it goes
+                # on replaying as UNDECLARED forever.
+                declaration=AcquisitionDeclaration.from_dict(
+                    data.get("declaration")),
             )
         except (KeyError, ValueError, TypeError):
             return None
@@ -421,7 +531,9 @@ class AcquisitionLedger:
 
     def record(self, payload: str, *,
                channel: AcquisitionChannel,
-               correlation_id: Optional[str] = None) -> AcquisitionRecord:
+               correlation_id: Optional[str] = None,
+               declaration: Optional[AcquisitionDeclaration] = None
+               ) -> AcquisitionRecord:
         """Record ONE external arrival. Mint an id, append one line, return it.
 
         RAISES on failure and the raise PROPAGATES - the write GATES the
@@ -450,10 +562,13 @@ class AcquisitionLedger:
         # RULING 69 res.3 - IN-PROCESS MINT-APPEND ATOMICITY. Keyed by the
         # RESOLVED PATH and held across DERIVE -> MINT -> APPEND as one unit.
         with mint_lock(self.ledger_path):
-            return self._mint_and_append(payload, channel, correlation_id)
+            return self._mint_and_append(payload, channel, correlation_id,
+                                         declaration)
 
     def _mint_and_append(self, payload: str, channel: AcquisitionChannel,
-                         correlation_id: Optional[str]) -> AcquisitionRecord:
+                         correlation_id: Optional[str],
+                         declaration: Optional[AcquisitionDeclaration] = None
+                         ) -> AcquisitionRecord:
         """The locked critical section: derive, mint, validate, append.
 
         Split out so the lock scope is a whole method rather than an indented
@@ -470,6 +585,8 @@ class AcquisitionLedger:
             payload=payload,
             payload_sha256=payload_digest(payload),
             recorded_wall=datetime.now().isoformat(),
+            # M4-ε: recorded AS DECLARED, or `None` where nothing was.
+            declaration=declaration,
         )
         entry = record.as_dict()
 

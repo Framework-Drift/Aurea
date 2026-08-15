@@ -717,7 +717,22 @@ def _acquisition_census(core) -> Dict[str, Any]:
             1 for claim in core.ancestry.read_all()
             if claim.acquisition_ref is not None),
         "claim_lines": len(core.ancestry.read_all()),
+        # M4-ε: arrivals carrying a declaration block, and the origin kinds the
+        # claims ended up with. **THE SECOND KEY IS WHAT MAKES A LOST
+        # DECLARATION VISIBLE TO A REPLAY COMPARISON**: a count alone can match
+        # while the contents differ, but an origin-kind breakdown moves the
+        # moment a declared arrival replays as UNDECLARED.
+        "declarations": sum(1 for r in records if r.declaration is not None),
+        "claim_origin_kinds": _tally(
+            claim.origin_kind.value for claim in core.ancestry.read_all()),
     }
+
+
+def _tally(values) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for value in values:
+        out[value] = out.get(value, 0) + 1
+    return out
 
 
 def _suspension_census(core) -> Dict[str, Any]:

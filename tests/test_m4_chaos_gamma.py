@@ -209,21 +209,35 @@ def test_b_the_divergence_detector_reads_clean_across_the_interrupt(tmp_path):
 
     # ...AND THE BOUNDARY'S CLOCK STILL REFUSES TO REISSUE THE TORN ORDINAL.
     # `ACQ-0006`'s bytes reached disk, so its ordinal is BURNED (Ruling 69
-    # res.2's raw-text scan) and the next mint is 0007 - read from the CLAIM,
-    # which is where the resumed pass records the arrival it was given.
+    # res.2's raw-text scan) and the next mint is 0007.
     result = resumed.process_input("after the crash")
     claim = resumed.ancestry.get(result["claim_id"])
     assert claim.acquisition_ref == "ACQ-0007"
 
-    # THE M4-α TORN-APPEND FINDING IS STILL LIVE HERE, AND THAT IS WHY THIS
-    # ASSERTION READS THE CLAIM RATHER THAN THE LEDGER'S LAST LINE: a torn
-    # append has no trailing newline, so `ACQ-0007`'s line concatenates onto it
-    # and is unreadable. The MINT is safe and the RECORD is lost - measured,
-    # reported and not repaired (Ruling 78 res.2 rules the newline the caller's,
-    # and every remedy moves that across nine ledgers).
-    assert resumed.acquisitions.read_all()[-1].acquisition_id == "ACQ-0005", (
-        "if this now reads ACQ-0007 the torn-append seam has been ruled on - "
-        "update this pin and `tests/test_m4_acquisition.py`'s twin, citing it")
+    # CHANGED BY A RULING, 2026-08-15 (M4-δ) - the Ruling-14 precedent, and this
+    # pin's own message is what asked for the change:
+    #
+    #     OLD (M4-γ):
+    #         assert resumed.acquisitions.read_all()[-1].acquisition_id
+    #                == "ACQ-0005"
+    #         ... "if this now reads ACQ-0007 the torn-append seam has been
+    #             ruled on - update this pin and its twin, citing it"
+    #     NEW (M4-δ):
+    #         ... == "ACQ-0007"
+    #
+    # **THE WORKAROUND'S REASON IS GONE.** γ read the CLAIM rather than the
+    # ledger's last line because a torn append swallowed the record that
+    # followed it; δ's column-zero law opens a new line for that record, so the
+    # LEDGER can be read directly again. The claim assertion above stays - it is
+    # now a second, independent view of the same fact rather than a substitute
+    # for one that could not be taken.
+    assert resumed.acquisitions.read_all()[-1].acquisition_id == "ACQ-0007", (
+        "M4-δ: the post-tear record survives as its own line, so the ledger's "
+        "last line IS the record just written")
+
+    # AND THE TORN FRAGMENT IS STILL REFUSED - the boundary was repaired, the
+    # record never was.
+    assert resumed.acquisitions.get("ACQ-0006") is None
 
 
 def test_b_the_restart_assertions_fire_when_the_mark_is_lost(tmp_path):

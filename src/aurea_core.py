@@ -22,6 +22,7 @@ from src.filtration.scar_logic_core import ScarLogicCore
 from src.filtration.scar_management import SML
 from src.doctrine.cae import CAE, LedgerUnreadable
 from src.external.acquisition_ledger import (AcquisitionChannel,
+                                             AcquisitionDeclaration,
                                              AcquisitionLedger,
                                              AcquisitionLedgerUnreadable)
 from src.external.claim_ancestry import (AncestryLedgerUnreadable,
@@ -946,7 +947,9 @@ class AureaCore:
     def process_input(self, raw_input: str, *,
                       origin: Optional[OriginDeclaration] = None,
                       channel: AcquisitionChannel = AcquisitionChannel.USER_INPUT,
-                      correlation_id: Optional[str] = None) -> Dict[str, Any]:
+                      correlation_id: Optional[str] = None,
+                      declaration: Optional[AcquisitionDeclaration] = None
+                      ) -> Dict[str, Any]:
         """
         Process input through the complete AUREA pipeline.
 
@@ -965,6 +968,10 @@ class AureaCore:
             correlation_id: The `ACQ-` id of the arrival that OPENED this
                 exchange, when this one continues it. `None` means this arrival
                 opens its own, and the record correlates with itself.
+            declaration: What the channel DECLARED about this arrival (M4-ε),
+                recorded ON the acquisition so a replay driven from the ledger
+                alone can reconstruct the origin. `None` means the channel
+                declared nothing, which is what every pre-ε record says forever.
 
         Returns:
             Dictionary containing processing results
@@ -1231,7 +1238,8 @@ class AureaCore:
         # cannot be reconstructed later, so the record is the legitimacy of the
         # arrival and not a receipt for it.
         acquisition = self.acquisitions.record(
-            raw_input, channel=channel, correlation_id=correlation_id)
+            raw_input, channel=channel, correlation_id=correlation_id,
+            declaration=declaration)
         # THE CLAIM CARRIES THE ARRIVAL, never the reverse (M4-alpha; Ruling
         # 60's forced direction): the acquisition ledger is append-only with no
         # update family, and the arrival is recorded before this id exists.

@@ -847,39 +847,44 @@ def test_j_a_torn_acquisition_line_survives_an_unclean_restart(tmp_path):
         "reissued - a gap is fine, a forged id is not (Ruling 69 res.2)")
 
     # ------------------------------------------------------------------
-    # A MEASURED FINDING, PINNED RATHER THAN REPAIRED - and it is NOT this
-    # store's, it is EVERY append-only ledger's in the tree.
+    # THE MEASURED FINDING IS CLOSED - M4-δ, THE COLUMN-ZERO LAW.
     # ------------------------------------------------------------------
-    # A torn append leaves bytes with NO TRAILING NEWLINE, so the next append
-    # concatenates onto them and **the first record written after a crash is
-    # SWALLOWED into the torn line and is unreadable to every reader.** Its id
-    # is minted and its bytes are on disk - the MINT is safe, which is the half
-    # Ruling 69 res.2 designed for - but the RECORD is lost.
+    # **THIS PIN'S TRIPWIRE FIRED WHEN THE DEFECT DIED, WHICH IS WHAT IT WAS
+    # FOR** (Ruling 75's `paradox_void` form). Its old assertion recorded the
+    # swallow as a measured finding and said in its own message: "if this now
+    # resolves, the torn-append seam has been ruled on - update this pin and
+    # cite the ruling." It has, and this is that update.
     #
-    # REPRODUCED ON LEDGERS THIS PASS DID NOT TOUCH (`claim_ancestry`, Ruling
-    # 58; `cae`, Ruling 45), so it is a property of the shared append shape and
-    # not of this store.
+    #     OLD (M4-alpha, 2026-08-15):
+    #         assert resumed.acquisitions.get("ACQ-0004") is None
+    #         ... "the record written immediately after a torn append is
+    #             swallowed by it"
+    #         resumed.process_input("and the one after that")
+    #         assert [...ids...] == ["ACQ-0001", "ACQ-0002", "ACQ-0005"]
+    #     NEW (M4-δ):
+    #         ACQ-0004 SURVIVES, and the run continues at ACQ-0005.
     #
-    # **NOT REPAIRED HERE, BY CITATION.** Ruling 78 res.2 rules that THE CALLER
-    # SUPPLIES THE NEWLINE, in terms: "appending a separator would be choosing
-    # something about CONTENT, and a line separator belongs to the ledger's
-    # owner." Every candidate remedy - a leading newline in the funnel, a
-    # ends-with-newline check, a per-caller guard - moves that resolution across
-    # eight ledgers, which is a manifest decision and not a build lane's.
-    #
-    # PINNED AS MEASURED so a later pass that closes it must come and say why
-    # (Ruling 75's `paradox_void` form). When it is closed, this assertion
-    # inverts and the one below it becomes redundant.
-    assert resumed.acquisitions.get("ACQ-0004") is None, (
-        "MEASURED FINDING (M4-alpha): the record written immediately after a "
-        "torn append is swallowed by it. If this now resolves, the torn-append "
-        "seam has been ruled on - update this pin and cite the ruling.")
+    # **THE ASSERTION INVERTS BECAUSE THE BEHAVIOUR WAS RULED ON, NOT BECAUSE
+    # THE TEST WAS BENT.** `durable_append_text` now begins every append at
+    # column 0: if the previous write was torn, one newline goes down first. The
+    # torn fragment becomes its OWN line and is STILL REFUSED by floor semantics
+    # - nothing is repaired into validity - and it stops taking the next record
+    # with it.
+    survivor = resumed.acquisitions.get("ACQ-0004")
+    assert survivor is not None, (
+        "M4-δ: the record written after a torn append SURVIVES - the funnel "
+        "opens a new line for it rather than letting the fragment swallow it")
+    assert survivor.payload == "after the crash"
 
-    # THE LOSS IS BOUNDED AT EXACTLY ONE RECORD, and that is the half that makes
-    # the finding survivable: the ledger recovers on the very next append.
+    # THE TORN FRAGMENT IS STILL NOT A RECORD, and that is the half that must
+    # never be traded for the half above.
+    assert resumed.acquisitions.get("ACQ-0003") is None, (
+        "the torn fragment is refused exactly as before - M4-δ repairs the "
+        "BOUNDARY, never the record")
+
     resumed.process_input("and the one after that")
     assert [r.acquisition_id for r in resumed.acquisitions.read_all()] == [
-        "ACQ-0001", "ACQ-0002", "ACQ-0005"]
+        "ACQ-0001", "ACQ-0002", "ACQ-0004", "ACQ-0005"]
 
     # THE JOIN STILL RESOLVES for every arrival that survived the tear.
     survivors = {r.acquisition_id for r in resumed.acquisitions.read_all()}
@@ -924,11 +929,23 @@ def test_j_the_torn_append_finding_is_not_this_stores_and_the_proof_is_executabl
     A claim that a defect is "pre-existing and shared" is worth exactly as much
     as its evidence, so the evidence is here rather than in a sentence: the same
     interrupt is driven against `claim_ancestry` (Ruling 58) and `cae`
-    (Ruling 45), and both swallow the record written after the tear.
+    (Ruling 45).
 
-    **THIS IS WHY THE REMEDY IS A MANIFEST DECISION AND NOT A BUILD LANE'S:**
-    the seam is Ruling 78 res.2's caller-supplies-the-newline resolution, and it
-    is shared by every append-only ledger in the tree.
+        ~~...and both swallow the record written after the tear. **THIS IS WHY
+        THE REMEDY IS A MANIFEST DECISION AND NOT A BUILD LANE'S:** the seam is
+        Ruling 78 res.2's caller-supplies-the-newline resolution, and it is
+        shared by every append-only ledger in the tree.~~
+
+    **SUPERSEDED 2026-08-15 BY M4-δ, old text kept verbatim - and the shared
+    scope this pin established is exactly WHY it was ruled at the funnel rather
+    than patched at a site.** The remedy was a manifest decision, it was taken,
+    and it landed in ONE place: `durable_append_text` now begins every append at
+    column 0. So this pin keeps its subject - the behaviour is shared by every
+    append-only ledger - and INVERTS its verdict, because what is shared is now
+    the fix.
+
+        OLD:  assert len(ledger.read_all()) == 1   # the post-tear record is lost
+        NEW:  assert len(ledger.read_all()) == 2   # ...and it survives
     """
     from src.doctrine.cae import CAE
     import tempfile
@@ -946,7 +963,9 @@ def test_j_the_torn_append_finding_is_not_this_stores_and_the_proof_is_executabl
         with open(path, "a", encoding="utf-8") as handle:
             handle.write(torn)
         mint(ledger)
-        assert len(ledger.read_all()) == 1, (
-            f"{type(ledger).__name__} did NOT swallow the post-tear record. If "
-            f"the seam has been ruled on, this pin and the ACQ one above both "
-            f"need updating with the citation.")
+        records = ledger.read_all()
+        assert len(records) == 2, (
+            f"{type(ledger).__name__} SWALLOWED the post-tear record. M4-δ's "
+            f"column-zero law is what stops that, at the funnel, for every "
+            f"append-only ledger at once - so a failure here means the boundary "
+            f"invariant has been removed or routed around.")

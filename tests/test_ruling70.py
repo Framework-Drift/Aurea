@@ -83,6 +83,8 @@ class _Spy:
             def __call__(self, raw_input, *, origin=None):
         NEW (M4-alpha):
             ... plus `channel=None, correlation_id=None`, both RECORDED
+        NEW (M4-ε, 2026-08-15):
+            ... plus `declaration=None`, RECORDED for the same reason
 
     **NO ASSERTION MOVED.** `process_input` gained the two acquisition keywords
     and the adapter now declares `MODEL_EXCHANGE` through them, so a double that
@@ -97,13 +99,14 @@ class _Spy:
         self._ledger = ledger
 
     def __call__(self, raw_input, *, origin=None, channel=None,
-                 correlation_id=None):
+                 correlation_id=None, declaration=None):
         claim_id = None
         if self._ledger is not None:
             claim_id = self._ledger.record(origin).claim_id
         self.calls.append({"raw_input": raw_input, "origin": origin,
                            "claim_id": claim_id, "channel": channel,
-                           "correlation_id": correlation_id})
+                           "correlation_id": correlation_id,
+                           "declaration": declaration})
         return {"claim_id": claim_id, "spy": True}
 
 
@@ -510,7 +513,7 @@ def test_b_the_adapter_adds_nothing_to_the_result_and_removes_nothing():
 
     # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
     def collaborator(raw_input, *, origin=None, channel=None,
-                     correlation_id=None):
+                     correlation_id=None, declaration=None):
         return sentinel
 
     returned = ingest_model_assertion(collaborator, "A claim.", IDENTITY)
@@ -530,7 +533,7 @@ def test_b_the_adapter_calls_process_input_with_origin_keyword_only():
 
     # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
     def collaborator(raw_input, *, origin=None, channel=None,
-                     correlation_id=None):
+                     correlation_id=None, declaration=None):
         captured["raw_input"] = raw_input
         captured["origin"] = origin
         return {}
@@ -913,7 +916,7 @@ def test_h_any_process_input_shaped_callable_is_accepted():
 
     # M4-alpha: the double follows the collaborator (see `_Spy`'s note).
     def collaborator(raw_input, *, origin=None, channel=None,
-                     correlation_id=None):
+                     correlation_id=None, declaration=None):
         seen.append((raw_input, origin.kind))
         return {"routed": True}
 

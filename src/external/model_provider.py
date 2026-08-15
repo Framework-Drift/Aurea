@@ -104,7 +104,8 @@ from typing import Any, Callable, Dict, Optional
 # path, not a writer. Ruling 63's precedent verbatim, the same one that licenses
 # the record-vocabulary import below: IMPORTING A VOCABULARY IS NOT CONSUMING A
 # STORE. This module still names no path, opens no file and holds no handle.
-from src.external.acquisition_ledger import AcquisitionChannel
+from src.external.acquisition_ledger import (AcquisitionChannel,
+                                             AcquisitionDeclaration)
 
 # THE RECORD VOCABULARY ONLY - never the ledger, and the distinction is Ruling
 # 63's own precedent: IMPORTING A RECORD TYPE IS NOT CONSUMING A STORE. This
@@ -293,10 +294,29 @@ def ingest_model_assertion(
     # strip, no normalization, no truncation. A transformed assertion is a
     # different assertion.
     #
+    # M4-ε: THE SAME DECLARATION, CARRIED ON THE ARRIVAL TOO - and the adapter
+    # STILL DECLARES RATHER THAN WRITES. This builds a value and hands it on; it
+    # holds no ledger, opens no file and calls no `record`, so Ruling 70's pin
+    # (b) is untouched and the boundary write stays `process_input`'s.
+    #
+    # Built from THE SAME FOUR INPUTS `model_declaration` was given, so the two
+    # records cannot disagree about what the caller said - one declaration, two
+    # places it is written down, no second source of truth. NOTHING IS
+    # MANUFACTURED: a surface the caller left unmentioned arrives here as `None`
+    # and is recorded ABSENT, which is Ruling 58's real answer rather than a
+    # value invented because a field existed to hold it.
+    acquisition_declaration = AcquisitionDeclaration(
+        model_identity=model_identity,
+        **{name: value for name, value in (
+            ("basis", basis), ("replication_refs", replication_refs),
+            ("connecting_assumptions", connecting_assumptions),
+            ("defeaters", defeaters)) if value is not None})
+
     # M4-alpha: the channel is DECLARED here because this is the door that knows
     # it. Nothing about the ancestry declaration is consulted to derive it - see
     # the docstring, and `process_input`'s wire, on why deriving one from the
     # other would collapse two senses into one value.
     return perceive(response_text, origin=declaration,
                     channel=AcquisitionChannel.MODEL_EXCHANGE,
-                    correlation_id=correlation_id)
+                    correlation_id=correlation_id,
+                    declaration=acquisition_declaration)

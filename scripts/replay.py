@@ -34,20 +34,31 @@ of the report. **A run whose audit fails FAILS LOUDLY** - nonzero exit, no
 report treated as usable - because a contaminated measurement compared against a
 clean one produces a diff that looks like a finding.
 
-THE ONE THING A REPLAY CANNOT RECONSTRUCT, DECLARED RATHER THAN DISCOVERED
--------------------------------------------------------------------------------
-An acquisition records the ARRIVAL: payload, channel, correlation. **It does not
-record the ancestry DECLARATION** - that is the CLAIM's record (Ruling 58), a
-different store, minted after the arrival. So a replay from the acquisition
-ledger alone re-drives every arrival faithfully and re-derives every state
-transition, but a claim whose channel DECLARED an origin replays as UNDECLARED.
+    ~~THE ONE THING A REPLAY CANNOT RECONSTRUCT, DECLARED RATHER THAN
+    DISCOVERED. An acquisition records the ARRIVAL: payload, channel,
+    correlation. **It does not record the ancestry DECLARATION** - that is the
+    CLAIM's record (Ruling 58), a different store, minted after the arrival. So
+    a replay from the acquisition ledger alone re-drives every arrival
+    faithfully and re-derives every state transition, but a claim whose channel
+    DECLARED an origin replays as UNDECLARED.~~
 
-That is not a gap this instrument papers over, and it is not a defect of the
-boundary either: it is the two records being about different things. **It is
-stated here so nobody later reads an identical census as proof that
-declarations round-trip.** For every arrival that declared nothing - which is
-every claim the soak, the evaluation corpus and this instrument drive - the
-replay is exact.
+**SUPERSEDED 2026-08-15 BY M4-ε, old text kept verbatim because it is the record
+of the gap that ruling closed** - and because γ DECLARING the limitation rather
+than papering over it is what made it a thing a later ruling could take.
+
+DECLARATIONS ROUND-TRIP NOW
+-------------------------------------------------------------------------------
+The acquisition carries an optional `declaration` block: the model identity
+BYTE-IDENTICAL as declared, and the four ancestry surfaces in Ruling 58's
+three-state vocabulary. `_origin_for` below reconstructs the origin by
+RE-INVOKING `model_declaration` with the recorded fields - the same constructor
+the live path uses, so the replayed declaration is built by the same rules
+rather than by a second implementation that could drift from them.
+
+**THE LEGACY HALF STAYS TRUE AND STAYS PINNED.** A record written before ε has
+no block, reads as `None`, and replays as UNDECLARED forever - which is not a
+defect of those records but an honest statement about what was written down at
+the time. Nothing is backfilled and nothing is inferred.
 
 USAGE
 -------------------------------------------------------------------------------
@@ -124,6 +135,31 @@ def census(core: Any) -> Dict[str, Any]:
     }
 
 
+def _origin_for(declaration: Any) -> Any:
+    """Reconstruct the ancestry declaration a recorded arrival carried. M4-ε.
+
+    **RE-INVOKES `model_declaration` RATHER THAN REBUILDING AN
+    `OriginDeclaration` FIELD BY FIELD**, and that is the whole point: the live
+    path constructs its origin through that function, so replaying through it
+    means the replayed declaration is built by the same rules. A hand-rolled
+    copy here would be a second implementation of a ruled constructor, free to
+    drift from it invisibly - the defect this house has closed repeatedly
+    (Ruling 47's criterion names, Ruling 67's one-audit-two-callers).
+
+    `None` in, `None` out: a blockless record declared nothing and replays as
+    UNDECLARED, which is what it has always said.
+    """
+    if declaration is None:
+        return None
+    from src.external.model_provider import model_declaration
+    return model_declaration(
+        declaration.model_identity,
+        basis=declaration.basis,
+        replication_refs=declaration.replication_refs,
+        connecting_assumptions=declaration.connecting_assumptions,
+        defeaters=declaration.defeaters)
+
+
 def _drive(core: Any, arrivals: List[Dict[str, Any]]) -> None:
     """Feed arrivals through the PUBLIC DOOR, in recorded order.
 
@@ -134,7 +170,9 @@ def _drive(core: Any, arrivals: List[Dict[str, Any]]) -> None:
     for arrival in arrivals:
         core.process_input(arrival["payload"],
                            channel=arrival["channel"],
-                           correlation_id=arrival["correlation_id"])
+                           correlation_id=arrival["correlation_id"],
+                           origin=_origin_for(arrival["declaration"]),
+                           declaration=arrival["declaration"])
 
 
 def _arrivals_from(path: Path) -> List[Dict[str, Any]]:
@@ -146,7 +184,9 @@ def _arrivals_from(path: Path) -> List[Dict[str, Any]]:
     """
     from src.external.acquisition_ledger import AcquisitionLedger
     return [{"payload": r.payload, "channel": r.channel,
-             "correlation_id": r.correlation_id}
+             "correlation_id": r.correlation_id,
+             # M4-ε: the declaration block, or `None` for a pre-ε record.
+             "declaration": r.declaration}
             for r in AcquisitionLedger(ledger_path=str(path)).read_all()]
 
 
@@ -170,7 +210,8 @@ def _run_in_sandbox(claims: Optional[List[str]] = None,
     else:
         from src.external.acquisition_ledger import AcquisitionChannel
         arrivals = [{"payload": c, "channel": AcquisitionChannel.USER_INPUT,
-                     "correlation_id": None} for c in (claims or ())]
+                     "correlation_id": None, "declaration": None}
+                    for c in (claims or ())]
 
     _drive(core, arrivals)
 

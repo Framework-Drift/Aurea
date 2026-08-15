@@ -218,6 +218,33 @@ def durable_append_text(path: Union[str, Path], line: str,
     `json.dumps(...) + "\\n"`, so the bytes on disk are identical to what the
     raw `open` produced and only the durability is new.
 
+    M4-δ (2026-08-15) - THE COLUMN-ZERO LAW. **RULING 78 res.2 STANDS EXACTLY AS
+    WRITTEN ABOVE, AND THE LINE BETWEEN THEM IS THE WHOLE OF THIS ADDITION.**
+
+    THE DEFECT, MEASURED AT M4-α AND RULED HERE: a torn append leaves bytes with
+    NO TRAILING NEWLINE, so the next append concatenated onto them and **the
+    first record written after a crash was SWALLOWED into the torn fragment and
+    unreadable to every reader.** Its id was minted and its bytes reached disk -
+    the MINT was safe (Ruling 69 res.2's raw-text scan) - but the RECORD was
+    lost. Reproduced on `claim_ancestry` and `cae`, so it belonged to every
+    append-only ledger in the tree rather than to any one of them.
+
+    **WHAT THE FUNNEL NOW OWNS IS THE BOUNDARY, NOT THE FORMAT.** The caller
+    still supplies its own trailing newline and this function still appends no
+    separator to the caller's content. The prefix below fires ONLY when the
+    PREVIOUS write was torn - never after a well-formed one, because a
+    well-formed write ended at column 0 by the caller's own trailing newline. So
+    it chooses nothing about any record's bytes; it repairs the FILE's boundary,
+    which is filesystem integrity of exactly the same standing as the `fsync`
+    two lines below it.
+
+    **THE TORN FRAGMENT IS NOT REPAIRED INTO VALIDITY, AND THAT IS THE HALF
+    WORTH READING TWICE.** It becomes its OWN line, which every reader still
+    refuses by floor semantics exactly as the standing torn-line law provides -
+    a half-written record stays a half-written record forever. What changes is
+    that it stops taking an innocent record down with it. Nothing is silently
+    made valid; one thing is stopped from being silently destroyed.
+
     WHAT STAYS AT THE SITE, DELIBERATELY: `json.dumps`, `validate_record_value`,
     `allow_nan=False`, id minting, the mint lock, and each writer's error
     discipline. This helper decides NOTHING - it is a filesystem primitive of
@@ -247,6 +274,43 @@ def durable_append_text(path: Union[str, Path], line: str,
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding=encoding) as handle:
+        # M4-δ: THE BOUNDARY INVARIANT. Every append begins at column 0.
+        if _ends_mid_line(path):
+            handle.write("\n")
         handle.write(line)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _ends_mid_line(path: Path) -> bool:
+    """Does `path` exist, hold bytes, and END WITHOUT a newline? (M4-δ)
+
+    True ONLY for a file whose last write was torn. An empty or absent file is
+    already at column 0, and a file written by any routed site ends with the
+    caller's own trailing newline - so on every healthy path this returns False
+    and the append is BYTE-IDENTICAL to what it was before this ruling. That is
+    not an aspiration; it is why the differential for this pass is zero.
+
+    **CHECKED IN BYTES, NOT IN DECODED TEXT.** `0x0A` is the last byte of a
+    UTF-8 newline regardless of what precedes it, and decoding a file whose tail
+    is a torn multi-byte sequence would raise on exactly the input this function
+    exists to recognize.
+
+    **A FAILED PROBE MEANS "NO PREFIX", AND THAT IS DELIBERATE RATHER THAN
+    DEFENSIVE.** This funnel's raise semantics are RULED (Ruling 78: it raises,
+    and each site's own discipline decides what that means - the gating ledgers
+    refuse, the forensic writers catch). A probe that raised would make a
+    boundary this function could not DETERMINE into a new refusal for a write
+    the caller could otherwise have made, which would let a disk hiccup on a
+    read gate a claim's perception. Falling back to no-prefix is exactly the
+    pre-δ behaviour, so the worst case is bounded by the status quo: the swallow
+    this ruling closes, not a new failure.
+    """
+    try:
+        if path.stat().st_size == 0:
+            return False
+        with open(path, "rb") as probe:
+            probe.seek(-1, os.SEEK_END)
+            return probe.read(1) != b"\n"
+    except OSError:
+        return False
