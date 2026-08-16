@@ -36,7 +36,7 @@ the long way round. L10, pinned by AST rather than promised.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping, Optional, Tuple
 
@@ -214,6 +214,84 @@ def _obligation_candidates(obligations: Any) -> Tuple[AttentionCandidate, ...]:
 
 
 @dataclass(frozen=True)
+class PredictionFacts:
+    """What M7-c's discrepancy classes need about ONE unresolved prediction.
+
+    FACTS ONLY, exactly as `AttentionCandidate` is. Nothing here decides whether
+    a prediction is overdue - that comparison is the generator's, and it is made
+    against a clock reading carried on the substrate beside these.
+    """
+
+    prediction_id: str
+    # The `FieldState` VALUE, verbatim. DECLARED_NONE and ABSENT are kept apart
+    # here for the same reason they are on the attention census: they are
+    # different facts about a prediction, and only the RANK ever merges them.
+    horizon_state: str
+    # The `SEQ-` ordinal behind the recorded horizon, or `None`.
+    #
+    # **THIS IS NOT AN INTERPRETATION OF THE HORIZON'S FORMAT** (Ruling 61
+    # res.5, which refuses to interpret one and cannot honestly). It asks a
+    # narrower question with a recorded answer: IS THE RECORDED VALUE A TOKEN OF
+    # THE ONE CLOCK THIS TREE HAS? A `SEQ-NNNNNN` token is comparable to every
+    # other point on that clock; anything else - a date, a cycle count, a prose
+    # condition - is left alone and yields `None`, which the generator reads as
+    # "no comparable ordinal" rather than as "not overdue".
+    horizon_ordinal: Optional[int]
+    # Recorded ids only (Ruling 61's `claim_refs`, never validated here).
+    claim_refs: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GoalFacts:
+    """The LINKAGE fields a licensing derivation may honestly read.
+
+    Ids only, and only the two tuples that can carry a linkage. `desired_state`,
+    `kind`, `provenance` and every other content field are deliberately ABSENT
+    from this type: M7-c's bounds permit reading id, order and linkage, and a
+    field that is not carried cannot be read by accident.
+    """
+
+    goal_id: str
+    originating_record_ids: Tuple[str, ...] = ()
+    justification_claim_ids: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ObligationFacts:
+    """A standing obligation's PROVENANCE - who authored it, and about what.
+
+    `source` is what makes depth accounting possible from records alone: an
+    obligation the inquiry generator admitted carries the generator's name in
+    the field the ledger already stamps, so "did I author this" is a recorded
+    fact rather than a self-log read.
+    """
+
+    obligation_id: str
+    source: str
+    target_kind: str
+    target_id: str
+
+
+@dataclass(frozen=True)
+class InquirySubstrate:
+    """Everything M7-c's generator reads, gathered once per observation.
+
+    Carried BESIDE the attention candidates rather than merged into them,
+    because the two consumers ask different questions of the same kernel and
+    merging would give the attention policy fields it has no business reading.
+    """
+
+    predictions: Tuple[PredictionFacts, ...] = ()
+    goals: Tuple[GoalFacts, ...] = ()
+    obligations: Tuple[ObligationFacts, ...] = ()
+    # THE CLOCK READING, from the obligation ledger's own `SEQ-` sequence - the
+    # single monotonic clock this tree mints logical time from. It is an
+    # OBSERVATION carried as data, never a wall-clock read: the generator
+    # compares two recorded points and calls no clock of its own.
+    max_seq_ordinal: int = 0
+
+
+@dataclass(frozen=True)
 class DerivedView:
     """One observation of the kernel, frozen. Equality is field equality.
 
@@ -236,6 +314,10 @@ class DerivedView:
     # same order as the three id tuples above. ADDITIVE and defaulted, so every
     # M7-a construction and every M7-a pin still means exactly what it meant.
     candidates: Tuple[AttentionCandidate, ...] = ()
+    # M7-c. Additive and defaulted for the same reason `candidates` was: every
+    # M7-a and M7-b pin must keep meaning exactly what it meant, and the v-a/v-b
+    # test files must pass BYTE-UNMODIFIED.
+    inquiry: InquirySubstrate = field(default_factory=InquirySubstrate)
 
     def candidates_in(self,
                       category: AttentionCategory) -> Tuple[AttentionCandidate, ...]:
@@ -307,6 +389,64 @@ def derive(obligations: Any, predictions: Any, goals: Any,
         for com in goals.commitments())
     committed_goals = tuple(c.record_id for c in goal_candidates)
 
+    # ---------------------------------------------------------------
+    # M7-c SUBSTRATE. Every read below is GUARDED, and the guards are not
+    # defensive clutter: this function's handles are duck-typed by contract
+    # (episode_record's M3-B precedent), so a handle supplying only what an
+    # EARLIER slice named must keep working. That is pin 9 - the v-a and v-b
+    # test files pass byte-unmodified - enforced here rather than promised.
+    # ---------------------------------------------------------------
+    prediction_facts = []
+    for com in predictions.commitments():
+        prediction_id = str(com.prediction_id)
+        if prediction_id in resolved_ids:
+            continue
+        horizon = getattr(com, "resolution_horizon", None)
+        state = getattr(horizon, "state", None)
+        prediction_facts.append(PredictionFacts(
+            prediction_id=prediction_id,
+            horizon_state=(getattr(state, "value", None) if state is not None
+                           else HORIZON_WHEN_UNRECORDED),
+            # Only a PROVIDED horizon can carry a value worth parsing; an
+            # ABSENT one has nothing recorded, and reading a DECLARED_NONE's
+            # value would be reading a declaration that there is none.
+            horizon_ordinal=(seq_ordinal(getattr(horizon, "value", None))
+                             if getattr(state, "value", None) == HORIZON_PROVIDED
+                             else None),
+            claim_refs=tuple(str(r) for r in getattr(com, "claim_refs", ()) or ())))
+
+    goal_facts = tuple(
+        GoalFacts(
+            goal_id=str(com.goal_id),
+            originating_record_ids=tuple(
+                str(r) for r in getattr(com, "originating_record_ids", ()) or ()),
+            justification_claim_ids=tuple(
+                str(r) for r in getattr(com, "justification_claim_ids", ()) or ()))
+        for com in goals.commitments())
+
+    obligation_facts = []
+    max_seq = 0
+    read_all = getattr(obligations, "read_all", None)
+    if callable(read_all):
+        standing = {c.record_id for c in obligation_candidates}
+        for record in read_all():
+            # THE CLOCK READING is taken over EVERY line, not only standing
+            # ones: `SEQ-` is monotonic across the whole stream, so the maximum
+            # observed is the furthest point logical time has reached. Reading
+            # it off standing records alone would make the clock run backwards
+            # whenever an obligation was merged out of the standing set.
+            for key in ("created_seq", "due_seq"):
+                ordinal = seq_ordinal(record.get(key))
+                if ordinal is not None and ordinal > max_seq:
+                    max_seq = ordinal
+            obligation_id = record.get("obligation_id")
+            if obligation_id in standing and record.get("source") is not None:
+                obligation_facts.append(ObligationFacts(
+                    obligation_id=str(obligation_id),
+                    source=str(record.get("source")),
+                    target_kind=str(record.get("target_kind")),
+                    target_id=str(record.get("target_id"))))
+
     verdict_id = _verdict_registration(acquisitions)
     chair = (ChairState.EMPTY_BY_REFUSED_VERDICT if verdict_id is not None
              else ChairState.UNREGISTERED)
@@ -319,4 +459,9 @@ def derive(obligations: Any, predictions: Any, goals: Any,
         verdict_acquisition_id=verdict_id,
         candidates=(obligation_candidates + tuple(prediction_candidates)
                     + goal_candidates),
+        inquiry=InquirySubstrate(
+            predictions=tuple(prediction_facts),
+            goals=goal_facts,
+            obligations=tuple(obligation_facts),
+            max_seq_ordinal=max_seq),
     )

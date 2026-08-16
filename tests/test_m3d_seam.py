@@ -62,9 +62,27 @@ def test_a_claim_is_the_fourth_member_and_the_vocabulary_is_closed():
     eighty-first manifest entry rules it: a world-model inconsistency is a
     conflict candidate routed into L4, and it is owed about the PROPOSITION that
     carries it. M6-γ's own pins live in `tests/test_m6_worldmodel.py`.
+
+    CHANGED BY A RULING A SECOND TIME, 2026-08-16 (M7-c) - same precedent, same
+    exactness, and this pin did its job again. Recorded verbatim:
+
+        OLD (M6-γ):
+            assert {m.value for m in TargetKind} == {
+                "doctrine", "scar", "suspension", "claim", "world_proposition"}
+        NEW (M7-c):
+            ... the same five PLUS "prediction"
+
+    The HUNDRED-SECOND manifest entry rules it, and it ruled it only after the
+    alternatives were MEASURED: at `e1f8612` all five prior members REJECTED a
+    `PRD-` target as TARGETLESS once resolvers were supplied, so endogenous
+    inquiry had no honest member to wear. **The member arrived WITH its
+    resolver, in one commit** - a target kind the ledger cannot look up is the
+    `UNCHECKED` trap, and closing that door is inseparable from opening this
+    one. M7-c's own pins live in `tests/test_m7c_inquiry.py`.
     """
     assert {m.value for m in TargetKind} == {
-        "doctrine", "scar", "suspension", "claim", "world_proposition"}
+        "doctrine", "scar", "suspension", "claim", "world_proposition",
+        "prediction"}
 
 
 def test_a_a_recorded_claim_resolves(tmp_path):

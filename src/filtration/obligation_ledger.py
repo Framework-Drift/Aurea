@@ -157,6 +157,7 @@ __all__ = [
     "ObligationLedger",
     "ObligationLedgerUnreadable",
     "MalformedDeferral",
+    "UncheckableTarget",
 ]
 
 
@@ -187,6 +188,39 @@ class ObligationLedgerUnreadable(Exception):
     obligations wearing one id are two owed things nobody can tell apart
     afterwards, in an append-only record where nothing can disambiguate them
     later (3a:112).
+    """
+
+
+class UncheckableTarget(Exception):
+    """A `PREDICTION` target was admitted with no way to look the target up.
+
+    **THE HUNDRED-SECOND ENTRY'S SECOND OPERATIVE PART, AS SHAPE.** Every other
+    target kind may resolve to `UNCHECKED` and be admitted, and that is correct
+    for them: `UNCHECKED` records that no resolver was supplied, which is a
+    different fact from "the target is not there" (Docket H's cut, and this
+    module's own third-state reasoning).
+
+    **PREDICTION IS THE EXCEPTION, AND THE MEASUREMENT IS WHY.** At `e1f8612`,
+    probing the pre-widening vocabulary showed FOUR members ADMITTING a `PRD-`
+    id - not because any of them fit, but because their resolvers were absent
+    and the ledger could not look. The same ledger with resolvers supplied
+    REJECTED all five. So an unwired resolver is not a benign gap here: it is
+    the exact configuration in which a fabricated target is written into a
+    permanent, append-only record and reads afterwards as an admitted fact.
+
+    **WHY THIS RAISES RATHER THAN WRITING A REJECTED RECORD - a judgment call,
+    stated, because it stands against this module's own ADMISSION IS TOTAL
+    law.** A REJECTED record needs a `RejectionKind`, and all three members
+    misdescribe this: it is not a DUPLICATE, the input is not MALFORMED, and
+    TARGETLESS asserts the target does not exist - which is precisely the
+    untested claim being refused. Coining a fourth member would be a
+    closed-enum widening beyond the ruled set, which the hundred-second entry
+    authorizes for `TargetKind` ALONE and which this pass's own pin forbids.
+    The remaining honest reading: this is not a CLAIM being refused, it is the
+    LEDGER BEING MISWIRED - a caller fault in Docket N's sense - and the
+    admission-is-total law governs claims, not configuration. The refusal is
+    loud, typed, and leaves no record precisely because no claim was ever
+    adjudicated.
     """
 
 
@@ -282,12 +316,42 @@ class TargetKind(str, Enum):
     recorded claim does - neither store erases, so membership is the whole
     question. The point of the routing is that the world model gets NO private
     truth machinery: its conflicts stand in the same court as everything else.
+
+    **WIDENED BY ONE MEMBER A THIRD TIME AT M7-c**, by the HUNDRED-SECOND
+    manifest entry and never by a caller's string: `PREDICTION`. The M3-D and
+    M6-γ precedent verbatim - GOVERNED CONTENT, `_member`'s closed-vocabulary
+    guard untouched, so an unruled seventh member is still unwritable.
+
+    PREDICTION is what the EXECUTIVE needs: endogenous inquiry observes a
+    discrepancy on a prediction ("this one is overdue and unresolved", "this one
+    records no horizon at all") and what is owed is owed ABOUT THE PREDICTION.
+    **THE MEMBER EXISTS BECAUSE THE ALTERNATIVES WERE MEASURED AND REFUSED**: at
+    `e1f8612` all five prior members REJECTED a `PRD-` target as TARGETLESS once
+    resolvers were supplied, and the claim-target reading was refused by the
+    ruling as a misnamed referent - the inquiry is about the prediction, not
+    about the claim the prediction happens to cite, and a prediction with empty
+    `claim_refs` has no claim to name at all.
+
+    **THE RESOLVER IS INSEPARABLE FROM THE WIDENING** (the ruling's second
+    operative part): this member landed in the SAME COMMIT as the read that
+    checks it, because a target kind the ledger cannot look up admits at
+    `UNCHECKED` and writes a permanent record asserting something nobody tested.
+    See `_resolve_target` and `UncheckableTarget` for the door that is closed.
+
+    **VOCABULARY COLLISION, RECORDED PER RULING 30** (third occurrence of this
+    word in the tree, and no sense is derived from another): `PREDICTION` is
+    live in `proposition_ledger.KernelRefKind` (WHICH KERNEL STORE an id lives
+    in) and in `executive.derived_view.AttentionCategory` (WHICH PRECEDENCE
+    CLASS a candidate belongs to). Here it names WHAT AN OBLIGATION IS OWED
+    ABOUT. Three questions, one word, and **none of the three enums derives from
+    another** - a change to any one must not move the other two.
     """
     DOCTRINE = "doctrine"
     SCAR = "scar"
     SUSPENSION = "suspension"
     CLAIM = "claim"
     WORLD_PROPOSITION = "world_proposition"
+    PREDICTION = "prediction"
 
 
 class TargetResolution(str, Enum):
@@ -366,6 +430,7 @@ class ObligationLedger:
         suspension_systems: Optional[Sequence[Any]] = None,
         ancestry_ledger: Any = None,
         proposition_ledger: Any = None,
+        prediction_ledger: Any = None,
     ):
         # Ruling 31 / Ruling 39: an `__init__` DEFAULT under `data/runtime/` -
         # one of exactly two shapes `tests/conftest.py` and `scripts/soak.py`
@@ -392,6 +457,18 @@ class ObligationLedger:
         # returns a BOOL - no mint, no stamp, no write, and no content. It obeys
         # this module's standing AST pin exactly as the other four resolvers do.
         self.proposition_ledger = proposition_ledger
+        # M7-c (hundred-second entry): the prediction ledger (Ruling 61),
+        # READ-ONLY. Its read surface was censused before wiring, exactly as the
+        # other four were: `commitment_for` is a pure fold over `commitments()`,
+        # which reads mode "r" - no mint, no stamp, no write, and it returns a
+        # DEEP-FROZEN record (Ruling 52), so this module cannot mutate what it
+        # is handed even by accident. It obeys the standing AST pin that bars
+        # naming any mutating verb on a resolver.
+        #
+        # **INSEPARABLE FROM `TargetKind.PREDICTION`** - the ruling's second
+        # operative part. The member and this handle landed together, because a
+        # target kind without its resolver is the `UNCHECKED` trap.
+        self.prediction_ledger = prediction_ledger
         # In-memory mirror of what THIS PROCESS appended. NOT the ledger: the
         # file is the ledger. Nothing reads this back into a decision.
         self.entries: List[Dict[str, Any]] = []
@@ -494,6 +571,28 @@ class ObligationLedger:
                 return TargetResolution.RESOLVED
             return TargetResolution.UNRESOLVED
 
+        if target_kind == TargetKind.PREDICTION:
+            if self.prediction_ledger is None:
+                # UNCHECKED - and `admit` REFUSES on it for this kind alone.
+                # The third state is still reported honestly here rather than
+                # being collapsed into UNRESOLVED: this resolver did not test
+                # anything, and saying it did would be the very conflation
+                # Docket H's cut exists to prevent. The REFUSAL is `admit`'s,
+                # one frame up, where the decision to write belongs.
+                return TargetResolution.UNCHECKED
+            # **A RECORDED COMMITMENT ALWAYS RESOLVES** - the claim-resolves and
+            # proposition-resolves rules' sibling, and for the same reason: that
+            # ledger is append-only and never erases (Ruling 61 - there is no
+            # update, no amend, no revise), so MEMBERSHIP IS THE WHOLE QUESTION.
+            #
+            # A RESOLVED prediction still resolves as a TARGET. Whether it is
+            # settled is a different question from whether it EXISTS, and an
+            # obligation may legitimately be owed about a prediction that has
+            # already been scored - the fossil-resolves rule, one store over.
+            if self.prediction_ledger.commitment_for(target_id) is not None:
+                return TargetResolution.RESOLVED
+            return TargetResolution.UNRESOLVED
+
         if target_kind == TargetKind.SUSPENSION:
             if not self.suspension_systems:
                 return TargetResolution.UNCHECKED
@@ -549,6 +648,23 @@ class ObligationLedger:
 
         # (3) TARGETLESS - resolved against what the ledger CAN SEE.
         resolution = self._resolve_target(target_kind, target_id)
+        # M7-c: THE `UNCHECKED` DOOR, CLOSED FOR PREDICTION TARGETS ONLY.
+        # Structural, not conventional: there is no flag, no default and no
+        # caller-supplied override that admits an unlookup-able prediction
+        # target. See `UncheckableTarget` for why this raises instead of
+        # writing a REJECTED record, and why the exception is scoped to this
+        # one kind rather than generalized - the other four have legitimate
+        # unresolved-by-design callers, and widening this would break them.
+        if (target_kind is TargetKind.PREDICTION
+                and resolution is TargetResolution.UNCHECKED):
+            raise UncheckableTarget(
+                f"an obligation was offered about prediction '{target_id}' by "
+                f"'{source}', but this ledger holds no prediction resolver, so "
+                f"the target CANNOT BE LOOKED UP. Admitting would write a "
+                f"permanent record asserting a target nobody tested - the exact "
+                f"configuration measured at `e1f8612`, where four target kinds "
+                f"admitted a `PRD-` id purely because their resolvers were "
+                f"absent. Construct this ledger with `prediction_ledger=`.")
         if resolution is TargetResolution.UNRESOLVED:
             return self._reject(
                 RejectionKind.TARGETLESS, supplied,

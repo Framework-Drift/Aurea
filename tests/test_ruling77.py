@@ -489,8 +489,13 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # default, so a merely-constructed loop holds one - but the Executive loop
     # is not wired into `process_input`, so the soak census still shows ZERO
     # selection lines, and a line appearing there would itself be the finding.
-    assert audit["configured_paths"] == 34
-    assert first_run["isolation"]["configured_paths"] == 34
+    # ~~assert audit["configured_paths"] == 34~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 34~~
+    #
+    # MIGRATED AGAIN 2026-08-16 (M7-c). The inquiry act log is THE ONE ruled
+    # table movement of that pass (34 -> 35); any OTHER movement is a STOP.
+    assert audit["configured_paths"] == 35
+    assert first_run["isolation"]["configured_paths"] == 35
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1218,7 +1223,11 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # registering it in both tables mandatory rather than optional. THE SUBJECT
     # IS STILL UNCHANGED - the evaluation instrument registers no store of its
     # own, and never has.
-    assert len(class_attrs) + len(init_defaults) == 34
+    # ~~assert len(class_attrs) + len(init_defaults) == 34~~
+    # MIGRATED AGAIN 2026-08-16 (M7-c), same reason a SEVENTH time: M7-c added
+    # the inquiry act log in `src/`, and this assertion is what made
+    # registering it in both tables mandatory. THE SUBJECT IS STILL UNCHANGED.
+    assert len(class_attrs) + len(init_defaults) == 35
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

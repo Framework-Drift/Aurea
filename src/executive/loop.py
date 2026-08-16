@@ -44,6 +44,17 @@ from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
 from src.executive.attention_policy import AttentionSelection
+from src.executive.inquiry_generator import (
+    GENERATOR_NAME,
+    CandidatePartition,
+    InquiryCandidate,
+    InquiryGenerator,
+)
+from src.executive.inquiry_log import (
+    InquiryLog,
+    InquiryRecord,
+    KernelDisposition,
+)
 from src.executive.derived_view import (
     VERDICT_PAYLOAD_KIND,
     ChairState,
@@ -51,6 +62,11 @@ from src.executive.derived_view import (
     derive,
 )
 from src.executive.selection_log import AttentionSelectionRecord, SelectionLog
+# THE ONE KERNEL VOCABULARY THIS MODULE NAMES, and it names it because this is
+# the submitting act: an obligation is admitted AT a target kind, and the
+# hundred-second entry ruled which one a prediction-sourced inquiry wears. The
+# import is the enum ONLY - no ledger class, no writer, no path.
+from src.filtration.obligation_ledger import TargetKind
 
 
 class NoAttentionPolicyBound(Exception):
@@ -99,6 +115,17 @@ class VerdictAlreadyRegistered(Exception):
 
 class MalformedConsumedVerdict(Exception):
     """The registration payload failed its own closed checks."""
+
+
+class UnmappedKernelDisposition(Exception):
+    """The kernel returned a rejection kind this act cannot record.
+
+    Raised rather than defaulted: the whole value of recording a disposition is
+    that it is the kernel's own answer, and a nearest-neighbour guess would put
+    a fact on a permanent record that nobody ever gave. It fires only if
+    `RejectionKind` gains a member without this map gaining one - which is a
+    kernel vocabulary change, and therefore a ruling.
+    """
 
 
 @dataclass(frozen=True)
@@ -170,7 +197,8 @@ class ExecutiveLoop:
 
     def __init__(self, obligations: Any, predictions: Any, goals: Any,
                  acquisitions: Any, policy: Any = None,
-                 selections: Any = None):
+                 selections: Any = None, generator: Any = None,
+                 inquiries: Any = None):
         self.obligations = obligations
         self.predictions = predictions
         self.goals = goals
@@ -191,6 +219,15 @@ class ExecutiveLoop:
         # and writes nothing - the arbiter and the activation layer are
         # composed the same way and stay silent until a door is opened.
         self.selections = selections or SelectionLog()
+        # M7-c, same default-by-construction idiom. **THE GENERATOR IS NOT
+        # OPTIONAL THE WAY THE POLICY IS**, and the asymmetry is deliberate:
+        # a policy is a CHOICE among possible orderings, so binding one is the
+        # caller's act and an unbound loop must refuse. `inquiry-generator.v1`
+        # is not a choice - it is the only generation there is, and a loop
+        # holding one still generates nothing until a door is opened from
+        # outside.
+        self.generator = generator or InquiryGenerator()
+        self.inquiries = inquiries or InquiryLog()
 
     # ------------------------------------------------------------------
     # OBSERVE
@@ -243,6 +280,126 @@ class ExecutiveLoop:
         if self.policy is None:
             raise NoAttentionPolicyBound(_UNBOUND_MESSAGE)
         return self.policy.select(self.observe())
+
+    # ------------------------------------------------------------------
+    # ENDOGENOUS INQUIRY -- M7-c. A GOVERNED PHASE BESIDE THE CYCLE.
+    # ------------------------------------------------------------------
+    #
+    # **WHY GENERATION IS A SIBLING OF `step()` RATHER THAN A STAGE INSIDE IT --
+    # the wiring decision the specification left to this lane, with its
+    # reasoning.**
+    #
+    # (1) THE COHERENCE ARGUMENT, which is the one that actually decides it.
+    #     `step()` chooses from the attendable set and returns that choice. If
+    #     the same call also ADMITTED obligations, it would mutate the very set
+    #     it had just selected from, and the record it returns would describe a
+    #     kernel state that no longer holds by the time the caller reads it.
+    #     Attention allocation and obligation authorship are different acts on
+    #     the same records, and fusing them makes the selection's census
+    #     unreproducible from the state the caller can observe afterwards.
+    #
+    # (2) THE HOUSE SHAPE. `AureaCore` exposes `examine_goals`,
+    #     `open_goal_activation` and `close_goal_activation` as
+    #     `process_input`'s SIBLINGS, each externally invoked with no internal
+    #     caller (Rulings 72/73/74's three-doors pattern). These are the same
+    #     shape one layer up.
+    #
+    # (3) PIN 9 IS SATISFIED BY CONSTRUCTION RATHER THAN BY LUCK. The v-a and
+    #     v-b files must pass BYTE-UNMODIFIED; a `step()` that also generated
+    #     would have to be argued not to disturb them. This way there is
+    #     nothing to argue - `step()` is untouched.
+    #
+    # NOTHING LOOPS AND NOTHING SCHEDULES. Both verbs below are doors opened
+    # from outside, exactly as every Docket Q verb is.
+
+    def generate_inquiries(self) -> Tuple[InquiryCandidate, ...]:
+        """Observe and notice. PURE - it writes nothing and submits nothing.
+
+        The select/record split for a third time. A candidate set computable
+        without recording one is a candidate set anyone can audit, and it is
+        what makes the determinism pin measurable without accumulating log
+        lines or admitting obligations.
+        """
+        return self.generator.generate(self.observe())
+
+    @staticmethod
+    def _claim_text(candidate: InquiryCandidate) -> str:
+        """The obligation's claim text. DERIVED, never composed as prose.
+
+        **THIS IS LOAD-BEARING FOR KERNEL-OWNED DEDUPLICATION, NOT COSMETIC.**
+        The obligation ledger's duplicate check compares the NORMALIZED claim
+        text against standing obligations for the same target. A generated
+        sentence that varied - by phrasing, by ordering, by anything - would
+        make two submissions of the SAME discrepancy read as two different
+        claims, and the kernel's duplicate disposition would never fire. So the
+        text is a deterministic function of the closed class name and the
+        source ids: identical discrepancies produce identical text, by
+        construction.
+
+        It is also why no natural language is generated anywhere in this slice.
+        """
+        return (f"{candidate.discrepancy_class.value}: "
+                f"{','.join(candidate.source_record_ids)}")
+
+    @staticmethod
+    def _disposition(result: Any) -> KernelDisposition:
+        """Map the kernel's OWN answer onto the recorded vocabulary.
+
+        A TRANSLATION, NEVER A JUDGEMENT (section 5: the Executive submits, the
+        kernel dispositions). Every branch reads a field the ledger set; nothing
+        here decides whether a rejection was fair, and an unrecognised rejection
+        kind is NOT coerced into a neighbour - it would mean the kernel's
+        vocabulary moved, and answering from a stale map would record a
+        disposition the kernel never gave.
+        """
+        if getattr(result, "admitted", False):
+            return KernelDisposition.ADMITTED
+        kind = getattr(getattr(result, "rejection_kind", None), "value", None)
+        mapped = {
+            "duplicate": KernelDisposition.REJECTED_DUPLICATE,
+            "targetless": KernelDisposition.REJECTED_TARGETLESS,
+            "malformed": KernelDisposition.REJECTED_MALFORMED,
+        }.get(kind)
+        if mapped is None:
+            raise UnmappedKernelDisposition(
+                f"the obligation ledger returned rejection kind {kind!r}, which "
+                f"this act has no recorded member for. The kernel's vocabulary "
+                f"has moved; recording the nearest neighbour would put a "
+                f"disposition on a permanent record that the kernel never gave.")
+        return mapped
+
+    def submit_inquiries(self) -> Tuple[InquiryRecord, ...]:
+        """Generate, submit the licensed, and RECORD EVERY candidate.
+
+        **THE PARTITION IS TOTAL HERE, WHICH IS WHERE IT MATTERS.** Both
+        branches write a line; there is no path on which a candidate is neither
+        admitted nor recorded. That is the specification's one forbidden
+        outcome, and it is closed by the loop over the generator's FULL output
+        rather than by a filter anyone must remember not to add.
+
+        A licensed candidate is submitted THROUGH THE KERNEL'S OWN DOOR - the
+        existing obligation ledger, no new admission path - and the kernel's
+        answer is recorded as received, including a duplicate disposition on a
+        repeat. **This act never deduplicates and never reads its own log.**
+        """
+        records = []
+        for candidate in self.generate_inquiries():
+            if candidate.partition is CandidatePartition.LICENSED:
+                result = self.obligations.admit(
+                    GENERATOR_NAME, TargetKind.PREDICTION,
+                    candidate.source_record_ids[0], self._claim_text(candidate))
+                records.append(self.inquiries.record(
+                    candidate, self.generator.name, self.generator.version,
+                    disposition=self._disposition(result),
+                    obligation_id=getattr(result, "obligation_id", None)))
+            else:
+                # SURFACED, NEVER PURSUED. No admission is attempted at all -
+                # `NOT_SUBMITTED` is a different fact from a submission that
+                # was refused, and collapsing them would hide which bar stopped
+                # it.
+                records.append(self.inquiries.record(
+                    candidate, self.generator.name, self.generator.version))
+        return tuple(records)
 
     def step(self) -> AttentionSelectionRecord:
         """ONE CYCLE: observe, select, record, return.

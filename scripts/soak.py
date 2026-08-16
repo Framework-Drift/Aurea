@@ -118,6 +118,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.filtration.episode_record import EpisodeRecord
     from src.filtration.obligation_ledger import ObligationLedger
     from src.executive.selection_log import SelectionLog
+    from src.executive.inquiry_log import InquiryLog
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -219,6 +220,12 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # injectable set from `src/` and REFUSES a run whose table has fallen
         # behind.
         (SelectionLog, "log_path", "logs/attention_selections.jsonl"),
+        # M7-c - the inquiry act log. The Executive loop is NOT wired into
+        # `process_input`, so the soak must show ZERO inquiry lines - the
+        # property that would itself be the finding if it moved. Redirected
+        # regardless, because the coverage self-audit re-derives the injectable
+        # set from `src/` and REFUSES a run whose table has fallen behind.
+        (InquiryLog, "log_path", "logs/inquiry_acts.jsonl"),
     ]
     return class_attrs, init_defaults
 

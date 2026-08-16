@@ -177,7 +177,7 @@ The architectural frame around the ownership table above: every subsystem sits i
 |---|---|---|
 | **Kernel** | what may mean what | The existing build. **PASSIVE — nothing loops.** |
 | **World Model** | what seems to exist | **THE DOMAIN HAS A MEMBER AS OF M6 (2026-08-15): `src/worldmodel/` — the proposition ledger, the standing derivation, the contradiction surface.** `record_projection` remains the seed and remains **A VIEW, NEVER A SOURCE** (Ruling 64's own finding). The new store is the other thing: a persistent typed representation of what she thinks is happening outside herself — and **it manufactures no truth.** Propositions REFERENCE kernel epistemic records (resolved at write, refused typed) and DERIVE standing from the kernel; a world-model inconsistency is a conflict candidate routed into L4, where the loop M3 built adjudicates it. **The domain has no private truth machinery.** |
-| **Executive** | what receives cognition | **FUTURE (M7). It LOOPS, and it is CONSTITUTIONALLY DISPOSABLE.** |
+| **Executive** | what receives cognition | **THE DOMAIN HAS MEMBERS AS OF M7 (2026-08-16): `src/executive/` — the derived view, `attention-policy.v1`, the selection log, `inquiry-generator.v1`, the inquiry act log.** It LOOPS, and it is CONSTITUTIONALLY DISPOSABLE. **L10 IS ENFORCED BY SHAPE, NOT PROMISED:** every module here holds ZERO durable state — the working state is a `DerivedView` recomputed from kernel ledgers on every observation, and the two act logs record ACTS rather than state, with an AST pin that **no `src/` logic path reads either one back into a decision.** M7-d proves the disposability by destruction. **NOTHING LOOPS YET AND NOTHING SCHEDULES**: every verb is a door opened from outside, the Q-family's three-doors pattern one layer up. **The Executive SUBMITS; the kernel DISPOSITIONS** — an endogenous inquiry enters as an ordinary obligation admission through the kernel's own door, and the ledger's duplicate/targetless answer is recorded as received, never pre-empted. |
 | **Capability Plane** | what cognition/action can be used | `model_provider` · `spl` · `hail`/`srg`. **ROLES, NOT BRANDS.** |
 | **Foundry** | what capabilities actually do | The AUREA-Foundry repo — **OUTSIDE the system.** |
 | **Builder** | what changes the machinery | The governance practice itself. |
@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2011 passed, 0 xfailed.** ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2054 passed, 0 xfailed.** ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -248,7 +248,14 @@ assertions inside two other tests, and nothing was written to satisfy a number)
 → **2011** (M7-b, `attention-policy.v1`: **+44** new pins and **+1** inherited
 ledger-population row at the `SEL-` prefix; the standing derivation in
 `test_m4_delta_epsilon.py` found the new store WITHOUT BEING TOLD, which is the
-whole value of deriving that population instead of listing it).
+whole value of deriving that population instead of listing it) → **2054**
+(M7-c, endogenous inquiry: **+42** new pins and **+1** inherited
+ledger-population row at the `INQ-` prefix). **M7-c IS THE FIRST EXECUTIVE
+SLICE TO CHANGE THE KERNEL**, and it changed exactly one thing: `TargetKind`
+gains `PREDICTION` by the hundred-second manifest entry, in M3-D's and M6-γ's
+governed-content form, with its resolver in the SAME commit. That pass was
+STOPPED first and built only after the ruling — the measurement that forced the
+stop is on the record at §8.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and
@@ -261,7 +268,11 @@ boast does not — what the design cannot do is make anyone LOOK.** Both halves 
 the sentence now agree, and M7-b's own row is written in the same edit that
 closes the gap, which is the practice that would have prevented it.
 **Invariants stood at 27/27 from Ruling 42 Slice 2 until the retirement, which took
-them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ, M4-ε, M6-α, M6-β, M6-γ, M7-a and M7-b added none.** **M7-b's
+them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ, M4-ε, M6-α, M6-β, M6-γ, M7-a, M7-b and M7-c added none.** **M7-c's
+reason is the selection log's verbatim**: the inquiry act log is a FILE whose
+only in-memory collection is `entries`, a name nine stores already assign to, so
+the Ruling-1 scanner has no unique attribute to key on. `record()` being the
+only write path is what guards it, pinned. **M7-b's
 reason is CAE's verbatim, a second time:** the attention selection log is a FILE,
 and its only in-memory collection is `entries` — the same name three suspension
 stores and six ledgers already assign to — so the Ruling-1 scanner has no unique

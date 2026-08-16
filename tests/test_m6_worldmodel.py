@@ -255,9 +255,22 @@ def test_beta_b_the_verdict_carries_the_facts_that_produced_it():
 # =====================================================================
 
 def test_gamma_a_world_proposition_is_the_fifth_member(tmp_path):
+    """MIGRATED BY A RULING 2026-08-16 (M7-c), Ruling-14 form, old text kept:
+
+        ~~assert {m.value for m in TargetKind} == {
+            "doctrine", "scar", "suspension", "claim", "world_proposition"}~~
+
+    **THE SUBJECT IS UNCHANGED AND STILL ASSERTED BELOW**: `WORLD_PROPOSITION`
+    is still the FIFTH member and still carries its own value. What moved is the
+    SET, by the hundred-second entry, which added `prediction` for endogenous
+    inquiry - and the assertion stays EXACT rather than becoming a superset
+    check, because exactness is what made THIS edit mandatory instead of
+    optional. A `>=` here would have absorbed the widening silently.
+    """
     assert TargetKind.WORLD_PROPOSITION.value == "world_proposition"
     assert {m.value for m in TargetKind} == {
-        "doctrine", "scar", "suspension", "claim", "world_proposition"}
+        "doctrine", "scar", "suspension", "claim", "world_proposition",
+        "prediction"}
 
 
 def test_gamma_a_a_recorded_proposition_always_resolves(tmp_path):

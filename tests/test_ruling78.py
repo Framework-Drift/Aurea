@@ -444,8 +444,10 @@ def test_c_every_routed_site_is_still_a_site():
     # The direction matters and is why the count stays exact: a MISSING site
     # means a record stopped being kept, and only an exact count can tell the
     # two movements apart.
-    assert len(callers) == 17, (
-        "seventeen append sites are routed through Ruling 78's funnel; the tree "
+    # ~~assert len(callers) == 17~~ - MIGRATED 2026-08-16 (M7-c) by this
+    # assertion's own instruction; the inquiry act log is the new site.
+    assert len(callers) == 18, (
+        "eighteen append sites are routed through Ruling 78's funnel; the tree "
         "now has " + str(len(callers)) + ": " + repr(sorted(callers)) + ". A "
         "NEW one is fine and welcome - update this count. A MISSING one means a "
         "record stopped being kept.")

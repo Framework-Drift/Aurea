@@ -28,9 +28,12 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS THIRTY-ONE PATHS: six resolved from class attributes,
-twenty-five from `__init__` defaults. If you add a thirty-second and do not add
+THIS FIXTURE COVERS THIRTY-TWO PATHS: six resolved from class attributes,
+twenty-six from `__init__` defaults. If you add a thirty-third and do not add
 it here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS THIRTY-ONE PATHS: six from class attributes,
+    twenty-five from `__init__` defaults.~~ MIGRATED 2026-08-16 (M7-c).
 
     ~~THIS FIXTURE COVERS THIRTY PATHS: six resolved from class attributes,
     twenty-four from `__init__` defaults.~~
@@ -165,6 +168,7 @@ from src.expansion.tether.session_governor import TetherProtocol
 from src.filtration.episode_record import EpisodeRecord
 from src.filtration.obligation_ledger import ObligationLedger
 from src.executive.selection_log import SelectionLog
+from src.executive.inquiry_log import InquiryLog
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import GSR
@@ -423,6 +427,12 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # loop writes nothing - but without this redirect a bare
         # `ExecutiveLoop(...)` would point at the real `data/runtime/` log.
         (SelectionLog, "log_path", "attention_selections.jsonl"),
+        # M7-c: the inquiry act log. Same situation as the selection log -
+        # `ExecutiveLoop.__init__` composes one BY DEFAULT, so every
+        # constructed loop holds one. Composing is not writing (no verb here
+        # has an internal caller), but without this redirect a bare
+        # `ExecutiveLoop(...)` would point at the real `data/runtime/` log.
+        (InquiryLog, "log_path", "inquiry_acts.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

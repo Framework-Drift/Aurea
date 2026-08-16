@@ -580,7 +580,13 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # attention selection log, THE ONE RULED MOVEMENT of that pass (33 -> 34),
     # declared in its handoff precisely so any other movement is a STOP. Exact,
     # not `>=`, for the reason the paragraph above gives.
-    assert len(class_attrs) + len(init_defaults) == 34
+    # ~~assert len(class_attrs) + len(init_defaults) == 34~~
+    #
+    # MIGRATED AGAIN 2026-08-16 (M7-c), old text kept. THE SUBJECT IS STILL
+    # UNCHANGED - the divergence detector registers no store of its own. What
+    # moved is the TABLE: M7-c registered the inquiry act log, THE ONE RULED
+    # MOVEMENT of that pass (34 -> 35).
+    assert len(class_attrs) + len(init_defaults) == 35
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

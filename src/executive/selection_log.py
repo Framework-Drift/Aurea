@@ -70,6 +70,7 @@ from src.executive.attention_policy import (
     SelectionOutcome,
 )
 from src.executive.derived_view import AttentionCategory
+from src.executive.gate_one import GateOneReferent
 from src.utils.atomic_write import durable_append_text
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
 from src.utils.record_value import validate_record_value
@@ -80,18 +81,16 @@ __all__ = [
 ]
 
 
-class GateOneReferent(str, Enum):
-    """How a Gate-1 adequacy field is answered by a NON-DISPOSITION record.
-
-    Two members, and neither is a value: they say WHERE the answer is, or that
-    the question does not apply. A record that silently omitted a Gate-1 field
-    would be indistinguishable from one whose author forgot it.
-    """
-
-    # The field names something a selection does not do. Not zero, not empty.
-    NOT_APPLICABLE = "not_applicable"
-    # The requirement is met, and the per-candidate census is where it is met.
-    IN_CANDIDATE_CENSUS = "in_candidate_census"
+# ~~`GateOneReferent` was DECLARED here at M7-b~~ - MOVED 2026-08-16 (M7-c) to
+# `src/executive/gate_one.py` and RE-EXPORTED here, so every M7-b import site
+# and pin is untouched and the v-b test file stays BYTE-UNMODIFIED.
+#
+# The move was forced by a pin doing its job: M7-c's inquiry log needs the same
+# three answers, and importing them FROM THIS MODULE would have made the
+# attention log a dependency of the inquiry log - reddening M7-b's own
+# no-consumer pin, which asserts nothing in `src/` reads this store. Redeclaring
+# them there instead would be a second definition of one rule. See `gate_one`
+# for the full reasoning.
 
 
 class SelectionLogUnreadable(Exception):
