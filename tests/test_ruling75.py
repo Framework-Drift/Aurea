@@ -932,7 +932,12 @@ def test_j_the_conftest_path_count_is_a_derivation_not_a_claim():
                      if "~~" not in line)
     words = {"TWENTY-TWO": 22, "TWENTY-THREE": 23, "TWENTY-FOUR": 24,
              "TWENTY-FIVE": 25, "TWENTY-SIX": 26, "TWENTY-SEVEN": 27,
-             "TWENTY-EIGHT": 28, "TWENTY-NINE": 29, "THIRTY": 30}
+             "TWENTY-EIGHT": 28, "TWENTY-NINE": 29, "THIRTY": 30,
+             # M7-b (2026-08-16): the vocabulary needed the next word, and the
+             # ruled form is what forced the docstring edit rather than letting
+             # the count drift. `THIRTY` cannot shadow `THIRTY-ONE` here - the
+             # match requires ` PATHS` immediately after the word.
+             "THIRTY-ONE": 31}
     claimed = [value for word, value in words.items()
                if f"THIS FIXTURE COVERS {word} PATHS" in live]
     assert len(claimed) == 1, (

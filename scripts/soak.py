@@ -117,6 +117,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.goals.goal_ledger import GoalLedger
     from src.filtration.episode_record import EpisodeRecord
     from src.filtration.obligation_ledger import ObligationLedger
+    from src.executive.selection_log import SelectionLog
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -210,6 +211,14 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # episode, and a line appearing here would itself be the finding.
         (ObligationLedger, "ledger_path", "obligations/obligations.jsonl"),
         (EpisodeRecord, "log_path", "episodes/episodes.jsonl"),
+        # M7-b - the attention selection log. The Executive loop is NOT wired
+        # into `process_input`: nothing in the pipeline constructs one and no
+        # verb here has an internal caller, so a soak must show ZERO selection
+        # lines - the property that would itself be the finding if it moved.
+        # Redirected regardless, because the coverage self-audit re-derives the
+        # injectable set from `src/` and REFUSES a run whose table has fallen
+        # behind.
+        (SelectionLog, "log_path", "logs/attention_selections.jsonl"),
     ]
     return class_attrs, init_defaults
 

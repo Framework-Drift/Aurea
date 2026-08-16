@@ -477,8 +477,20 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     #
     # MIGRATED AGAIN 2026-08-15 (M6-α). The proposition ledger is THE ONE ruled
     # table movement of that pass (32 -> 33); any OTHER movement is a STOP.
-    assert audit["configured_paths"] == 33
-    assert first_run["isolation"]["configured_paths"] == 33
+    #
+    # ~~assert audit["configured_paths"] == 33~~
+    # ~~assert first_run["isolation"]["configured_paths"] == 33~~
+    #
+    # MIGRATED AGAIN 2026-08-16 (M7-b), old text kept verbatim above. The
+    # attention selection log is THE ONE ruled table movement of that pass
+    # (33 -> 34); any OTHER movement is a STOP. **It is the ACQUISITION
+    # LEDGER'S shape rather than the two Kernel stores'** in one respect and
+    # NOT in the other: `ExecutiveLoop.__init__` composes a `SelectionLog` by
+    # default, so a merely-constructed loop holds one - but the Executive loop
+    # is not wired into `process_input`, so the soak census still shows ZERO
+    # selection lines, and a line appearing there would itself be the finding.
+    assert audit["configured_paths"] == 34
+    assert first_run["isolation"]["configured_paths"] == 34
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1200,7 +1212,13 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # durable path in `src/` and this assertion is what made registering it
     # mandatory. THE SUBJECT IS UNCHANGED - the evaluation instrument registers
     # no store of its own, and never has.
-    assert len(class_attrs) + len(init_defaults) == 33
+    # ~~assert len(class_attrs) + len(init_defaults) == 33~~
+    # MIGRATED AGAIN 2026-08-16 (M7-b), same reason a SIXTH time: M7-b added the
+    # attention selection log in `src/`, and this assertion is what made
+    # registering it in both tables mandatory rather than optional. THE SUBJECT
+    # IS STILL UNCHANGED - the evaluation instrument registers no store of its
+    # own, and never has.
+    assert len(class_attrs) + len(init_defaults) == 34
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

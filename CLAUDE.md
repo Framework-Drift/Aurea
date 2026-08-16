@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 1954 passed, 0 xfailed.** ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2011 passed, 0 xfailed.** ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -241,9 +241,32 @@ envelope, +36) → **1841** (M4-γ, replay and the chaos family, +20) → **1873
 (M4-δ + M4-ε, the column-zero law and the declaration fields, +32).
 **M4 CLOSED THERE.** → **1920** (M6-α, the proposition ledger: **+9** inherited
 battery rows and **+38** new pins) → **1954** (M6-β + M6-γ, the standing
-derivation and the L4 routing, +34).
+derivation and the L4 routing, +34). **THE EXECUTIVE OPENS:** → **1966**
+(M7-a, the loop skeleton and the derived view, +12 — **the handoff said 13 and
+the file holds 12**; its thirteenth item, exactly-one-acquisition, is pinned as
+assertions inside two other tests, and nothing was written to satisfy a number)
+→ **2011** (M7-b, `attention-policy.v1`: **+44** new pins and **+1** inherited
+ledger-population row at the `SEL-` prefix; the standing derivation in
+`test_m4_delta_epsilon.py` found the new store WITHOUT BEING TOLD, which is the
+whole value of deriving that population instead of listing it).
+
+**THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
+1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and
+REPORTED the surplus, and the docs-sync row was deferred to a later pass — so
+the drift the seventy-second entry named as *third recorded instance* had a
+fourth. It is the milder direction (a low baseline makes the next session's
+mandatory before-you-start run report an unexplained surplus, which is at least
+visible), and it is still the same defect: **a count goes visibly stale and a
+boast does not — what the design cannot do is make anyone LOOK.** Both halves of
+the sentence now agree, and M7-b's own row is written in the same edit that
+closes the gap, which is the practice that would have prevented it.
 **Invariants stood at 27/27 from Ruling 42 Slice 2 until the retirement, which took
-them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ, M4-ε, M6-α, M6-β and M6-γ added none.** For the acquisition
+them to 26** — see §4. **M4-α, M4-β′, M4-γ, M4-δ, M4-ε, M6-α, M6-β, M6-γ, M7-a and M7-b added none.** **M7-b's
+reason is CAE's verbatim, a second time:** the attention selection log is a FILE,
+and its only in-memory collection is `entries` — the same name three suspension
+stores and six ledgers already assign to — so the Ruling-1 scanner has no unique
+attribute to key on and registering it would flag correct code. What guards the
+store instead is that `record()` is its only write path, pinned. For the acquisition
 ledger the reason is CAE's verbatim: the Ruling-1 scanner keys on an ATTRIBUTE
 NAME, and the ledger is a FILE whose `entries` is a per-process mirror nothing
 reads back into a decision. For the three suspension stores the reason is that

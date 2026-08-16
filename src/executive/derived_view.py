@@ -19,6 +19,18 @@ exists the chair is UNREGISTERED -- a visible state, not an error. After it,
 EMPTY_BY_REFUSED_VERDICT. There is NO qualified state in this vocabulary,
 because no package has ever cleared the gate; adding one is a ruling that
 arrives with the first QUALIFIED verdict, not before (M7_GROUNDING section 3).
+
+M7-b EXTENDS THIS VIEW WITH CANDIDATE FACTS, AND THE CUT IS DELIBERATE: the
+view holds FACTS read from the kernel; `attention_policy` holds ORDERING over
+them. Nothing here knows that an obligation outranks a goal, and nothing here
+ranks anything -- so `attention-policy.v2` would change one module and this one
+not at all. A view that carried ordering keys would be a policy wearing a
+derivation's name.
+
+NOTHING HERE READS THE SELECTION LOG. The Executive records the acts it takes;
+those records are forensic, and a derivation that folded them back in would make
+the loop's own history an input to its next decision -- owned state, reached by
+the long way round. L10, pinned by AST rather than promised.
 """
 
 from __future__ import annotations
@@ -26,7 +38,20 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple
+
+# PURE FUNCTIONS ONLY, NEVER A LEDGER CLASS. `seq_ordinal` parses a `SEQ-`
+# token and `ordinal_pattern` builds an anchored id matcher; neither opens a
+# file, holds state, or reaches a store. `episode_record` set this precedent
+# explicitly - it imports the obligation ledger's mint FUNCTION and not its
+# class, so the zero-internal-callers pins (which bind on CLASSES) stay exact.
+#
+# RE-DERIVING EITHER PATTERN HERE WAS THE ALTERNATIVE AND IS REFUSED: a second
+# definition of a ruled regex is what Ruling 79 declined by name, and an id
+# grammar that drifts between two spellings is a join that silently stops
+# joining.
+from src.filtration.obligation_ledger import seq_ordinal
+from src.utils.ledger_mint import ordinal_pattern
 
 # The payload discriminator for the consumed-verdict acquisition. A closed,
 # exact string: the derivation below matches it with equality, never with
@@ -48,6 +73,146 @@ class ChairState(str, Enum):
     EMPTY_BY_REFUSED_VERDICT = "empty_by_refused_verdict"
 
 
+class AttentionCategory(str, Enum):
+    """WHICH PRECEDENCE CLASS a candidate belongs to. Closed at three.
+
+    **VOCABULARY COLLISION CENSUS, run BEFORE coining** (Ruling 30's discipline;
+    67 enum classes / 279 distinct member names in `src/` at `ce0498f`). ZERO
+    class-name collisions. Two member names already exist elsewhere and are
+    recorded here so nobody later derives one sense from the other:
+
+      * `OBLIGATION` and `PREDICTION` are live in
+        `proposition_ledger.KernelRefKind`, where they name WHICH KERNEL STORE
+        AN ID LIVES IN. Here they name WHICH PRECEDENCE CLASS A CANDIDATE
+        BELONGS TO. **This enum is NOT derived from that one and must not be**,
+        or a store-vocabulary change would silently move what the Executive
+        attends to first - the same reasoning `TargetKind` records about
+        `NodeType`, one layer up.
+
+    `GOAL` is free tree-wide. There is deliberately no fourth member: a category
+    the policy cannot order is a category it must not be handed.
+    """
+
+    OBLIGATION = "obligation"
+    PREDICTION = "prediction"
+    GOAL = "goal"
+
+
+@dataclass(frozen=True)
+class AttentionCandidate:
+    """ONE attendable record, as FACTS. It carries no ranking of any kind.
+
+    Every field below is READ FROM THE KERNEL, never computed by comparison.
+    The policy turns these into ordering keys; this type does not know what
+    outranks what, and a reviewer can confirm that by the absence of any
+    comparison operator in this module.
+
+    The optional fields are category-shaped and that is honest rather than
+    untidy: an obligation has no commitment ordinal and a goal has no horizon.
+    `None` means THE FACT DOES NOT APPLY TO THIS CATEGORY - it never means the
+    fact was unavailable, because a candidate whose ordering fact could not be
+    read is not built at all.
+    """
+
+    category: AttentionCategory
+    record_id: str
+    # OBLIGATIONS. The EFFECTIVE due ordinal - see `_obligation_candidates`.
+    due_ordinal: Optional[int] = None
+    # PREDICTIONS. The `FieldState` VALUE of the recorded resolution horizon,
+    # verbatim. Carried beside the rank the policy derives from it so that
+    # Docket H's cut survives the ordering: DECLARED_NONE and ABSENT rank
+    # together and are still DIFFERENT FACTS on the record.
+    horizon_state: Optional[str] = None
+    # PREDICTIONS and GOALS. The mint ordinal behind the record's own id, which
+    # IS commitment order - both ledgers are append-only and mint monotonically.
+    commitment_ordinal: Optional[int] = None
+
+
+# The `FieldState` value meaning "the channel supplied a horizon". Compared by
+# VALUE rather than imported as a member, so that this module keeps its promise
+# to import no ledger class; the real vocabulary is pinned against it.
+HORIZON_PROVIDED = "provided"
+
+# What a horizon field reads as when the handle carries none at all. This is the
+# PREDICTION LEDGER'S OWN DEFAULT (`field(default_factory=absent)`), not a
+# convenience: a commitment that never mentioned a horizon is ABSENT there too,
+# so reading a missing attribute as ABSENT agrees with the store rather than
+# guessing past it.
+HORIZON_WHEN_UNRECORDED = "absent"
+
+
+def _ordinal_of(record_id: Any, prefix: str) -> Optional[int]:
+    """The mint ordinal behind an id, by ANCHORED match, or `None`.
+
+    Ruling 64's rider discipline: `PRD-00010` must never read as `PRD-0001`, and
+    a bare `\\b` is insufficient because `-` is itself a non-word character.
+    An unparseable id yields `None` and the policy orders it by identity - it is
+    never guessed at and never silently sorted first.
+    """
+    if not isinstance(record_id, str):
+        return None
+    match = ordinal_pattern(prefix).search(record_id)
+    return int(match.group(1)) if match else None
+
+
+def _obligation_candidates(obligations: Any) -> Tuple[AttentionCandidate, ...]:
+    """Standing obligations, carrying their EFFECTIVE DUE ORDINAL.
+
+    **THE FINDING THAT SHAPES THIS FUNCTION, measured before it was written:**
+    `open_items()` returns the OPEN record, and `due_seq` is not on it. A
+    deferral is a SEPARATE append (`ObligationRecordType.DEFERRED`) carrying
+    `reason` and `due_seq`, because that ledger is event-sourced and never edits
+    a record in place. So the due ordinal has to be FOLDED out of the stream; a
+    reader that trusted `open_items()` alone would silently order every deferred
+    obligation by its admission instead of by when it was set aside.
+
+    **THE EFFECTIVE DUE ORDINAL IS THE DEFERRED `due_seq` WHERE ONE EXISTS, AND
+    THE OPEN `created_seq` OTHERWISE - AND THE TWO ARE COMPARABLE BECAUSE THEY
+    ARE MINTED BY ONE CLOCK.** `mint_seq_token` stamps every record in that
+    ledger from a single monotonic `SEQ-` sequence, so an admission ordinal and
+    a due ordinal are points on the same line. Nothing is coined, nothing is
+    scaled, and no magnitude is invented to make them commensurable - they
+    already were, and that is what licenses this reading rather than a
+    convenience mapping.
+
+    The consequences are both intended: an un-deferred obligation sorts by when
+    it arrived, and a deferred one sorts by when it comes due - which puts an
+    OVERDUE deferral (a due ordinal already passed) ahead of recent arrivals,
+    and a far-future deferral behind them.
+
+    THE FOLD IS LAZY. With no standing obligations there is nothing to order, so
+    the stream is never read - which also means a handle that offers only
+    `open_items()` stays sufficient for the empty case.
+    """
+    items = list(obligations.open_items())
+    if not items:
+        return ()
+
+    standing = {item.get("obligation_id") for item in items}
+    due: dict = {}
+    for record in obligations.read_all():
+        obligation_id = record.get("obligation_id")
+        if obligation_id not in standing:
+            continue
+        # LAST DEFERRAL WINS, by append order: an obligation may be deferred
+        # more than once, and the ledger's own `status_of` folds the same way.
+        ordinal = seq_ordinal(record.get("due_seq"))
+        if ordinal is not None:
+            due[obligation_id] = ordinal
+
+    out = []
+    for item in items:
+        obligation_id = item.get("obligation_id")
+        effective = due.get(obligation_id)
+        if effective is None:
+            effective = seq_ordinal(item.get("created_seq"))
+        out.append(AttentionCandidate(
+            category=AttentionCategory.OBLIGATION,
+            record_id=str(obligation_id),
+            due_ordinal=effective))
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class DerivedView:
     """One observation of the kernel, frozen. Equality is field equality.
@@ -67,6 +232,15 @@ class DerivedView:
     committed_goals: Tuple[str, ...]
     chair: ChairState
     verdict_acquisition_id: Optional[str]
+    # M7-b. Every attendable record with the FACTS an ordering needs, in the
+    # same order as the three id tuples above. ADDITIVE and defaulted, so every
+    # M7-a construction and every M7-a pin still means exactly what it meant.
+    candidates: Tuple[AttentionCandidate, ...] = ()
+
+    def candidates_in(self,
+                      category: AttentionCategory) -> Tuple[AttentionCandidate, ...]:
+        """This category's candidates, in derivation order. A filter, not a rank."""
+        return tuple(c for c in self.candidates if c.category is category)
 
 
 def _verdict_registration(acquisitions: Any) -> Optional[str]:
@@ -99,17 +273,39 @@ def derive(obligations: Any, predictions: Any, goals: Any,
     is the kernel's fact to assert, and a derivation that swallowed it would be
     inventing an empty world.
     """
-    open_obligations = tuple(
-        str(item["obligation_id"]) for item in obligations.open_items())
+    obligation_candidates = _obligation_candidates(obligations)
+    open_obligations = tuple(c.record_id for c in obligation_candidates)
 
     resolved_ids = frozenset(
         str(res.prediction_id) for res in predictions.resolutions())
-    unresolved = tuple(
-        str(com.prediction_id) for com in predictions.commitments()
-        if str(com.prediction_id) not in resolved_ids)
+    prediction_candidates = []
+    for com in predictions.commitments():
+        prediction_id = str(com.prediction_id)
+        if prediction_id in resolved_ids:
+            continue
+        # THE HORIZON IS READ FOR ITS STATE, NEVER FOR ITS VALUE. Ruling 61
+        # res.5 is explicit that the prediction ledger does not interpret a
+        # horizon and CANNOT honestly - it may be a date, a cycle count or an
+        # observed condition, and choosing a format would coin one at the point
+        # "has this expired" gets decided. So the Executive orders by whether a
+        # horizon was RECORDED, which is a fact, and never by what it says.
+        horizon = getattr(com, "resolution_horizon", None)
+        state = getattr(horizon, "state", None)
+        prediction_candidates.append(AttentionCandidate(
+            category=AttentionCategory.PREDICTION,
+            record_id=prediction_id,
+            horizon_state=(getattr(state, "value", None)
+                           if state is not None else HORIZON_WHEN_UNRECORDED),
+            commitment_ordinal=_ordinal_of(prediction_id, "PRD-")))
+    unresolved = tuple(c.record_id for c in prediction_candidates)
 
-    committed_goals = tuple(
-        str(com.goal_id) for com in goals.commitments())
+    goal_candidates = tuple(
+        AttentionCandidate(
+            category=AttentionCategory.GOAL,
+            record_id=str(com.goal_id),
+            commitment_ordinal=_ordinal_of(str(com.goal_id), "GLC-"))
+        for com in goals.commitments())
+    committed_goals = tuple(c.record_id for c in goal_candidates)
 
     verdict_id = _verdict_registration(acquisitions)
     chair = (ChairState.EMPTY_BY_REFUSED_VERDICT if verdict_id is not None
@@ -121,4 +317,6 @@ def derive(obligations: Any, predictions: Any, goals: Any,
         committed_goals=committed_goals,
         chair=chair,
         verdict_acquisition_id=verdict_id,
+        candidates=(obligation_candidates + tuple(prediction_candidates)
+                    + goal_candidates),
     )

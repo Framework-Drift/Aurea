@@ -28,9 +28,15 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS THIRTY PATHS: six resolved from class attributes,
-twenty-four from `__init__` defaults. If you add a thirty-first and do not add it
-here, you have reopened the hole Ruling 31 closed.
+THIS FIXTURE COVERS THIRTY-ONE PATHS: six resolved from class attributes,
+twenty-five from `__init__` defaults. If you add a thirty-second and do not add
+it here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS THIRTY PATHS: six resolved from class attributes,
+    twenty-four from `__init__` defaults.~~
+    MIGRATED 2026-08-16 (M7-b): the attention selection log. The count is
+    CHECKED against the tables on every run (see `test_ruling75.py::test_j`),
+    which is what caught this edit rather than leaving it to be noticed.
 
     ~~THIS FIXTURE COVERS TWENTY-NINE PATHS: six resolved from class attributes,
     twenty-three from `__init__` defaults.~~
@@ -158,6 +164,7 @@ from src.reflex.racm import RACM
 from src.expansion.tether.session_governor import TetherProtocol
 from src.filtration.episode_record import EpisodeRecord
 from src.filtration.obligation_ledger import ObligationLedger
+from src.executive.selection_log import SelectionLog
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import GSR
@@ -407,6 +414,15 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # from inside an isolated test.
         (ObligationLedger, "ledger_path", "obligations.jsonl"),
         (EpisodeRecord, "log_path", "episodes.jsonl"),
+        # M7-b: the attention selection log. **THIS ONE IS THE ACTIVATION
+        # LAYER'S SITUATION, NOT THE ARBITER'S**, and the difference is why it
+        # matters: `ExecutiveLoop.__init__` composes a `SelectionLog` BY
+        # DEFAULT (Ruling 45's `cae or CAE()` idiom), so from this commit every
+        # loop that is merely CONSTRUCTED holds one. Composing a log is not
+        # writing to it - no verb here has an internal caller, so a constructed
+        # loop writes nothing - but without this redirect a bare
+        # `ExecutiveLoop(...)` would point at the real `data/runtime/` log.
+        (SelectionLog, "log_path", "attention_selections.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

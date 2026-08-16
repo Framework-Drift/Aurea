@@ -436,8 +436,16 @@ def test_c_every_routed_site_is_still_a_site():
             if (isinstance(node, ast.Call)
                     and getattr(node.func, "id", None) == "durable_append_text"):
                 callers.add(path.relative_to(REPO).as_posix())
-    assert len(callers) == 16, (
-        "sixteen append sites are routed through Ruling 78's funnel; the tree "
+    # ~~assert len(callers) == 16~~
+    #
+    # MIGRATED 2026-08-16 (M7-b), old text kept verbatim above, and BY THIS
+    # ASSERTION'S OWN INSTRUCTION - its failure message says "A NEW one is fine
+    # and welcome - update this count." M7-b's selection log is that new one.
+    # The direction matters and is why the count stays exact: a MISSING site
+    # means a record stopped being kept, and only an exact count can tell the
+    # two movements apart.
+    assert len(callers) == 17, (
+        "seventeen append sites are routed through Ruling 78's funnel; the tree "
         "now has " + str(len(callers)) + ": " + repr(sorted(callers)) + ". A "
         "NEW one is fine and welcome - update this count. A MISSING one means a "
         "record stopped being kept.")

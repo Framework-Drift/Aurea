@@ -34,6 +34,10 @@ from src.external.acquisition_ledger import (AcquisitionChannel,
 from src.external.claim_ancestry import (ClaimAncestryLedger, FieldState,
                                          OriginDeclaration, OriginKind,
                                          declared_none, provided)
+from src.executive.attention_policy import (POLICY_NAME, POLICY_VERSION,
+                                            AttentionPolicy)
+from src.executive.derived_view import ChairState, DerivedView
+from src.executive.selection_log import SelectionLog
 from src.external.model_provider import ingest_model_assertion
 from src.external.prediction_ledger import PredictionLedger
 from src.filtration.episode_record import EpisodeRecord
@@ -169,7 +173,28 @@ LEDGERS = [
     ("proposition", lambda p: PropositionLedger(ledger_path=str(p)),
      lambda L: L.record(PropositionKind.STATE, "a world proposition"),
      "src/worldmodel/proposition_ledger.py", lambda L: L.summaries()),
+    # M7-b MIGRATION (2026-08-16), Ruling-14 form. NO ASSERTION MOVED - one row
+    # added, so every claim in this file now also binds the selection log.
+    # **THE STANDING DERIVATION FOUND IT WITHOUT BEING TOLD, a second time**,
+    # and its failure message is what ordered this edit: "Add the row - a
+    # ledger absent from it makes every claim below TRUE BY OMISSION for that
+    # store." That is the whole value of deriving the population instead of
+    # listing it.
+    #
+    # A `NOTHING_ATTENDABLE` selection is the cheapest honest write this store
+    # has: it needs no candidates, so the row exercises the mint and the append
+    # without constructing a kernel.
+    # A kernel with nothing attendable, built directly rather than derived:
+    # this row is about the STORE's append discipline, not about the policy.
+    ("attention_selection", lambda p: SelectionLog(log_path=str(p)),
+     lambda L: L.record(
+         AttentionPolicy().select(_EMPTY_VIEW), POLICY_NAME, POLICY_VERSION),
+     "src/executive/selection_log.py", lambda L: L.selections()),
 ]
+_EMPTY_VIEW = DerivedView(
+    open_obligations=(), unresolved_predictions=(), committed_goals=(),
+    chair=ChairState.UNREGISTERED, verdict_acquisition_id=None, candidates=())
+
 IDS = [row[0] for row in LEDGERS]
 
 
@@ -188,8 +213,9 @@ def test_the_ledger_population_is_derived_and_matches_this_table():
         f"the funnel-appending, minting population is {sorted(derived)} but "
         f"this file covers {sorted(covered)}. Add the row - a ledger absent "
         f"from it makes every claim below TRUE BY OMISSION for that store.")
-    assert len(covered) == 11, (
-        "ELEVEN as of M6-α (the proposition ledger). ~~TEN, not the handoff's "
+    assert len(covered) == 12, (
+        "TWELVE as of M7-b (the attention selection log). ~~ELEVEN as of M6-α "
+        "(the proposition ledger).~~ ~~TEN, not the handoff's "
         "nine~~ - `aurea_core` imports the mint helper for a FLOOR READ and "
         "appends only forensic logs, and the M3-A stores were never in Ruling "
         "69's battery list")
