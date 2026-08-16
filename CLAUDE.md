@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2054 passed, 0 xfailed.** ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2074 passed, 0 xfailed.** ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -256,6 +256,31 @@ gains `PREDICTION` by the hundred-second manifest entry, in M3-D's and M6-γ's
 governed-content form, with its resolver in the SAME commit. That pass was
 STOPPED first and built only after the ruling — the measurement that forced the
 stop is on the record at §8.
+→ **2074** (M7-d, Acceptance Test 6 BY EXECUTED DESTRUCTION, +20 pins,
+**ZERO `src/` FILES TOUCHED** — the exit gate's own hard bound, since at a gate
+a `src/` change means a prior slice's claim was wrong).
+**M7 CLOSES HERE.** The kill is TWO OS PROCESSES: a child builds the world
+through the kernel's own doors and EXITS, a second independent child opens it
+cold from disk paths alone, and the test process only ever compares two JSON
+files — so it cannot smuggle a reference it never held, and the measurement is a
+KILL rather than a reset. Across that boundary the derived view, the next
+selection (id + basis + full census), the next generation (set + partition +
+licences + drift bases) and the chair's citation are all IDENTICAL, and the
+rebuilt loop mints forward without collision because Ruling 69's derive-from-file
+has no cached ordinal to lose.
+**THE ASYMMETRY IS DEMONSTRATED, NOT ASSERTED**: a forged act-log line — and a
+DELETED act log outright — changes not one decision, while one corrupted
+obligation line removes a standing obligation from the derived view and moves
+the selection off it. Act logs are history; kernel stores are constitutive.
+**A GAP IS REPORTED AND DELIBERATELY NOT CLOSED HERE: no instrument anywhere in
+the tree catches a mutated act-log line.** A well-formed edit round-trips
+undetected; a broken line is silently dropped by floor semantics; the mint's
+raw-text scan reacts without flagging (an id edited DOWN lowers the floor and
+sets up a reissue); and Ruling 79's divergence detector knows only `CLM-` and
+`CAE-`. It is pinned as MEASURED behaviour so the day an instrument lands it
+reddens. **The exposure is bounded by the pin above it** — a tampered act log
+changes no decision, so what is at risk is a reader's account of history, never
+what AUREA does next.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and
