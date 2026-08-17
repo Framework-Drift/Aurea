@@ -57,7 +57,7 @@ from src.executive.act_chain import CHAIN_KEY, chain_over, strip_terminator
 __all__ = [
     "FindingKind", "LineEra", "ActLogFinding", "ActLogReport",
     "SELECTION_LOG_SCHEMA", "INQUIRY_LOG_SCHEMA", "ROUTING_LOG_SCHEMA",
-    "UTILITY_LOG_SCHEMA",
+    "UTILITY_LOG_SCHEMA", "CHALLENGE_LOG_SCHEMA", "ADJUDICATION_LOG_SCHEMA",
     "LogSchema", "audit_act_log",
 ]
 
@@ -197,6 +197,22 @@ UTILITY_LOG_SCHEMA = LogSchema(
     required_keys=("kind_of_record", "utility_id", "routing_id", "rung",
                    "disposition_id", "disposition_kind", "opened_seq",
                    "disposed_seq", "ordinal_cost", "gate_one"))
+
+
+#: M8-d REGISTRATION - DATA ONLY. Both chained from genesis.
+CHALLENGE_LOG_SCHEMA = LogSchema(
+    kind_of_record="decision_challenge", id_field="challenge_id",
+    id_prefix="CHL-",
+    required_keys=("kind_of_record", "challenge_id", "challenged_record_id",
+                   "defect_class", "challenger_basis", "challenger",
+                   "gate_one"))
+
+ADJUDICATION_LOG_SCHEMA = LogSchema(
+    kind_of_record="challenge_adjudication", id_field="adjudication_id",
+    id_prefix="ADJ-",
+    required_keys=("kind_of_record", "adjudication_id", "challenge_id",
+                   "challenged_record_id", "defect_class", "verdict",
+                   "divergences", "legs_run", "gate_one"))
 
 
 def _ordinal(record_id: Any, prefix: str) -> Optional[int]:

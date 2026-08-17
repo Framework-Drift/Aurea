@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2185 passed, 0 xfailed.** ~~2162~~ ~~2129~~ ~~2100~~ ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2211 passed, 0 xfailed.** ~~2185~~ ~~2162~~ ~~2129~~ ~~2100~~ ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -370,6 +370,30 @@ SLATE:** two guards both raising `UnmeasurableEpisode` masked each other, so
 deleting either left every pin green — *a guard masked by its neighbour is a
 guard nothing measures*; they stay one type and each message now names its own
 case. Chained from genesis; a third act log, and still not constitutive.
+→ **2211** (M8-d, Acceptance Test 7 by EXERCISED CHALLENGE, +26 pins).
+**M8 CLOSES HERE.** A decision is challenged after the fact and the adjudicator
+RERUNS the pure policies over the records it cites — **the comparison IS the
+verdict**, with no judgment step and nothing to be persuaded. Both halves
+reconstruct from records alone in a cold scope, and the challenge-shaped
+questions are answered BY CONSTRUCTION: *why this and not that* (the census with
+every non-selection's key), *under what law* (policy identity on the record),
+*on what evidence* (the consulted ids and surfaces, embedded).
+**BOTH VERDICTS ARE EXERCISED AGAINST REAL RECORDS:** UPHELD on a sound
+decision, and DEFECT_SUSTAINED on a genuinely tampered routing line in a private
+copy — **two instruments, one truth**, since the same bytes make the integrity
+audit report CHAIN_BREAK and the adjudicator name the diverging fields. Never by
+weakening the decision code to make it wrong. **REFUSED IS NOT VINDICATION**: a
+challenge the re-derivation cannot reach is refused as unadjudicable with its
+reason, never defaulted to UPHELD — *inability to adjudicate is not innocence*.
+**A DEFECT_SUSTAINED IS A RECORD, NOT A ROLLBACK** — the challenged decision
+stands, nothing reads adjudications back, and what a sustained defect obligates
+is a future ruling's question.
+**TEST 7's SECOND CLAUSE IS DECLARED OPEN, NOT CLAIMED.** The heading's sentence
+(**line 240**, not the 236 the handoff cited — re-verified from disk) ends *"and
+a pressure-selection decision is challenged and adjudicated under L12"*. That
+names a different subject with no pure policy to rerun, and claiming Test 7
+whole on this pass would be the completeness defect §4 records four instances
+of.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and

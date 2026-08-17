@@ -121,6 +121,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.executive.inquiry_log import InquiryLog
     from src.executive.routing_log import RoutingLog
     from src.executive.utility_log import UtilityLog
+    from src.executive.challenge_log import AdjudicationLog, ChallengeLog
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -234,6 +235,9 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # M8-c - the utility log. Nothing in `src/` composes one, so the
         # soak must show ZERO utility lines.
         (UtilityLog, "log_path", "logs/utility_measurements.jsonl"),
+        # M8-d - the challenge surface. Doors, so the soak shows ZERO lines.
+        (ChallengeLog, "log_path", "logs/challenges.jsonl"),
+        (AdjudicationLog, "log_path", "logs/adjudications.jsonl"),
     ]
     return class_attrs, init_defaults
 

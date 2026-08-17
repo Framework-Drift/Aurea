@@ -499,8 +499,11 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     # table movement of that pass (35 -> 36); any OTHER movement is a STOP.
     # ~~assert audit["configured_paths"] == 36~~ MIGRATED 2026-08-17 (M8-c):
     # the utility log is THE ONE ruled table movement of that pass (36 -> 37).
-    assert audit["configured_paths"] == 37
-    assert first_run["isolation"]["configured_paths"] == 37
+    # ~~assert audit["configured_paths"] == 37~~ MIGRATED 2026-08-17 (M8-d):
+    # the challenge and adjudication logs are TWO ruled movements (37 -> 39).
+    # A pass that moves the table by two states it; any OTHER movement is a STOP.
+    assert audit["configured_paths"] == 39
+    assert first_run["isolation"]["configured_paths"] == 39
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1237,7 +1240,9 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # routing act log. THE SUBJECT IS STILL UNCHANGED.
     # ~~assert len(class_attrs) + len(init_defaults) == 36~~ MIGRATED
     # 2026-08-17 (M8-c), same reason a NINTH time. Subject unchanged.
-    assert len(class_attrs) + len(init_defaults) == 37
+    # ~~assert len(class_attrs) + len(init_defaults) == 37~~ MIGRATED
+    # 2026-08-17 (M8-d), a TENTH time, by two. Subject unchanged.
+    assert len(class_attrs) + len(init_defaults) == 39
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:

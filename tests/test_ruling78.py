@@ -450,8 +450,10 @@ def test_c_every_routed_site_is_still_a_site():
     # assertion's own instruction; the routing act log is the new site.
     # ~~assert len(callers) == 19~~ - MIGRATED 2026-08-17 (M8-c) by this
     # assertion's own instruction; the utility log is the new site.
-    assert len(callers) == 20, (
-        "twenty append sites are routed through Ruling 78's funnel; the tree "
+    # ~~assert len(callers) == 20~~ - MIGRATED 2026-08-17 (M8-d); the challenge
+    # surface adds ONE site (both logs share `_ActLog._append`).
+    assert len(callers) == 21, (
+        "twenty-one append sites are routed through Ruling 78's funnel; the tree "
         "now has " + str(len(callers)) + ": " + repr(sorted(callers)) + ". A "
         "NEW one is fine and welcome - update this count. A MISSING one means a "
         "record stopped being kept.")
