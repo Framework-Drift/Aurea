@@ -349,6 +349,27 @@ populated one is REFUSED: with an empty ladder there is no occupant, so recordin
 an assessment would record a judgement nobody made. **Unclassified routing is
 REFUSED, never defaulted to the cheapest rung** — a stake nobody derived is not a
 low stake.
+→ **2185** (M8-c, utility measurement under L3, +23 pins). Per routed episode:
+the routing it measures, the rung that ran, the RECORDED ORDINAL COST, and the
+kernel's own disposition id and kind. **THE ENTIRE VALUE OF THE SLICE IS WHAT IT
+REFUSES TO DO** — nothing evaluative is WRITABLE (the record shape has no slot
+for a score, a rating or an adequacy, so judgment is unwritable rather than
+discouraged), and **adequacy was the ROUTING record's statement**; this one says
+what happened afterwards. **L3's BAR IS STRUCTURAL: ZERO `src/` MODULES IMPORT
+THE UTILITY LOG** — stronger than its three sibling act logs, each of which is
+reachable from `ExecutiveLoop`. Measurement is a DOOR, so utility feeds nothing
+until a consumer ruling exists, and the no-logic-path witness proves it: a world
+with utility records derives, classifies and routes IDENTICALLY to one without.
+**THE COST IS TWO RECORDED POINTS AND THEIR DIFFERENCE** on the one monotonic
+`SEQ-` clock, with no wall-clock import anywhere and no unit coined.
+**DIVERGENCE, MEASURED: THE ANCHOR IS THE EPISODE, NOT THE ROUTING** — the
+routing record carries no `SEQ-` ordinal at all, and stamping one would be a
+routing-record change this slice's bounds forbid, so the two recorded anchors are
+the episode's own open and disposition seqs. **A REAL GAP CAME OUT OF THE
+SLATE:** two guards both raising `UnmeasurableEpisode` masked each other, so
+deleting either left every pin green — *a guard masked by its neighbour is a
+guard nothing measures*; they stay one type and each message now names its own
+case. Chained from genesis; a third act log, and still not constitutive.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and
