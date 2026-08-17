@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2100 passed, 0 xfailed.** ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2129 passed, 0 xfailed.** ~~2100~~ ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -303,6 +303,26 @@ the ordering entry's STOP did not fire. **Docket H's cut is carried into the
 stake layer**, at the worst place to lose it: an UNCONSULTED surface never reads
 as an absence of stake, or a structural disposition would route to the cheapest
 rung on nobody's evidence.
+→ **2129** (THE ACT-LOG INTEGRITY INSTRUMENT, +29 pins — **the M7-d gap,
+DISCHARGED**). Two honest parts. **FORWARD hash-chaining** in both act-log
+writers: every new record carries a hash over the previous line's bytes, read
+from disk at mint time under the same lock (Ruling 69's derive-from-file at a
+second surface, and a cached-tail mutant is RED). **ERA HONESTY IS LAW** —
+historical lines carry no chain and answer ABSENT forever; nothing is rehashed
+or annotated, and the same edit that is CAUGHT in the chained era is INVISIBLE
+in the pre-chain one, pinned, because back-filling would produce a log that
+looked fully verified while its oldest records were certified after the fact by
+the same process that could have altered them. **The read-side instrument**
+(`act_log_audit`) is REPORT-ONLY in Ruling 79's discipline: five closed finding
+kinds, no quarantine, no refusal, **repair FORBIDDEN and pinned byte-unchanged**,
+and no `src/` consumer. **Silently-dropped becomes REPORTED-and-dropped.**
+**TWO LIMITATIONS ARE DECLARED RATHER THAN PAPERED OVER:** a record is protected
+by its SUCCESSOR, so **the most recent line is unprotected until the next is
+written** (pinned, since the redundancy for line N is created when N+1 is
+minted); and the pre-chain era is unverifiable-by-chain permanently. **L10
+SURVIVES ITS OWN INTEGRITY INSTRUMENT** — the act logs are still not
+constitutive, tampering still changes no decision, and M7-d's kill and
+reconstruction pins still pass whole.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and

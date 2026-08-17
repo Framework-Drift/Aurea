@@ -70,6 +70,7 @@ from src.executive.attention_policy import (
     SelectionOutcome,
 )
 from src.executive.derived_view import AttentionCategory
+from src.executive.act_chain import CHAIN_KEY, chain_for_next_line
 from src.executive.gate_one import GateOneReferent
 from src.utils.atomic_write import durable_append_text
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
@@ -216,6 +217,17 @@ class SelectionLog:
         append and the tree-wide AST census forbids a mode-`"a"` open outside
         it, so durability is inherited rather than re-argued.
         """
+        # FORWARD HASH-CHAIN (the hundred-fifth entry). Computed HERE, in the
+        # single append funnel, so no writer can produce an unchained line -
+        # the wrong path is unexecutable rather than discouraged. The caller
+        # holds `mint_lock` across derive -> mint -> append and this read joins
+        # that same hold, which is what makes the chain atomic with the append.
+        #
+        # A CHAIN FAILURE IS A WRITE FAILURE: this raises before `mkdir` and
+        # before the append, so a record whose chain could not be computed does
+        # not exist - the write still GATES the act, unchanged.
+        payload = dict(payload)
+        payload[CHAIN_KEY] = chain_for_next_line(self.log_path)
         validate_record_value(payload, path="attention_selection_entry")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         durable_append_text(self.log_path,

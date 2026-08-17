@@ -340,9 +340,36 @@ def test_7b_destroying_an_act_log_entirely_changes_no_decision(killed_world,
     assert cold["generation"] == killed_world["pre"]["generation"]
 
 
-def test_8_the_tamper_census_no_instrument_catches_a_mutated_act_log_line(
+def test_8_the_tamper_census_is_superseded_the_gap_is_closed_forward(
         killed_world):
-    """**PIN 8 IS A REPORTED GAP, AND THIS PIN RECORDS THE MEASUREMENT.**
+    """**SUPERSEDED 2026-08-16 BY THE ACT-LOG INTEGRITY PASS. Ruling-14 form.**
+
+        OLD NAME:
+            test_8_the_tamper_census_no_instrument_catches_a_mutated_act_log_line
+        OLD CLAIM (struck, kept verbatim in the block below):
+            ~~"The census was run and found NO CATCHING INSTRUMENT."~~
+        NEW CLAIM:
+            The census's FINDINGS about the READ PATH all still hold - nothing
+            in `selections()` / `inquiries()` validates a line, floor semantics
+            still drop a torn one, and Ruling 79's detector still knows only
+            `CLM-` and `CAE-`. What is no longer true is the HEADLINE: an
+            instrument now exists (`act_log_audit`), and forward chaining
+            (`act_chain`) supplies the redundancy that makes the well-formed
+            edit catchable at all.
+        WHY IT MOVED:
+            This pin's own docstring asked for exactly this - "the day an
+            instrument lands it goes RED and someone has to come back and read
+            this docstring." The instrument landed by the hundred-fifth entry,
+            and the pin is migrated rather than deleted because the READ-PATH
+            half of its measurement is still true and still worth holding.
+        WHAT IS *NOT* CLOSED, and stays measured below:
+            The PRE-CHAIN era is unverifiable-by-chain FOREVER (era honesty),
+            and the READ path is still not a verifier - the audit is a separate
+            door that a reader invokes, not something `selections()` does.
+
+    The original text follows, struck where it is now false.
+
+    ~~PIN 8 IS A REPORTED GAP, AND THIS PIN RECORDS THE MEASUREMENT.~~
 
     The specification asked for the logs' own integrity instruments to flag a
     mutation when the logs are READ AS RECORDS, and required a census rather
@@ -365,11 +392,12 @@ def test_8_the_tamper_census_no_instrument_catches_a_mutated_act_log_line(
           integrity instrument - does not cover these logs: its prefixes are
           `CLM-` and `CAE-`, and it was written before either log existed.
 
-    **NOTHING WAS ADDED TO CLOSE THIS.** M7-d's bounds are tests-only, and the
+    ~~**NOTHING WAS ADDED TO CLOSE THIS.** M7-d's bounds are tests-only, and the
     specification is explicit that a missing instrument is a finding for the
     ruling rather than something to slip in out of scope. This pin therefore
     asserts the MEASURED behaviour, so that the day an instrument arrives it
-    goes RED and someone has to come back and read this docstring.
+    goes RED and someone has to come back and read this docstring.~~
+    (SUPERSEDED - the instrument arrived; see the migration block above.)
 
     THE GAP IS BOUNDED BY PIN 7, AND THAT IS THE MITIGATION ON THE RECORD: a
     tampered act log changes NO decision, so the exposure is to a reader's
@@ -406,6 +434,26 @@ def test_8_the_tamper_census_no_instrument_catches_a_mutated_act_log_line(
                 inspect.signature(divergence.detect_divergence).parameters.values()
                 if isinstance(p.default, str) and p.default.endswith("-")}
     assert prefixes == {"CLM-", "CAE-"}, prefixes
+
+    # ---- THE NEW HALF (the migration's NEW CLAIM) --------------------------
+    # An instrument now EXISTS, and on a CHAINED-era log the very edit measured
+    # in (a) is caught. The pre-chain era stays unverifiable-by-chain forever,
+    # which is why the old measurement is superseded rather than deleted.
+    from src.executive.act_log_audit import (INQUIRY_LOG_SCHEMA, FindingKind,
+                                             audit_act_log)
+    chained_root = _arm(killed_world, "census_chained")
+    # THE INQUIRY LOG, deliberately: the acceptance world writes EIGHT inquiry
+    # acts and only ONE selection, and a forged line is revealed by its
+    # SUCCESSOR's chain - so a single-line log is the declared final-line
+    # limitation rather than a test of the mechanism.
+    forged = chained_root / "inquiries.jsonl"
+    report = audit_act_log(forged, INQUIRY_LOG_SCHEMA)
+    assert report.clean, report.as_dict()
+    assert report.chained_lines > 1, "needs a successor to reveal an edit"
+
+    _rewrite_line(forged, 0, _forge_inquiry)
+    after = audit_act_log(forged, INQUIRY_LOG_SCHEMA)
+    assert FindingKind.CHAIN_BREAK in {f.kind for f in after.findings}
 
 
 # ===========================================================================

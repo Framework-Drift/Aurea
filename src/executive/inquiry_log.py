@@ -50,6 +50,7 @@ from src.executive.inquiry_generator import (
     InquiryCandidate,
     LicenseBasis,
 )
+from src.executive.act_chain import CHAIN_KEY, chain_for_next_line
 from src.executive.gate_one import GateOneReferent
 from src.utils.atomic_write import durable_append_text
 from src.utils.ledger_mint import derive_max_ordinal, mint_lock
@@ -183,6 +184,12 @@ class InquiryLog:
         REFUSES rather than being stringified into a permanent record. There is
         no write mode in this file at all - Ruling 78's funnel owns the append.
         """
+        # FORWARD HASH-CHAIN - see `selection_log._append` for the full
+        # reasoning; the two act logs carry the identical discipline because
+        # they are the identical shape, and a chain in one but not the other
+        # would leave half the Executive's history unverifiable for no reason.
+        payload = dict(payload)
+        payload[CHAIN_KEY] = chain_for_next_line(self.log_path)
         validate_record_value(payload, path="inquiry_act_entry")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         durable_append_text(self.log_path,
