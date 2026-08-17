@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2074 passed, 0 xfailed.** ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2100 passed, 0 xfailed.** ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -281,6 +281,28 @@ sets up a reissue); and Ruling 79's divergence detector knows only `CLM-` and
 reddens. **The exposure is bounded by the pin above it** — a tampered act log
 changes no decision, so what is at risk is a reader's account of history, never
 what AUREA does next.
+→ **2100** (M8-a, `stake-classifier.v1`, +26 pins — **M8 OPENS**). A pure
+classifier: given a target, the HIGHEST stake class whose RECORDED touch-condition
+holds, carrying the full derivation. **Stake is never estimated, asserted or
+model-supplied**, and the classifier writes nothing — M8-b's routing act carries
+the derivation. **NO MAGNITUDES**: every condition is presence or membership on
+records, so one recorded dependent and fifty are both S1 (pinned). It is UNWIRED
+(loop wiring is M8-b's), so `derive()`'s signature is untouched and the
+differential moved nothing.
+**THE TOUCH-SURFACE CENSUS IS THE PASS'S LOAD-BEARING RESULT**, and two findings
+came out of it. **S2's two directions genuinely disagree in the real seed** —
+scar `Δ31` records `['Doctrine-3','AVT.014']` while the Codex answers
+`['Doctrine-0.1','AVT.014']` — so Ruling 26's union is mandatory here rather than
+defensive: either half alone under-reports doctrine linkage, and under-reporting
+silently LOWERS a stake class. **And one ruled touch-fact has NO record surface
+at all: S4's kernel-fixed-stratum adjacency**, absent tree-wide, DECLARED
+underivable, named on every S4 result and pinned so it reddens the day a surface
+appears. S4's other half — identity commitments — IS derivable (RIL's threads
+carry by-id entries and `ingest_scar` is wired), so the class is producible and
+the ordering entry's STOP did not fire. **Docket H's cut is carried into the
+stake layer**, at the worst place to lose it: an UNCONSULTED surface never reads
+as an absence of stake, or a structural disposition would route to the cheapest
+rung on nobody's evidence.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and

@@ -36,9 +36,10 @@ the long way round. L10, pinned by AST rather than promised.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 # PURE FUNCTIONS ONLY, NEVER A LEDGER CLASS. `seq_ordinal` parses a `SEQ-`
 # token and `ordinal_pattern` builds an anchored id matcher; neither opens a
@@ -292,6 +293,197 @@ class InquirySubstrate:
 
 
 @dataclass(frozen=True)
+class StakeSubstrate:
+    """M8-a: the RECORDED touch-facts a stake classification may consult.
+
+    FACTS ONLY, in this module's standing discipline: every tuple below is read
+    off a kernel store and none of them ranks anything. `stake_classifier` turns
+    them into a class; nothing here knows that a doctrine outranks a join.
+
+    **EVERY FIELD IS A FLAT TUPLE OF ID PAIRS RATHER THAN A LIVE RECORD.** An
+    embedded store object here would be a write path into another owner's store
+    that the Ruling-1 scanner structurally cannot see (Ruling 42's finding at
+    the identity threads, and the reason `RIL` entries became by-id).
+
+    AN EMPTY SUBSTRATE IS THE HONEST DEFAULT, not a degenerate one: a caller
+    that supplied no store handles consulted no records, and every condition
+    then answers "no recorded touch" - which is exactly what the records say.
+    """
+
+    # S1 - ancestry children: (citing_record_id, cited_claim_id).
+    claim_citations: Tuple[Tuple[str, str], ...] = ()
+    # S1 - prediction references: (prediction_id, referenced_claim_id).
+    prediction_claim_refs: Tuple[Tuple[str, str], ...] = ()
+    # S1 - world propositions: (wmp_id, referenced_kernel_id).
+    proposition_refs: Tuple[Tuple[str, str], ...] = ()
+    # S2 - doctrine linkage: (doctrine_id, scar_id), the UNION of both
+    # directions. See `build_stake_substrate` for why the union is mandatory.
+    doctrine_scar_links: Tuple[Tuple[str, str], ...] = ()
+    # S2 - the live doctrine ids, so a DOCTRINE target is recognised as one.
+    live_doctrine_ids: Tuple[str, ...] = ()
+    # S3 - suspension entries, and the claims they were suspended for.
+    suspension_ids: Tuple[str, ...] = ()
+    suspension_claims: Tuple[Tuple[str, str], ...] = ()
+    # S3 - doctrines whose ENTRENCHMENT BASIS is one of the dug-in ones.
+    entrenched_doctrine_ids: Tuple[str, ...] = ()
+    # S4 - every record id RIL has written into an identity thread.
+    identity_referenced_ids: Tuple[str, ...] = ()
+    # WHICH SURFACES WERE ACTUALLY CONSULTED. Carried so a classification can
+    # say whether a condition was FALSE or merely UNCONSULTED - Docket H's cut
+    # at the stake layer, and the reason a missing handle never reads as an
+    # absence of stake.
+    consulted_surfaces: Tuple[str, ...] = ()
+
+
+def build_stake_substrate(*, ancestry=None, predictions=None, propositions=None,
+                          codex=None, scar_core=None, suspensions=(),
+                          ril=None) -> StakeSubstrate:
+    """Read the touch-facts off whatever stores the caller supplies. READS ONLY.
+
+    EVERY HANDLE IS OPTIONAL AND EVERY ABSENCE IS RECORDED rather than assumed:
+    a surface that was not supplied does not appear in `consulted_surfaces`, so
+    a classification built on this substrate can distinguish "no recorded touch"
+    from "nobody looked" without either being guessed at.
+
+    **THE S2 UNION IS MANDATORY, NOT DEFENSIVE.** Ruling 26 requires reading
+    `doctrine.scar_links` AND `scar.linked_doctrines`, and the REAL SEED proves
+    why: at `c047c3b` scar `Δ31` records `['Doctrine-3', 'AVT.014']` while the
+    Codex answers `['Doctrine-0.1', 'AVT.014']` for the same scar. The two
+    halves genuinely disagree, so either alone under-reports doctrine linkage -
+    and under-reporting here silently lowers a stake class.
+    """
+    claim_citations: List[Tuple[str, str]] = []
+    prediction_claim_refs: List[Tuple[str, str]] = []
+    proposition_refs: List[Tuple[str, str]] = []
+    doctrine_scar_links: List[Tuple[str, str]] = []
+    live_doctrine_ids: List[str] = []
+    suspension_ids: List[str] = []
+    suspension_claims: List[Tuple[str, str]] = []
+    entrenched: List[str] = []
+    identity_ids: List[str] = []
+    consulted: List[str] = []
+
+    if ancestry is not None:
+        consulted.append("claim_ancestry")
+        for record in ancestry.read_all():
+            citing = getattr(record, "claim_id", None)
+            for field_name in CLAIM_CITATION_FIELDS:
+                # The three fields are FLAT on the record (Ruling 58's shape),
+                # each an `AncestryField` carrying state + value.
+                field = getattr(record, field_name, None)
+                value = getattr(field, "value", None)
+                for cited in _minted_ids(value):
+                    if citing and cited != citing:
+                        claim_citations.append((str(citing), cited))
+
+    if predictions is not None:
+        consulted.append("prediction_ledger")
+        for commitment in predictions.commitments():
+            for ref in getattr(commitment, "claim_refs", ()) or ():
+                prediction_claim_refs.append(
+                    (str(commitment.prediction_id), str(ref)))
+
+    if propositions is not None:
+        consulted.append("proposition_ledger")
+        for summary in propositions.summaries():
+            for bucket in ("supported_by", "contradicted_by", "predicted_by"):
+                for ref in getattr(summary, bucket, ()) or ():
+                    proposition_refs.append(
+                        (str(summary.wmp_id), str(getattr(ref, "record_id", ref))))
+
+    if codex is not None:
+        consulted.append("codex")
+        # PURE FUNCTION AND PURE ENUM, never a store - this module's standing
+        # import rule. `entrenchment_basis` reads three fields off a Doctrine
+        # and returns a member; it opens nothing and holds nothing.
+        from src.doctrine.entrenchment import entrenchment_basis
+        for doctrine in codex.active():
+            live_doctrine_ids.append(str(doctrine.id))
+            for scar_id in getattr(doctrine, "scar_links", ()) or ():
+                doctrine_scar_links.append((str(doctrine.id), str(scar_id)))
+            if entrenchment_basis(doctrine).value in ENTRENCHED_BASES:
+                entrenched.append(str(doctrine.id))
+
+    if scar_core is not None:
+        consulted.append("scar_store")
+        for scar in scar_core.all_scars():
+            for doctrine_id in getattr(scar, "linked_doctrines", ()) or ():
+                # RULING 26's OTHER HALF - see the docstring.
+                doctrine_scar_links.append((str(doctrine_id), str(scar.id)))
+
+    if suspensions:
+        consulted.append("suspension_stores")
+        for system in suspensions:
+            for entry_id, entry in getattr(system, "entries", {}).items():
+                suspension_ids.append(str(entry_id))
+                claim_id = getattr(entry, "claim_id", None)
+                if claim_id:
+                    suspension_claims.append((str(entry_id), str(claim_id)))
+
+    if ril is not None:
+        consulted.append("identity_threads")
+        for entries in ril.thread_state().values():
+            for entry in entries:
+                record_id = (entry.get("record_id")
+                             if isinstance(entry, dict) else None)
+                if record_id:
+                    identity_ids.append(str(record_id))
+
+    return StakeSubstrate(
+        claim_citations=tuple(claim_citations),
+        prediction_claim_refs=tuple(prediction_claim_refs),
+        proposition_refs=tuple(proposition_refs),
+        doctrine_scar_links=tuple(sorted(set(doctrine_scar_links))),
+        live_doctrine_ids=tuple(live_doctrine_ids),
+        suspension_ids=tuple(suspension_ids),
+        suspension_claims=tuple(suspension_claims),
+        entrenched_doctrine_ids=tuple(sorted(set(entrenched))),
+        identity_referenced_ids=tuple(sorted(set(identity_ids))),
+        consulted_surfaces=tuple(consulted))
+
+
+# WHICH ENTRENCHMENT BASES COUNT AS "DUG IN" FOR STAKE PURPOSES - and the cut
+# lives HERE, on the Executive side, deliberately. `EntrenchmentBasis` is the
+# CODEX's ordered vocabulary for what a doctrine's standing rests on; which of
+# its members make a disposition STRUCTURAL is M8-a's reading of the
+# hundred-fifth entry ("entrenched doctrine per the entrenchment records"), not
+# a fact the Codex asserts. Putting it in `entrenchment.py` would make a kernel
+# module carry an Executive judgement - and the kernel is out of bounds here for
+# exactly that kind of reason.
+#
+# SEED and SCAR_SURVIVED are the dug-in pair: she was founded on it, or
+# something broke and this is what stood. DERIVED and PROVISIONAL are not -
+# a doctrine that descends from something fallen, or one merely asserted, has
+# not yet been tested into the load-bearing architecture.
+ENTRENCHED_BASES: frozenset = frozenset({"seed", "scar_survived"})
+
+# The three O1 ancestry fields Ruling 60 CONSULTS for descent. Named once, and
+# deliberately NOT the other two: `connecting_assumptions` and `defeaters` bear
+# on argument structure and rebuttal, so reading them as descent would let an
+# unrelated reference raise a stake class.
+CLAIM_CITATION_FIELDS: Tuple[str, ...] = (
+    "asserted_by", "basis", "replication_refs")
+
+_MINTED_ID = re.compile(r"(?<![\w.-])(CLM-\d+)(?![\w.-])")
+
+
+def _minted_ids(value: Any) -> Tuple[str, ...]:
+    """Every minted claim id inside a recorded value. ANCHORED, never a slice.
+
+    Ruling 64's rider discipline: `CLM-0001` must not graze `CLM-00010`, and a
+    bare `\\b` is insufficient because `-` is itself a non-word character.
+    """
+    if isinstance(value, str):
+        return tuple(_MINTED_ID.findall(value))
+    if isinstance(value, (list, tuple)):
+        out: List[str] = []
+        for item in value:
+            out.extend(_minted_ids(item))
+        return tuple(out)
+    return ()
+
+
+@dataclass(frozen=True)
 class DerivedView:
     """One observation of the kernel, frozen. Equality is field equality.
 
@@ -318,6 +510,10 @@ class DerivedView:
     # M7-a and M7-b pin must keep meaning exactly what it meant, and the v-a/v-b
     # test files must pass BYTE-UNMODIFIED.
     inquiry: InquirySubstrate = field(default_factory=InquirySubstrate)
+    # M8-a. Additive and defaulted for the same reason the two above are:
+    # every prior executive pin must keep meaning what it meant, and all
+    # four M7 pin files must pass BYTE-UNMODIFIED.
+    stake: StakeSubstrate = field(default_factory=StakeSubstrate)
 
     def candidates_in(self,
                       category: AttentionCategory) -> Tuple[AttentionCandidate, ...]:
