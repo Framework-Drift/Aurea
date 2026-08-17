@@ -586,7 +586,10 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # UNCHANGED - the divergence detector registers no store of its own. What
     # moved is the TABLE: M7-c registered the inquiry act log, THE ONE RULED
     # MOVEMENT of that pass (34 -> 35).
-    assert len(class_attrs) + len(init_defaults) == 35
+    # ~~assert len(class_attrs) + len(init_defaults) == 35~~
+    # MIGRATED AGAIN 2026-08-16 (M8-b): the routing act log, THE ONE RULED
+    # MOVEMENT of that pass (35 -> 36). Subject unchanged.
+    assert len(class_attrs) + len(init_defaults) == 36
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

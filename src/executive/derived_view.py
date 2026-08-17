@@ -293,6 +293,37 @@ class InquirySubstrate:
 
 
 @dataclass(frozen=True)
+class ConsumedVerdictFact:
+    """ONE consumed qualification verdict, as recorded. Facts only.
+
+    Carries `role_id` because rung occupancy is PER ROLE: a verdict about some
+    other role must never move the delegated-cognition rung, and the payload has
+    carried the role identity since M7-a, so this is a recorded fact rather than
+    an inference. Without it the derivation would have to assume every consumed
+    verdict was about the one role it cares about, which is the kind of
+    assumption that is right until the day a second role exists.
+    """
+
+    role_id: str
+    verdict: str
+    acquisition_id: str
+
+
+@dataclass(frozen=True)
+class RungSubstrate:
+    """The recorded facts rung occupancy is DERIVED from. Nothing is hardwired.
+
+    Populated by `derive()` from the acquisition handle it ALREADY holds - so
+    `derive()`'s signature is byte-unchanged and this substrate is LIVE on the
+    real pipeline rather than caller-supplied. That is the one way it differs
+    from `StakeSubstrate`, and the reason is simply that the records were
+    already in reach here and were not there.
+    """
+
+    consumed_verdicts: Tuple[ConsumedVerdictFact, ...] = ()
+
+
+@dataclass(frozen=True)
 class StakeSubstrate:
     """M8-a: the RECORDED touch-facts a stake classification may consult.
 
@@ -514,6 +545,9 @@ class DerivedView:
     # every prior executive pin must keep meaning what it meant, and all
     # four M7 pin files must pass BYTE-UNMODIFIED.
     stake: StakeSubstrate = field(default_factory=StakeSubstrate)
+    # M8-b. Populated by `derive()` from the acquisition handle it already
+    # holds, so rung occupancy is LIVE rather than caller-supplied.
+    rungs: RungSubstrate = field(default_factory=RungSubstrate)
 
     def candidates_in(self,
                       category: AttentionCategory) -> Tuple[AttentionCandidate, ...]:
@@ -541,6 +575,34 @@ def _verdict_registration(acquisitions: Any) -> Optional[str]:
         if isinstance(parsed, dict) and parsed.get("kind") == VERDICT_PAYLOAD_KIND:
             return getattr(record, "acquisition_id", None)
     return None
+
+
+def _consumed_verdicts(acquisitions: Any) -> Tuple[ConsumedVerdictFact, ...]:
+    """Every consumed qualification verdict on the acquisition ledger.
+
+    A SECOND SCAN over the same records that `_verdict_registration` walks, and
+    that is deliberate: the chair derivation is pinned behaviour from M7-a, and
+    folding the two together would put a pinned answer at risk to save one pass
+    over a handful of lines. Different questions, different readers.
+    """
+    out = []
+    for record in acquisitions.read_all():
+        payload = getattr(record, "payload", None)
+        if not isinstance(payload, str):
+            continue
+        try:
+            parsed = json.loads(payload)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(parsed, dict) or parsed.get("kind") != VERDICT_PAYLOAD_KIND:
+            continue
+        role_id = parsed.get("role_id")
+        verdict = parsed.get("verdict")
+        if isinstance(role_id, str) and isinstance(verdict, str):
+            out.append(ConsumedVerdictFact(
+                role_id=role_id, verdict=verdict,
+                acquisition_id=str(getattr(record, "acquisition_id", ""))))
+    return tuple(out)
 
 
 def derive(obligations: Any, predictions: Any, goals: Any,
@@ -655,6 +717,7 @@ def derive(obligations: Any, predictions: Any, goals: Any,
         verdict_acquisition_id=verdict_id,
         candidates=(obligation_candidates + tuple(prediction_candidates)
                     + goal_candidates),
+        rungs=RungSubstrate(consumed_verdicts=_consumed_verdicts(acquisitions)),
         inquiry=InquirySubstrate(
             predictions=tuple(prediction_facts),
             goals=goal_facts,

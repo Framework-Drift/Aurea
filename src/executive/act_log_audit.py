@@ -56,7 +56,8 @@ from src.executive.act_chain import CHAIN_KEY, chain_over, strip_terminator
 
 __all__ = [
     "FindingKind", "LineEra", "ActLogFinding", "ActLogReport",
-    "SELECTION_LOG_SCHEMA", "INQUIRY_LOG_SCHEMA", "LogSchema", "audit_act_log",
+    "SELECTION_LOG_SCHEMA", "INQUIRY_LOG_SCHEMA", "ROUTING_LOG_SCHEMA",
+    "LogSchema", "audit_act_log",
 ]
 
 
@@ -173,6 +174,19 @@ INQUIRY_LOG_SCHEMA = LogSchema(
                    "generator_version", "discrepancy_class",
                    "source_record_ids", "partition", "derivation_depth",
                    "kernel_disposition", "gate_one"))
+
+
+#: M8-b REGISTRATION - DATA ONLY, no audit-code change. The schema mechanism is
+#: a frozen dataclass precisely so a new act log joins the instrument by
+#: declaring its shape rather than by teaching the auditor a new special case.
+#:
+#: **THIS LOG IS CHAINED FROM GENESIS**, unlike its two siblings: it was born
+#: after the chain existed, so it has no pre-chain era and every line it will
+#: ever carry is chain-verifiable.
+ROUTING_LOG_SCHEMA = LogSchema(
+    kind_of_record="routing_act", id_field="routing_id", id_prefix="RTE-",
+    required_keys=("kind_of_record", "routing_id", "target_kind", "target_id",
+                   "routing", "gate_one", "self_assessment"))
 
 
 def _ordinal(record_id: Any, prefix: str) -> Optional[int]:

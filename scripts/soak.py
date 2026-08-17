@@ -119,6 +119,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.filtration.obligation_ledger import ObligationLedger
     from src.executive.selection_log import SelectionLog
     from src.executive.inquiry_log import InquiryLog
+    from src.executive.routing_log import RoutingLog
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -226,6 +227,9 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # regardless, because the coverage self-audit re-derives the injectable
         # set from `src/` and REFUSES a run whose table has fallen behind.
         (InquiryLog, "log_path", "logs/inquiry_acts.jsonl"),
+        # M8-b - the routing act log. The Executive loop is NOT wired into
+        # `process_input`, so the soak must show ZERO routing lines.
+        (RoutingLog, "log_path", "logs/routing_acts.jsonl"),
     ]
     return class_attrs, init_defaults
 

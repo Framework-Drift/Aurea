@@ -50,11 +50,14 @@ from src.executive.inquiry_generator import (
     InquiryCandidate,
     InquiryGenerator,
 )
+from src.executive.escalation_policy import EscalationPolicy, RoutingDecision
 from src.executive.inquiry_log import (
     InquiryLog,
     InquiryRecord,
     KernelDisposition,
 )
+from src.executive.routing_log import RoutingLog, RoutingRecord
+from src.executive.stake_classifier import StakeClassifier
 from src.executive.derived_view import (
     VERDICT_PAYLOAD_KIND,
     ChairState,
@@ -198,7 +201,8 @@ class ExecutiveLoop:
     def __init__(self, obligations: Any, predictions: Any, goals: Any,
                  acquisitions: Any, policy: Any = None,
                  selections: Any = None, generator: Any = None,
-                 inquiries: Any = None):
+                 inquiries: Any = None, classifier: Any = None,
+                 escalation: Any = None, routings: Any = None):
         self.obligations = obligations
         self.predictions = predictions
         self.goals = goals
@@ -228,6 +232,14 @@ class ExecutiveLoop:
         # outside.
         self.generator = generator or InquiryGenerator()
         self.inquiries = inquiries or InquiryLog()
+        # M8-b, same default-by-construction idiom and the same asymmetry as
+        # the generator: `stake-classifier.v1` and `escalation-policy.v1` are
+        # not CHOICES among possible instruments - each is the only one there
+        # is, and both are ruled. A loop holding them still routes nothing
+        # until a door is opened from outside.
+        self.classifier = classifier or StakeClassifier()
+        self.escalation = escalation or EscalationPolicy()
+        self.routings = routings or RoutingLog()
 
     # ------------------------------------------------------------------
     # OBSERVE
@@ -400,6 +412,58 @@ class ExecutiveLoop:
                 records.append(self.inquiries.record(
                     candidate, self.generator.name, self.generator.version))
         return tuple(records)
+
+    # ------------------------------------------------------------------
+    # ESCALATION ROUTING -- M8-b. A GOVERNED PHASE BESIDE THE CYCLE.
+    # ------------------------------------------------------------------
+    #
+    # **WHY ROUTING RIDES BESIDE `step()` RATHER THAN INSIDE IT** - the wiring
+    # decision this specification left to the lane, with its reasoning, and it
+    # is the M7-c argument sharpened by one more fact.
+    #
+    # (1) `step()` RETURNS A SELECTION RECORD AND ROUTING ANSWERS A SELECTION.
+    #     Fusing them would make one call produce two acts in two logs, and a
+    #     caller who wanted only to see what was selected could not get it
+    #     without also committing a routing decision. The select/record split
+    #     exists precisely so observation is separable from commitment.
+    #
+    # (2) NOT EVERY SELECTION IS ROUTED. `step()` legitimately returns
+    #     NOTHING_ATTENDABLE, and a fused call would then have to invent a
+    #     routing for an episode that does not exist - or branch around it,
+    #     which is the same thing wearing a guard.
+    #
+    # (3) PIN 10 IS SATISFIED BY CONSTRUCTION. All prior executive pin FILES
+    #     stay byte-unmodified because `step()` is untouched.
+    #
+    # Nothing loops and nothing schedules: both verbs below are doors opened
+    # from outside, as every Executive verb is.
+
+    def route(self, target_kind: Any, target_id: str) -> RoutingDecision:
+        """Classify the stake and apply the ruled mapping. PURE - writes nothing.
+
+        The select/record split for a fourth time: a routing computable without
+        recording one is a routing anyone can audit, and it is what makes the
+        determinism pins measurable without accumulating log lines.
+        """
+        view = self.observe()
+        stake = self.classifier.classify(target_kind, target_id, view)
+        return self.escalation.route(stake, view)
+
+    def route_and_record(self, target_kind: Any, target_id: str,
+                         selection_id: Optional[str] = None) -> RoutingRecord:
+        """Route, and RECORD the act - including its shortfall where one exists.
+
+        The write GATES the act: a failed log write raises and the routing does
+        not stand, so there is no path on which a caller receives a routing
+        whose record never landed. An escalation decision nobody can inspect is
+        the invisible venue decision L5 abolishes - and a SHORTFALL nobody can
+        inspect would be worse, because the whole point of recording the debt is
+        that it stays visible forever.
+        """
+        decision = self.route(target_kind, target_id)
+        return self.routings.record(
+            decision, target_kind=str(getattr(target_kind, "value", target_kind)),
+            target_id=target_id, selection_id=selection_id)
 
     def step(self) -> AttentionSelectionRecord:
         """ONE CYCLE: observe, select, record, return.

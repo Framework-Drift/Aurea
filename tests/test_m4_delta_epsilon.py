@@ -41,7 +41,10 @@ from src.executive.inquiry_generator import (GENERATOR_NAME, GENERATOR_VERSION,
                                              CandidatePartition,
                                              DiscrepancyClass, DriftBasis,
                                              InquiryCandidate)
+from src.executive.escalation_policy import EscalationPolicy
 from src.executive.inquiry_log import InquiryLog
+from src.executive.routing_log import RoutingLog
+from src.executive.stake_classifier import StakeClassifier
 from src.executive.selection_log import SelectionLog
 from src.external.model_provider import ingest_model_assertion
 from src.external.prediction_ledger import PredictionLedger
@@ -205,6 +208,19 @@ LEDGERS = [
     ("inquiry_act", lambda p: InquiryLog(log_path=str(p)),
      lambda L: L.record(_DRIFT_CANDIDATE, GENERATOR_NAME, GENERATOR_VERSION),
      "src/executive/inquiry_log.py", lambda L: L.inquiries()),
+    # M8-b MIGRATION (2026-08-16), Ruling-14 form. NO ASSERTION MOVED - one row
+    # added, so every claim in this file now also binds the routing act log.
+    # **THE STANDING DERIVATION FOUND IT WITHOUT BEING TOLD, a fourth time.**
+    #
+    # An S0 routing on an empty view is the cheapest honest write this store
+    # has: no shortfall, no kernel, just the mint and the append.
+    ("routing_act", lambda p: RoutingLog(log_path=str(p)),
+     lambda L: L.record(
+         EscalationPolicy().route(
+             StakeClassifier().classify("claim", "CLM-0001", _EMPTY_VIEW),
+             _EMPTY_VIEW),
+         target_kind="claim", target_id="CLM-0001"),
+     "src/executive/routing_log.py", lambda L: L.routings()),
 ]
 _EMPTY_VIEW = DerivedView(
     open_obligations=(), unresolved_predictions=(), committed_goals=(),
@@ -236,8 +252,9 @@ def test_the_ledger_population_is_derived_and_matches_this_table():
         f"the funnel-appending, minting population is {sorted(derived)} but "
         f"this file covers {sorted(covered)}. Add the row - a ledger absent "
         f"from it makes every claim below TRUE BY OMISSION for that store.")
-    assert len(covered) == 13, (
-        "THIRTEEN as of M7-c (the inquiry act log). ~~TWELVE as of M7-b (the "
+    assert len(covered) == 14, (
+        "FOURTEEN as of M8-b (the routing act log). ~~THIRTEEN as of M7-c (the "
+        "inquiry act log).~~ ~~TWELVE as of M7-b (the "
         "attention selection log).~~ ~~ELEVEN as of M6-α "
         "(the proposition ledger).~~ ~~TEN, not the handoff's "
         "nine~~ - `aurea_core` imports the mint helper for a FLOOR READ and "

@@ -228,7 +228,7 @@ the episode bound (FIXED AT OPEN, no amend surface, early stop RECORDED), pinned
 `M3_D_CENSUS.md` §4's own authorising sentence and keeps the old test verbatim and struck.
 **§4's bar is untouched: an invariant retires only by a ruling that names it, never to make
 a suite green.**
-**Full suite baseline (`pytest tests/`): 2129 passed, 0 xfailed.** ~~2100~~ ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
+**Full suite baseline (`pytest tests/`): 2162 passed, 0 xfailed.** ~~2129~~ ~~2100~~ ~~2074~~ ~~2054~~ ~~2011~~ ~~1954~~ ~~1523~~ ~~1725~~
 ~~1730~~ ~~1785~~ ~~1841~~ ~~1873~~ — the M3 pivot's construction passes: **1523 → 1612** (M3-A, the
 K2/K3 substrate, +89) → **1680** (M3-B typed defeaters +39, M3-C standing profiles
 +28, +1 follow-up) → **1707** (M3-D commit 1, the admission seam +27) → **1725**
@@ -323,6 +323,32 @@ minted); and the pre-chain era is unverifiable-by-chain permanently. **L10
 SURVIVES ITS OWN INTEGRITY INSTRUMENT** — the act logs are still not
 constitutive, tampering still changes no decision, and M7-d's kill and
 reconstruction pins still pass whole.
+→ **2162** (M8-b, `escalation-policy.v1` and the routing act, +33 pins).
+**THE POLICY'S WHOLE JUDGMENT IS THE RULED MAPPING AS DATA** — S0/S1 → rung 0
+adequate, S2/S3/S4 → minimum rung 1, total over the stake vocabulary and
+carrying the hundred-fifth entry's citation, so **v2 is a one-object change**
+and nothing branches on a stake class anywhere. **RUNG OCCUPANCY IS DERIVED FROM
+RECORDS, NEVER HARDWIRED:** rung 0 is occupied BY CONSTRUCTION (a substrate is
+not a candidate for its own ladder); rung 1 reads the consumed qualification
+verdict for its role, and is **EMPTY TODAY BY TWO INDEPENDENT DERIVATIONS** —
+the record says REFUSED (`ACQ-0001`, Foundry `c1930d6`), *and* no `src/` type can
+construct a QUALIFIED `ConsumedVerdict` at all. A qualified-shape record derives
+OCCUPIED and the shortfall disappears, pinned: **the ladder fills by records
+alone, with no code change.**
+**THE SHORTFALL IS A FACT, NOT A WARNING.** With rung 1 empty, every S2+ episode
+routes to rung 0 and the debt is RECORDED — stake class, ruled minimum, actual
+rung, and the unoccupied rung's basis WITH ITS CITATION. L12's pressure-debt
+discipline at the routing layer, live from this commit: **AUREA's own records now
+say, honestly and permanently, which of her dispositions were reached below their
+ruled cognitive minimum.** That is the design working, not a defect to dampen.
+The routing log is **CHAINED FROM GENESIS** — born after the chain, so it has no
+pre-chain era and every line it will ever carry is verifiable. The full stake
+derivation is EMBEDDED, because Test 7's challenge must be answerable from the
+record alone. **The self-assessment slot is PRESENT and UNPOPULATED**, and a
+populated one is REFUSED: with an empty ladder there is no occupant, so recording
+an assessment would record a judgement nobody made. **Unclassified routing is
+REFUSED, never defaulted to the cheapest rung** — a stake nobody derived is not a
+low stake.
 
 **THE 2026-08-16 CORRECTION, RECORDED RATHER THAN QUIETLY FIXED: this line read
 1954 while the tree measured 1966 at `ce0498f`.** The M7-a pass measured and

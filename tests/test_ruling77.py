@@ -494,8 +494,11 @@ def test_d_the_report_carries_a_passing_footprint_audit(first_run) -> None:
     #
     # MIGRATED AGAIN 2026-08-16 (M7-c). The inquiry act log is THE ONE ruled
     # table movement of that pass (34 -> 35); any OTHER movement is a STOP.
-    assert audit["configured_paths"] == 35
-    assert first_run["isolation"]["configured_paths"] == 35
+    # ~~assert audit["configured_paths"] == 35~~
+    # MIGRATED AGAIN 2026-08-16 (M8-b). The routing act log is THE ONE ruled
+    # table movement of that pass (35 -> 36); any OTHER movement is a STOP.
+    assert audit["configured_paths"] == 36
+    assert first_run["isolation"]["configured_paths"] == 36
 
 
 def test_d_the_run_writes_nothing_under_shared_runtime(first_run) -> None:
@@ -1227,7 +1230,10 @@ def test_j_the_instrument_registers_no_new_store() -> None:
     # MIGRATED AGAIN 2026-08-16 (M7-c), same reason a SEVENTH time: M7-c added
     # the inquiry act log in `src/`, and this assertion is what made
     # registering it in both tables mandatory. THE SUBJECT IS STILL UNCHANGED.
-    assert len(class_attrs) + len(init_defaults) == 35
+    # ~~assert len(class_attrs) + len(init_defaults) == 35~~
+    # MIGRATED AGAIN 2026-08-16 (M8-b), same reason an EIGHTH time: the
+    # routing act log. THE SUBJECT IS STILL UNCHANGED.
+    assert len(class_attrs) + len(init_defaults) == 36
 
 
 def test_j_the_soak_coverage_self_audit_still_passes() -> None:
