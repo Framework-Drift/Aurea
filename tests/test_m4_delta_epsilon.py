@@ -44,6 +44,7 @@ from src.executive.inquiry_generator import (GENERATOR_NAME, GENERATOR_VERSION,
 from src.executive.escalation_policy import EscalationPolicy
 from src.executive.inquiry_log import InquiryLog
 from src.executive.routing_log import RoutingLog
+from src.executive.utility_log import UtilityLog, UtilityRecord
 from src.executive.stake_classifier import StakeClassifier
 from src.executive.selection_log import SelectionLog
 from src.external.model_provider import ingest_model_assertion
@@ -221,6 +222,18 @@ LEDGERS = [
              _EMPTY_VIEW),
          target_kind="claim", target_id="CLM-0001"),
      "src/executive/routing_log.py", lambda L: L.routings()),
+    # M8-c MIGRATION (2026-08-17), Ruling-14 form. NO ASSERTION MOVED - one row
+    # added. **THE STANDING DERIVATION FOUND IT WITHOUT BEING TOLD, a fifth
+    # time.** A bare record through the log's own door is the cheapest honest
+    # write: `measure_episode` verifies against kernel records, and this row is
+    # about the STORE's append discipline rather than the measurement act's.
+    ("utility_measurement", lambda p: UtilityLog(log_path=str(p)),
+     lambda L: L.record(UtilityRecord(
+         utility_id="", routing_id="RTE-0001",
+         rung="rung_0_deterministic_kernel", disposition_id="EPI-0001",
+         disposition_kind="survived", opened_seq="SEQ-000001",
+         disposed_seq="SEQ-000004", ordinal_cost=3)),
+     "src/executive/utility_log.py", lambda L: L.measurements()),
 ]
 _EMPTY_VIEW = DerivedView(
     open_obligations=(), unresolved_predictions=(), committed_goals=(),
@@ -252,8 +265,9 @@ def test_the_ledger_population_is_derived_and_matches_this_table():
         f"the funnel-appending, minting population is {sorted(derived)} but "
         f"this file covers {sorted(covered)}. Add the row - a ledger absent "
         f"from it makes every claim below TRUE BY OMISSION for that store.")
-    assert len(covered) == 14, (
-        "FOURTEEN as of M8-b (the routing act log). ~~THIRTEEN as of M7-c (the "
+    assert len(covered) == 15, (
+        "FIFTEEN as of M8-c (the utility log). ~~FOURTEEN as of M8-b (the "
+        "routing act log).~~ ~~THIRTEEN as of M7-c (the "
         "inquiry act log).~~ ~~TWELVE as of M7-b (the "
         "attention selection log).~~ ~~ELEVEN as of M6-α "
         "(the proposition ledger).~~ ~~TEN, not the handoff's "

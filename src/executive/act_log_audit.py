@@ -57,6 +57,7 @@ from src.executive.act_chain import CHAIN_KEY, chain_over, strip_terminator
 __all__ = [
     "FindingKind", "LineEra", "ActLogFinding", "ActLogReport",
     "SELECTION_LOG_SCHEMA", "INQUIRY_LOG_SCHEMA", "ROUTING_LOG_SCHEMA",
+    "UTILITY_LOG_SCHEMA",
     "LogSchema", "audit_act_log",
 ]
 
@@ -187,6 +188,15 @@ ROUTING_LOG_SCHEMA = LogSchema(
     kind_of_record="routing_act", id_field="routing_id", id_prefix="RTE-",
     required_keys=("kind_of_record", "routing_id", "target_kind", "target_id",
                    "routing", "gate_one", "self_assessment"))
+
+
+#: M8-c REGISTRATION - DATA ONLY. Chained from genesis, like the routing log.
+UTILITY_LOG_SCHEMA = LogSchema(
+    kind_of_record="utility_measurement", id_field="utility_id",
+    id_prefix="UTL-",
+    required_keys=("kind_of_record", "utility_id", "routing_id", "rung",
+                   "disposition_id", "disposition_kind", "opened_seq",
+                   "disposed_seq", "ordinal_cost", "gate_one"))
 
 
 def _ordinal(record_id: Any, prefix: str) -> Optional[int]:

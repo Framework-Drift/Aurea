@@ -589,7 +589,9 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # ~~assert len(class_attrs) + len(init_defaults) == 35~~
     # MIGRATED AGAIN 2026-08-16 (M8-b): the routing act log, THE ONE RULED
     # MOVEMENT of that pass (35 -> 36). Subject unchanged.
-    assert len(class_attrs) + len(init_defaults) == 36
+    # ~~assert len(class_attrs) + len(init_defaults) == 36~~ MIGRATED
+    # 2026-08-17 (M8-c): the utility log, THE ONE RULED MOVEMENT (36 -> 37).
+    assert len(class_attrs) + len(init_defaults) == 37
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

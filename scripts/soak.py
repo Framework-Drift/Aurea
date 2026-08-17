@@ -120,6 +120,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.executive.selection_log import SelectionLog
     from src.executive.inquiry_log import InquiryLog
     from src.executive.routing_log import RoutingLog
+    from src.executive.utility_log import UtilityLog
     from src.filtration.scar_logic_core import ScarLogicCore
     from src.identity.ril import RIL
     from src.reflex.racm import RACM
@@ -230,6 +231,9 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # M8-b - the routing act log. The Executive loop is NOT wired into
         # `process_input`, so the soak must show ZERO routing lines.
         (RoutingLog, "log_path", "logs/routing_acts.jsonl"),
+        # M8-c - the utility log. Nothing in `src/` composes one, so the
+        # soak must show ZERO utility lines.
+        (UtilityLog, "log_path", "logs/utility_measurements.jsonl"),
     ]
     return class_attrs, init_defaults
 

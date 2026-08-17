@@ -28,9 +28,12 @@ for every test:
 Tests asserting on disk contents pass an explicit path instead and are
 unaffected.
 
-THIS FIXTURE COVERS THIRTY-THREE PATHS: six resolved from class attributes,
-twenty-seven from `__init__` defaults. If you add a thirty-fourth and do not add
+THIS FIXTURE COVERS THIRTY-FOUR PATHS: six resolved from class attributes,
+twenty-eight from `__init__` defaults. If you add a thirty-fifth and do not add
 it here, you have reopened the hole Ruling 31 closed.
+
+    ~~THIS FIXTURE COVERS THIRTY-THREE PATHS: six from class attributes,
+    twenty-seven from `__init__` defaults.~~ MIGRATED 2026-08-17 (M8-c).
 
     ~~THIS FIXTURE COVERS THIRTY-TWO PATHS: six from class attributes,
     twenty-six from `__init__` defaults.~~ MIGRATED 2026-08-16 (M8-b).
@@ -173,6 +176,7 @@ from src.filtration.obligation_ledger import ObligationLedger
 from src.executive.selection_log import SelectionLog
 from src.executive.inquiry_log import InquiryLog
 from src.executive.routing_log import RoutingLog
+from src.executive.utility_log import UtilityLog
 from src.filtration.scar_logic_core import ScarLogicCore
 from src.reflex.rb_system import RBSystem
 from src.reflex.reflex_grid import GSR
@@ -443,6 +447,11 @@ def _persist_to_tmp(tmp_path, monkeypatch):
         # this redirect a bare `ExecutiveLoop(...)` would point at the real
         # `data/runtime/` log.
         (RoutingLog, "log_path", "routing_acts.jsonl"),
+        # M8-c: the utility log. UNLIKE its three siblings NOTHING in `src/`
+        # composes one - the measurement act is a door, not a loop phase -
+        # so this redirect protects tests that build one DIRECTLY, and it
+        # lands in the SAME COMMIT as the store per Ruling 31.
+        (UtilityLog, "log_path", "utility_measurements.jsonl"),
     ):
         _redirect_default(monkeypatch, cls, param, str(tmp_path / fname))
 

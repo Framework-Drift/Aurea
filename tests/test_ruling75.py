@@ -938,7 +938,8 @@ def test_j_the_conftest_path_count_is_a_derivation_not_a_claim():
              # the count drift. `THIRTY` cannot shadow `THIRTY-ONE` here - the
              # match requires ` PATHS` immediately after the word.
              "THIRTY-ONE": 31, "THIRTY-TWO": 32,
-             "THIRTY-THREE": 33}
+             "THIRTY-THREE": 33,
+             "THIRTY-FOUR": 34}
     claimed = [value for word, value in words.items()
                if f"THIS FIXTURE COVERS {word} PATHS" in live]
     assert len(claimed) == 1, (
