@@ -839,8 +839,24 @@ def test_h_the_goal_ledgers_consumer_set_is_exactly_the_ruled_one():
 
     NO ASSERTION MOVED: still an exact-set equality, still red on an unruled
     consumer, and the set is sorted so a fourth entry cannot hide in ordering.
+
+    M9-a MIGRATION (2026-08-19), Ruling-14 form. THIRD migration, same shape,
+    same reason - **the pin fired again, and again the wiring arrived WITH
+    its ruling.** The hundred-seventeenth entry (PATH v143, M9_GROUNDING.md
+    section M9-a) requires the prediction commitment's licensing goal
+    reference to RESOLVE against the goal ledger's commitments at commitment
+    time, so `src/external/prediction_ledger.py` joins as a READ-ONLY
+    consumer - it imports exactly `GoalLedger` and touches exactly
+    `commitment_for` (a pure fold), both AST-pinned in
+    `tests/test_m9a_prediction_exposure.py`. It writes nothing to the goal
+    store; the linkage is THE JOINT's substrate (what makes an M7-c license
+    derivable), not a second writer.
+
+    NO ASSERTION MOVED: still an exact-set equality, still red on an unruled
+    fifth consumer.
     """
     RULED_CONSUMERS = ["src/aurea_core.py",
+                       "src/external/prediction_ledger.py",
                        "src/goals/goal_activation.py",
                        "src/goals/goal_arbitration.py"]
 

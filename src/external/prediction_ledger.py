@@ -65,6 +65,27 @@ sentence, three outcome members from the registration's own words, the
 three-state field vocabulary is Docket H's (REUSED, not redeclared), the id
 format and ledger shape are the house's, and no threshold, weight, magnitude or
 duration exists anywhere in this module.
+
+M9-a (2026-08-19) - THE COMMITMENT CARRIES ITS EXPOSURE. Widened under the
+hundred-seventeenth entry (PATH v143), M9_GROUNDING.md section M9-a, heading
+line 122. ADDITIVE, governed-content form: `DependencyKind` (the heading's own
+six, a SECOND closed vocabulary beside `DependencyLink`, which stays exactly
+as Ruling 61 recovered it - era honesty, no reinterpretation of history);
+`TypedDependency` (a record reference plus exactly one kind, validated at the
+door against the committed census in `prediction_census.py`);
+`OperationalCriterion` (a censused kernel record surface, the record it reads,
+and the state that resolves each way - deterministically evaluable by
+construction, so disposition-time interpretation approaches clerical);
+and the `licensing_goal` linkage, VALIDATED TO RESOLVE against the goal
+ledger's commitments at commitment time. The hundred-seventeenth entry rules
+the goal join differently from res.1's claim_refs (which stay recorded ids,
+unvalidated, exactly as before): a commitment carrying `claim_refs` and a
+resolving licensing goal is THE JOINT's substrate - what makes an M7-c
+license derivable. `GoalLedger.commitment_for` is a pure read; this module
+still writes nothing anywhere but its own file. A commitment without
+operational criteria or typed dependencies reads honestly as NON-OPERATIONAL
+(`is_operational`, derived at read, never stored) - ABSENT is an answer, a
+state not a defect, and every legacy line loads exactly as before.
 """
 
 from __future__ import annotations
@@ -104,6 +125,19 @@ from typing import (Any, Callable, ClassVar, Dict, List, Optional, Tuple,
 from src.external.claim_ancestry import (AncestryField as RecordedField,
                                          FieldState, _deep_freeze, _thaw,
                                          absent, declared_none, provided)
+# M9-a: the committed census - PURE DATA (vocabulary, not machinery; it
+# imports nothing from src/). The door validates reference forms and
+# criterion surfaces against it, so a form nothing can resolve is refused at
+# commitment rather than stored as hope.
+from src.external.prediction_census import (criterion_surface,
+                                            id_matches_form, reference_form)
+# M9-a: the licensing linkage's owner, READ SURFACE ONLY
+# (`commitment_for` is a pure fold over the goal ledger's own file). The
+# hundred-seventeenth entry rules this join validated at commitment - a
+# DIFFERENT ruling from res.1's claim_refs, which stay unvalidated ids. This
+# module writes nothing to the goal store and reaches no promotion surface
+# through it (`goal_ledger.py` imports only `src/utils/`).
+from src.goals.goal_ledger import GoalLedger
 # RULING 66: the shared record-value validator. A pure function over serialized
 # payloads - it owns no store, opens no file, and reads nothing, so importing it
 # here is not this module reading a second store.
@@ -112,7 +146,8 @@ from src.utils.atomic_write import durable_append_text
 from src.utils.record_value import validate_record_value
 
 __all__ = [
-    "DependencyLink", "PredictionOutcome", "CRITERION_FIELDS",
+    "DependencyLink", "DependencyKind", "PredictionOutcome",
+    "CRITERION_FIELDS", "TypedDependency", "OperationalCriterion",
     "PredictionCommitment", "PredictionResolution", "PredictionLedger",
     "PredictionLedgerUnreadable", "RecordedField", "FieldState",
     "provided", "declared_none", "absent",
@@ -148,6 +183,45 @@ class DependencyLink(str, Enum):
     HORIZON = "horizon"
     DOMAIN_VALIDITY = "domain_validity"
     THE_CLAIM_ITSELF = "the_claim_itself"
+
+
+class DependencyKind(str, Enum):
+    """WHAT A TYPED DEPENDENCY IS. CLOSED at the ruled six - M9-a's vocabulary.
+
+    Hundred-seventeenth entry (PATH v143), M9_GROUNDING.md section M9-a, on
+    the heading's line 122, verbatim:
+
+        "Falsification propagates backward as obligations on the failed
+         dependency - observation, causal link, assumption, scope, horizon,
+         or main claim."
+
+    A SECOND CLOSED VOCABULARY BESIDE `DependencyLink`, AND BOTH STAY.
+    `DependencyLink` is L2's own sentence, recovered by Ruling 61 and carried
+    by the legacy `dependency_chain` field, which this entry does not
+    reinterpret (era honesty - the old records are clients, never debt). A
+    typed dependency under M9-a is a RECORD REFERENCE plus exactly one of
+    THESE members, declared at commitment because justifications are recorded
+    at formation time - and because M9-b's backward walk routes obligations by
+    THIS vocabulary, a chain reconstructed after a failure being a chain drawn
+    to explain the failure.
+
+    ADDITIONS REQUIRE A MANIFEST RULING (Ruling 7's closed-enum discipline).
+    An unruled seventh is unwritable: `DependencyKind("anything_else")` raises,
+    `from_dict` drops the whole line, and the pin file holds the member set.
+    """
+
+    #: hundred-seventeenth entry / heading line 122: "observation"
+    OBSERVATION = "observation"
+    #: hundred-seventeenth entry / heading line 122: "causal link"
+    CAUSAL_LINK = "causal_link"
+    #: hundred-seventeenth entry / heading line 122: "assumption"
+    ASSUMPTION = "assumption"
+    #: hundred-seventeenth entry / heading line 122: "scope"
+    SCOPE = "scope"
+    #: hundred-seventeenth entry / heading line 122: "horizon"
+    HORIZON = "horizon"
+    #: hundred-seventeenth entry / heading line 122: "main claim"
+    MAIN_CLAIM = "main_claim"
 
 
 class PredictionOutcome(str, Enum):
@@ -186,6 +260,119 @@ class PredictionLedgerUnreadable(Exception):
 
     A STRUCTURAL VIOLATION (Ruling 25's taxonomy).
     """
+
+
+# =====================================================================
+# M9-a - THE EXPOSURE RECORDS, both validated at construction so the door
+# inherits their refusals: a commitment is CONSTRUCTED before it is appended,
+# and a refused construction writes nothing.
+# =====================================================================
+
+@dataclass(frozen=True)
+class TypedDependency:
+    """A RECORD REFERENCE plus exactly one ruled kind - M9-a section 1A.
+
+    The reference is a (form, id) pair in the proposition ledger's own
+    `KernelRef` shape: the FORM names an entry in the committed census
+    (`prediction_census.REFERENCEABLE_FORMS`), and the id must wear that
+    form's anchored mint shape where the owner mints one. A form outside the
+    census is REFUSED HERE - a reference form nothing can resolve is refused
+    at the door, not stored as hope. EXISTENCE is deliberately not checked
+    here: that is the resolver owner's question at ITS door, exactly as
+    `ObligationLedger.admit` already answers it for the backward walk's
+    obligations (M9-b).
+    """
+
+    kind: DependencyKind
+    record_form: str
+    record_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, DependencyKind):
+            raise TypeError(
+                f"TypedDependency.kind carries {self.kind!r}, which is not a "
+                f"DependencyKind. A raw string would let a caller invent a "
+                f"dependency class the ruled vocabulary deliberately closes.")
+        form = reference_form(self.record_form)
+        if form is None:
+            raise ValueError(
+                f"'{self.record_form}' is not a censused reference form. The "
+                f"census (prediction_census.REFERENCEABLE_FORMS) holds what "
+                f"the kernel honestly resolves; a form outside it is refused "
+                f"at the door, never stored as hope.")
+        if not id_matches_form(form, self.record_id):
+            raise ValueError(
+                f"'{self.record_id}' does not wear the censused id form for "
+                f"'{self.record_form}' ({form.id_patterns or 'non-empty'}). "
+                f"A reference the owner's mint never issued resolves nowhere.")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "kind": self.kind.value,
+            "record_form": self.record_form,
+            "record_id": self.record_id,
+        }
+
+
+@dataclass(frozen=True)
+class OperationalCriterion:
+    """A clerically evaluable resolution criterion - M9-a section 1B.
+
+    Names a censused KERNEL RECORD SURFACE, the record it reads, the state
+    that resolves CONFIRMED and the state that resolves FAILED. THE BINDING
+    PROPERTY IS DETERMINISTIC EVALUABILITY: given this criterion and the
+    kernel, two evaluators agree by construction, because evaluating it is a
+    read of the named surface and an equality comparison - nothing more
+    (heading line 122: "disposition-time interpretation approaches
+    clerical"). Evaluation itself is M9-b's; this record is what makes it
+    clerical rather than interpretive.
+
+    Both named states must come from the surface's honest closed vocabulary
+    (the owner's own enum, censused as data and drift-pinned), and they must
+    differ - a criterion whose CONFIRMED and FAILED name one state resolves
+    nothing. A surface outside the census is refused: derive or decline,
+    never invent.
+    """
+
+    surface: str
+    record_id: str
+    confirmed_state: str
+    failed_state: str
+
+    def __post_init__(self) -> None:
+        censused = criterion_surface(self.surface)
+        if censused is None:
+            raise ValueError(
+                f"'{self.surface}' is not a censused criterion surface. The "
+                f"census (prediction_census.CRITERION_SURFACES) holds the "
+                f"surfaces a clerical evaluator can read; naming another is "
+                f"invention, and the discipline is derive or decline.")
+        form = reference_form(censused.reference_form)
+        if form is None or not id_matches_form(form, self.record_id):
+            raise ValueError(
+                f"'{self.record_id}' does not wear the censused id form for "
+                f"surface '{self.surface}' (reads {censused.reference_form}).")
+        for name, state in (("confirmed_state", self.confirmed_state),
+                            ("failed_state", self.failed_state)):
+            if state not in censused.states:
+                raise ValueError(
+                    f"OperationalCriterion.{name} names {state!r}, which is "
+                    f"outside '{self.surface}''s honest vocabulary "
+                    f"{censused.states}. A state the surface can never show "
+                    f"is a criterion that can never be met - stored hope.")
+        if self.confirmed_state == self.failed_state:
+            raise ValueError(
+                f"confirmed_state and failed_state both name "
+                f"{self.confirmed_state!r}. One state cannot resolve both "
+                f"ways; the criterion would decide nothing deterministically.")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "surface": self.surface,
+            "record_id": self.record_id,
+            "confirmed_state": self.confirmed_state,
+            "failed_state": self.failed_state,
+        }
 
 
 # =====================================================================
@@ -237,6 +424,17 @@ class PredictionCommitment:
     # ancestry ledger - see the import note.
     claim_refs: Tuple[str, ...] = ()
     committed_at: str = ""
+    # ---- M9-a, all three ADDITIVE with honest defaults: a legacy line loads
+    # exactly as before and reads NON-OPERATIONAL (`is_operational`).
+    operational_criteria: Tuple[OperationalCriterion, ...] = ()
+    typed_dependencies: Tuple[TypedDependency, ...] = ()
+    # Three-state like the criteria (Docket H's cut): PROVIDED holds a GLC-
+    # reference validated to resolve at the door; DECLARED_NONE is a
+    # commitment explicitly under no goal; ABSENT is every legacy line.
+    # DELIBERATELY NOT IN `RECORDED_FIELDS` - the prior pin closes that tuple
+    # exactly (test_ruling61's freeze-list pin), so this field carries the
+    # same freeze discipline individually in `__post_init__`.
+    licensing_goal: RecordedField = field(default_factory=absent)
 
     # Every three-state field on this record, in one place.
     #
@@ -281,6 +479,37 @@ class PredictionCommitment:
                     f"record object here would be a reference into another "
                     f"owner's store (Ruling 42's finding).")
 
+        # M9-a: the exposure records are typed, already-validated, frozen
+        # shapes; anything else here would let a raw dict skip their door.
+        object.__setattr__(self, "operational_criteria",
+                           tuple(self.operational_criteria))
+        for criterion in self.operational_criteria:
+            if not isinstance(criterion, OperationalCriterion):
+                raise TypeError(
+                    f"operational_criteria carries {criterion!r}, which is "
+                    f"not an OperationalCriterion - a raw value would skip "
+                    f"the censused-surface validation at the door.")
+        object.__setattr__(self, "typed_dependencies",
+                           tuple(self.typed_dependencies))
+        for dependency in self.typed_dependencies:
+            if not isinstance(dependency, TypedDependency):
+                raise TypeError(
+                    f"typed_dependencies carries {dependency!r}, which is "
+                    f"not a TypedDependency - a raw value would skip the "
+                    f"censused-form validation at the door.")
+        if not isinstance(self.licensing_goal, RecordedField):
+            raise TypeError(
+                f"PredictionCommitment.licensing_goal must be a three-state "
+                f"field - use provided(...) / declared_none() / absent(). A "
+                f"bare value cannot say WHICH of the three answers it is.")
+        # The same Ruling 52 freeze the RECORDED_FIELDS loop applies, held
+        # individually because the prior pin closes that tuple exactly.
+        object.__setattr__(
+            self, "licensing_goal",
+            RecordedField(state=self.licensing_goal.state,
+                          value=_deep_freeze(
+                              copy.deepcopy(self.licensing_goal.value))))
+
     def criterion(self, name: str) -> RecordedField:
         """The named criterion as recorded, or raise if it is not a criterion."""
         if name not in CRITERION_FIELDS:
@@ -290,6 +519,20 @@ class PredictionCommitment:
                 f"met, and the set was fixed at commit time.")
         return getattr(self, name)
 
+    def is_operational(self) -> bool:
+        """DERIVED AT READ, NEVER STORED (L3). M9-a section 1D.
+
+        OPERATIONAL means the commitment carries BOTH structured resolution
+        criteria and typed dependency declarations - the exposure M9-b's
+        evaluator and backward walk consume. Either absent reads honestly as
+        NON-OPERATIONAL: ABSENT is an answer, a state not a defect, and it is
+        precisely what M7-c's HORIZONLESS class already asks about. The
+        ledger's whole history is NON-OPERATIONAL by construction, and those
+        records are the new machinery's first honest clients - no migration,
+        no backfill, no reinterpretation.
+        """
+        return bool(self.operational_criteria) and bool(self.typed_dependencies)
+
     def as_dict(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "kind": "commitment",
@@ -298,6 +541,13 @@ class PredictionCommitment:
             "dependency_chain": [link.value for link in self.dependency_chain],
             "claim_refs": list(self.claim_refs),
             "committed_at": self.committed_at,
+            # M9-a: additive keys. A reader of the OLD shape ignores them; a
+            # legacy line simply lacks them and loads with the honest defaults.
+            "operational_criteria": [c.as_dict()
+                                     for c in self.operational_criteria],
+            "typed_dependencies": [d.as_dict()
+                                   for d in self.typed_dependencies],
+            "licensing_goal": self.licensing_goal.as_dict(),
         }
         for name in self.RECORDED_FIELDS:
             payload[name] = getattr(self, name).as_dict()
@@ -317,12 +567,35 @@ class PredictionCommitment:
         try:
             chain = tuple(DependencyLink(v) for v in data.get("dependency_chain", []))
             refs = tuple(str(r) for r in data.get("claim_refs", []))
+            # M9-a: the same whole-line-drop discipline as the chain above. An
+            # unruled kind, an uncensused form or surface, or a state outside
+            # a surface's vocabulary raises here and the WHOLE LINE is dropped
+            # - a partially-loaded exposure would route M9-b's backward walk
+            # somewhere the predictor never named.
+            dependencies = tuple(
+                TypedDependency(kind=DependencyKind(item["kind"]),
+                                record_form=str(item["record_form"]),
+                                record_id=str(item["record_id"]))
+                for item in data.get("typed_dependencies", []))
+            criteria = tuple(
+                OperationalCriterion(
+                    surface=str(item["surface"]),
+                    record_id=str(item["record_id"]),
+                    confirmed_state=str(item["confirmed_state"]),
+                    failed_state=str(item["failed_state"]))
+                for item in data.get("operational_criteria", []))
             return cls(
                 prediction_id=str(data["prediction_id"]),
                 expected_result=str(data["expected_result"]),
                 dependency_chain=chain,
                 claim_refs=refs,
                 committed_at=str(data.get("committed_at", "")),
+                operational_criteria=criteria,
+                typed_dependencies=dependencies,
+                # A legacy line lacks the key entirely; `from_dict(None)` is
+                # ABSENT - never asked, which is the honest reading.
+                licensing_goal=RecordedField.from_dict(
+                    data.get("licensing_goal")),
                 **{name: RecordedField.from_dict(data.get(name))
                    for name in cls.RECORDED_FIELDS},
             )
@@ -397,11 +670,25 @@ class PredictionLedger:
     ID_PREFIX = "PRD-"
 
     def __init__(self,
-                 ledger_path: str = "data/runtime/logs/prediction_ledger.jsonl"):
+                 ledger_path: str = "data/runtime/logs/prediction_ledger.jsonl",
+                 goal_ledger: Optional[GoalLedger] = None):
         # Ruling 31 / Ruling 39: an `__init__` DEFAULT under `data/runtime/` -
         # one of exactly two shapes `tests/conftest.py` and `scripts/soak.py`
         # can reach - redirected in both in the same commit.
         self.ledger_path = Path(ledger_path)
+        # M9-a: the licensing linkage's resolver, held the way the obligation
+        # ledger holds ITS resolvers - injected at construction, None-able,
+        # READ ONLY. A commitment carrying a PROVIDED licensing goal while
+        # this is None is REFUSED at the door (`ObligationLedger.admit`'s own
+        # rule for an UNCHECKED prediction target): the entry requires the
+        # reference to resolve at commitment, and unvalidatable is not
+        # validated.
+        if goal_ledger is not None and not isinstance(goal_ledger, GoalLedger):
+            raise TypeError(
+                f"goal_ledger must be a GoalLedger or None, got "
+                f"{type(goal_ledger).__name__} - the licensing goal resolves "
+                f"against the OWNER's read surface, not a stand-in.")
+        self.goal_ledger = goal_ledger
         # In-memory mirror of what THIS PROCESS appended. NOT the ledger: the
         # file is the ledger. Nothing reads this back into a decision.
         self.entries: List[Dict[str, Any]] = []
@@ -555,6 +842,9 @@ class PredictionLedger:
                unresolved_criteria: Optional[RecordedField] = None,
                dependency_chain: Tuple[DependencyLink, ...] = (),
                claim_refs: Tuple[str, ...] = (),
+               operational_criteria: Tuple[OperationalCriterion, ...] = (),
+               typed_dependencies: Tuple[TypedDependency, ...] = (),
+               licensing_goal: Optional[RecordedField] = None,
                ) -> PredictionCommitment:
         """Record a prediction BEFORE its outcome. RAISES on write failure.
 
@@ -567,7 +857,44 @@ class PredictionLedger:
         A missing criterion defaults to ABSENT, which is the honest reading of
         a caller who did not mention it - never to an empty PROVIDED value,
         which would read as "asked, and there are none".
+
+        M9-a: THE SAME SINGLE FUNNEL, WIDENED - every existing call site stays
+        valid (the three new parameters are trailing and defaulted), and the
+        widened door validates EVERYTHING before the append. The typed shapes
+        self-validated at construction (censused forms, censused surfaces,
+        honest state vocabularies); the licensing goal is validated HERE,
+        before the mint lock is even taken, so a refused commitment derives
+        no ordinal, writes no line, and leaves no directory - refusals before
+        the write spend nothing.
         """
+        goal = licensing_goal if licensing_goal is not None else absent()
+        if not isinstance(goal, RecordedField):
+            raise TypeError(
+                f"licensing_goal must be a three-state field or None, got "
+                f"{type(goal).__name__} - use provided('GLC-...') / "
+                f"declared_none() / absent().")
+        if goal.state is FieldState.PROVIDED:
+            form = reference_form("goal")
+            if not isinstance(goal.value, str) or not id_matches_form(
+                    form, goal.value):
+                raise ValueError(
+                    f"the licensing goal reference {goal.value!r} does not "
+                    f"wear the goal ledger's censused id form "
+                    f"({form.id_patterns}). A reference the mint never issued "
+                    f"resolves nowhere, and is refused at the door.")
+            if self.goal_ledger is None:
+                raise ValueError(
+                    f"a licensing goal ({goal.value!r}) was provided but this "
+                    f"ledger was constructed without a goal ledger to resolve "
+                    f"it against. The hundred-seventeenth entry requires the "
+                    f"goal reference to RESOLVE at commitment time; "
+                    f"unvalidatable is not validated, so the commitment is "
+                    f"refused rather than stored as hope.")
+            if self.goal_ledger.commitment_for(goal.value) is None:
+                raise ValueError(
+                    f"the licensing goal {goal.value!r} does not resolve "
+                    f"against the goal ledger's commitments. A commitment "
+                    f"under a goal nobody committed licenses nothing.")
         # RULING 69 res.3 - IN-PROCESS MINT-APPEND ATOMICITY. The lock is keyed
         # by the RESOLVED PATH and held across DERIVE -> MINT -> APPEND as one
         # unit; deriving inside it and appending outside would leave exactly the
@@ -579,7 +906,8 @@ class PredictionLedger:
             return self._mint_and_append(
                 expected_result, applicable_conditions, resolution_horizon,
                 success_criteria, failure_criteria, unresolved_criteria,
-                dependency_chain, claim_refs)
+                dependency_chain, claim_refs,
+                operational_criteria, typed_dependencies, goal)
 
     def _mint_and_append(self,
                          expected_result: str,
@@ -590,6 +918,9 @@ class PredictionLedger:
                          unresolved_criteria: Optional[RecordedField],
                          dependency_chain: Tuple[DependencyLink, ...],
                          claim_refs: Tuple[str, ...],
+                         operational_criteria: Tuple[OperationalCriterion, ...],
+                         typed_dependencies: Tuple[TypedDependency, ...],
+                         licensing_goal: RecordedField,
                          ) -> PredictionCommitment:
         """The locked critical section: derive, mint, freeze, append.
 
@@ -608,6 +939,9 @@ class PredictionLedger:
             dependency_chain=dependency_chain,
             claim_refs=claim_refs,
             committed_at=datetime.now().isoformat(),
+            operational_criteria=operational_criteria,
+            typed_dependencies=typed_dependencies,
+            licensing_goal=licensing_goal,
         )
         self._append(commitment.as_dict())
         return commitment
