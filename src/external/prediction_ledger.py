@@ -457,6 +457,12 @@ class PredictionCommitment:
     # exactly (test_ruling61's freeze-list pin), so this field carries the
     # same freeze discipline individually in `__post_init__`.
     licensing_goal: RecordedField = field(default_factory=absent)
+    # M9-c (hundred-nineteenth entry), ADDITIVE: the acquisition trail. A
+    # commitment bridged from a derived candidate cites the candidate's act
+    # id (`PRA-...`), so the provenance chain suspension -> candidate ->
+    # commitment is recorded ids end to end. "" is the honest reading of
+    # every directly-authored and every legacy commitment.
+    derived_from: str = ""
 
     # Every three-state field on this record, in one place.
     #
@@ -519,6 +525,12 @@ class PredictionCommitment:
                     f"typed_dependencies carries {dependency!r}, which is "
                     f"not a TypedDependency - a raw value would skip the "
                     f"censused-form validation at the door.")
+        if not isinstance(self.derived_from, str):
+            raise TypeError(
+                f"PredictionCommitment.derived_from carries "
+                f"{self.derived_from!r}. A recorded ID ONLY (Ruling 50's "
+                f"ids-only shape) - the candidate act it cites lives in the "
+                f"prediction act log.")
         if not isinstance(self.licensing_goal, RecordedField):
             raise TypeError(
                 f"PredictionCommitment.licensing_goal must be a three-state "
@@ -570,6 +582,7 @@ class PredictionCommitment:
             "typed_dependencies": [d.as_dict()
                                    for d in self.typed_dependencies],
             "licensing_goal": self.licensing_goal.as_dict(),
+            "derived_from": self.derived_from,
         }
         for name in self.RECORDED_FIELDS:
             payload[name] = getattr(self, name).as_dict()
@@ -618,6 +631,7 @@ class PredictionCommitment:
                 # ABSENT - never asked, which is the honest reading.
                 licensing_goal=RecordedField.from_dict(
                     data.get("licensing_goal")),
+                derived_from=str(data.get("derived_from", "")),
                 **{name: RecordedField.from_dict(data.get(name))
                    for name in cls.RECORDED_FIELDS},
             )
@@ -874,6 +888,7 @@ class PredictionLedger:
                operational_criteria: Tuple[OperationalCriterion, ...] = (),
                typed_dependencies: Tuple[TypedDependency, ...] = (),
                licensing_goal: Optional[RecordedField] = None,
+               derived_from: str = "",
                ) -> PredictionCommitment:
         """Record a prediction BEFORE its outcome. RAISES on write failure.
 
@@ -895,7 +910,48 @@ class PredictionLedger:
         before the mint lock is even taken, so a refused commitment derives
         no ordinal, writes no line, and leaves no directory - refusals before
         the write spend nothing.
+
+        M9-c: THE BODY MOVED TO `_commit`, THE GOAL LEDGER'S OWN SHAPE, for
+        the goal ledger's own reason (its pin (h), verbatim law): Ruling 5's
+        invariant scans `src/` for `.commit()` calls ON ANY RECEIVER, and it
+        is the AUTHORITATIVE guard - a scanner that inferred receiver types
+        would eventually get one wrong. THE PUBLIC NAME STAYS (`commit` is
+        this docket's vocabulary, Ruling 61); `commit_prediction` below is
+        the same funnel under the name a `src/` caller may speak.
         """
+        return self._commit(
+            expected_result, applicable_conditions, resolution_horizon,
+            success_criteria, failure_criteria, unresolved_criteria,
+            dependency_chain, claim_refs, operational_criteria,
+            typed_dependencies, licensing_goal, derived_from)
+
+    def commit_prediction(self, *args: Any, **kwargs: Any) -> PredictionCommitment:
+        """`commit`, under the name a `src/` caller may speak. SAME FUNNEL.
+
+        Ruling 5's receiver-agnostic scanner owns the bare verb `commit` in
+        `src/` (only SAE and the Codex may be seen saying it), and the goal
+        ledger's pin (h) records the ruled remedy: the fix is the NAME, not
+        the test. This forwards verbatim - one funnel, two spellings, zero
+        behavioural difference - so the M9-c bridge can commit through the
+        ledger's own door without wearing the Codex's write verb.
+        """
+        return self._commit(*args, **kwargs)
+
+    def _commit(self,
+                expected_result: str,
+                applicable_conditions: Optional[RecordedField] = None,
+                resolution_horizon: Optional[RecordedField] = None,
+                success_criteria: Optional[RecordedField] = None,
+                failure_criteria: Optional[RecordedField] = None,
+                unresolved_criteria: Optional[RecordedField] = None,
+                dependency_chain: Tuple[DependencyLink, ...] = (),
+                claim_refs: Tuple[str, ...] = (),
+                operational_criteria: Tuple[OperationalCriterion, ...] = (),
+                typed_dependencies: Tuple[TypedDependency, ...] = (),
+                licensing_goal: Optional[RecordedField] = None,
+                derived_from: str = "",
+                ) -> PredictionCommitment:
+        """The funnel's body - validation, then the locked critical section."""
         goal = licensing_goal if licensing_goal is not None else absent()
         if not isinstance(goal, RecordedField):
             raise TypeError(
@@ -936,7 +992,7 @@ class PredictionLedger:
                 expected_result, applicable_conditions, resolution_horizon,
                 success_criteria, failure_criteria, unresolved_criteria,
                 dependency_chain, claim_refs,
-                operational_criteria, typed_dependencies, goal)
+                operational_criteria, typed_dependencies, goal, derived_from)
 
     def _mint_and_append(self,
                          expected_result: str,
@@ -950,6 +1006,7 @@ class PredictionLedger:
                          operational_criteria: Tuple[OperationalCriterion, ...],
                          typed_dependencies: Tuple[TypedDependency, ...],
                          licensing_goal: RecordedField,
+                         derived_from: str = "",
                          ) -> PredictionCommitment:
         """The locked critical section: derive, mint, freeze, append.
 
@@ -971,6 +1028,7 @@ class PredictionLedger:
             operational_criteria=operational_criteria,
             typed_dependencies=typed_dependencies,
             licensing_goal=licensing_goal,
+            derived_from=derived_from,
         )
         self._append(commitment.as_dict())
         return commitment

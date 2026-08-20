@@ -67,7 +67,16 @@ from src.executive.criterion_evaluator import (EVALUATOR_NAME,
 from src.executive.prediction_act_log import PredictionActLog
 from src.executive.propagation_policy import (FalsificationWalk,
                                               PropagationPolicy)
-from src.external.prediction_ledger import PredictionOutcome
+# M9-c (hundred-nineteenth entry, PATH v145): the candidate derivation and
+# its bridge -- additive wiring only. `commit()` stays the kernel's; the
+# bridge door drives it and NOTHING here commits on its own.
+from src.executive.candidate_generator import (CandidateDerivation,
+                                               CandidateGenerator)
+from src.external.prediction_ledger import (DependencyKind,
+                                            OperationalCriterion,
+                                            PredictionCommitment,
+                                            PredictionOutcome,
+                                            TypedDependency, provided)
 from src.executive.derived_view import (
     VERDICT_PAYLOAD_KIND,
     ChairState,
@@ -214,7 +223,8 @@ class ExecutiveLoop:
                  inquiries: Any = None, classifier: Any = None,
                  escalation: Any = None, routings: Any = None,
                  evaluator: Any = None, propagation: Any = None,
-                 prediction_acts: Any = None):
+                 prediction_acts: Any = None,
+                 candidate_generator: Any = None):
         self.obligations = obligations
         self.predictions = predictions
         self.goals = goals
@@ -270,6 +280,9 @@ class ExecutiveLoop:
         self.propagation = propagation or PropagationPolicy(
             obligations=self.obligations, predictions=self.predictions)
         self.prediction_acts = prediction_acts or PredictionActLog()
+        # M9-c, same default-by-construction idiom: the generator is pure and
+        # holds nothing; its acts ride the SAME prediction act log.
+        self.candidate_generator = candidate_generator or CandidateGenerator()
 
     # ------------------------------------------------------------------
     # M9-b SURFACE READERS -- each is the owner's own read, nothing more
@@ -551,6 +564,91 @@ class ExecutiveLoop:
         walk = self.propagation.walk(prediction_id)
         self.prediction_acts.record_propagation(walk)
         return walk
+
+    # ------------------------------------------------------------------
+    # M9-c DOORS -- derivation surfaced, commitment governed
+    # ------------------------------------------------------------------
+
+    def derive_candidates(self, suspension_entries: Any,
+                          proposition_summaries: Any) -> CandidateDerivation:
+        """Derive discriminating candidates and RECORD every one of them.
+
+        THE PARTITION IS TOTAL HERE, `submit_inquiries`' own rule: every
+        candidate lands as a candidate act and every decline as a declined
+        act -- surfaced, never silent, and never pursued. The goal join reads
+        this loop's own goal handle where one is held; a loop without one
+        derives honestly license-less candidates.
+        """
+        goal_commitments = (self.goals.commitments()
+                            if self.goals is not None else ())
+        derivation = self.candidate_generator.derive(
+            suspension_entries, proposition_summaries, goal_commitments)
+        for candidate in derivation.candidates:
+            self.prediction_acts.record_candidate(candidate)
+        for decline in derivation.declined:
+            self.prediction_acts.record_declined(decline)
+        return derivation
+
+    def commit_candidate(self, candidate_act_id: str,
+                         licensing_goal: Optional[str] = None
+                         ) -> PredictionCommitment:
+        """THE BRIDGE. Commit ONE recorded candidate through the M9-a door,
+        verbatim -- externally invoked, the committing authority's act.
+
+        The generator NEVER commits; this door is the only path from a
+        candidate to a commitment, and it commits exactly what the candidate
+        act recorded: its criterion and dependencies rebuilt through the SAME
+        constructors, its claim refs, its statement, and its license -- the
+        candidate's derived goal, or the committer-supplied one where the
+        record honestly said NO_DERIVABLE_LICENSE. A candidate with neither
+        refuses HERE: a bridged commitment is THE JOINT's substrate, and
+        committing it unlicensed would manufacture the findings-only state on
+        purpose. The M9-a door then validates the goal resolves -- this
+        bridge softens nothing.
+        """
+        act = next((a for a in self.prediction_acts.acts()
+                    if a.get("act_id") == candidate_act_id), None)
+        if act is None:
+            raise ValueError(
+                f"no act '{candidate_act_id}' is recorded in the prediction "
+                f"act log; there is no candidate to commit.")
+        kind = act.get("kind_of_record")
+        if kind == "prediction_candidate_declined_act":
+            raise ValueError(
+                f"'{candidate_act_id}' records a DECLINED contradiction "
+                f"({act.get('declined', {}).get('basis')!r}); nothing was "
+                f"derivable there, and committing it would be inventing the "
+                f"criterion the derivation honestly could not draft.")
+        if kind != "prediction_candidate_act":
+            raise ValueError(
+                f"'{candidate_act_id}' is a {kind!r}, not a candidate act; "
+                f"there is no draft to commit.")
+
+        draft = act["candidate"]
+        goal_id = draft["license"]["goal_id"] or licensing_goal
+        if not goal_id:
+            raise ValueError(
+                f"'{candidate_act_id}' derived NO_DERIVABLE_LICENSE and no "
+                f"licensing goal was supplied. The record said its "
+                f"commitment would require the committer to supply one -- "
+                f"this is that requirement, refusing.")
+
+        criterion = OperationalCriterion(**draft["criterion"])
+        dependencies = tuple(
+            TypedDependency(kind=DependencyKind(item["kind"]),
+                            record_form=str(item["record_form"]),
+                            record_id=str(item["record_id"]))
+            for item in draft["typed_dependencies"])
+        # `commit_prediction` IS `commit` - one funnel, the name a `src/`
+        # caller may speak (Ruling 5's receiver-agnostic scanner owns the
+        # bare verb; the goal ledger's pin (h) precedent, applied here).
+        return self.predictions.commit_prediction(
+            expected_result=draft["statement"],
+            claim_refs=tuple(draft["claim_refs"]),
+            operational_criteria=(criterion,),
+            typed_dependencies=dependencies,
+            licensing_goal=provided(goal_id),
+            derived_from=candidate_act_id)
 
     def step(self) -> AttentionSelectionRecord:
         """ONE CYCLE: observe, select, record, return.

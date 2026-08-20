@@ -21,6 +21,20 @@ disposition as received, and the policy identity. They share the `PRA-`
 ordinal stream and the schema's required core; the audit registration is data
 (`act_log_audit.PREDICTION_ACT_LOG_SCHEMA`), and the audit never repairs.
 
+M9-c (2026-08-20, hundred-nineteenth entry) -- TWO MORE ACT KINDS, SAME LOG,
+SAME STREAM, BY STATED CALL. A CANDIDATE act records one derivable
+discriminating prediction (source suspension, both claim refs, the drafted
+criterion and dependencies, the license derivation or its honest absence); a
+DECLINED act records a carried contradiction that yielded none, with its
+basis. They are prediction acts in the exact sense the log's name carries --
+the acts of the prediction machinery BEFORE a commitment exists -- and their
+`prediction_id` is None, the honest not-yet value (the routing log's own
+precedent for an absent join). Widening THIS log rather than minting a new
+store keeps the acquisition trail on one ordinal stream (a commitment cites
+its candidate act by `PRA-` id) and moves ZERO registration tables, which
+matters under this slice's standing constraint that every prior pin file --
+including the store-count censuses -- stays byte-unmodified.
+
 THE WALK'S ACT WRITES AFTER THE SUBMISSIONS -- CRASH HONESTY, STATED
 -------------------------------------------------------------------------------
 The act carries the submissions' REAL dispositions, so it cannot precede them.
@@ -49,6 +63,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.executive.act_chain import CHAIN_KEY, chain_for_next_line
+from src.executive.candidate_generator import (CandidatePrediction,
+                                               DeclinedContradiction)
 from src.executive.criterion_evaluator import (CriterionEvaluation,
                                                EvaluationOutcome)
 from src.executive.gate_one import GateOneReferent
@@ -177,6 +193,63 @@ class PredictionActLog:
             self._append(payload)
         return payload
 
+    def record_candidate(self, candidate: CandidatePrediction
+                         ) -> Dict[str, Any]:
+        """Record ONE derivable discriminating candidate. RAISES on a failed
+        write. The generator never writes; this door is the loop's."""
+        if not isinstance(candidate, CandidatePrediction):
+            raise TypeError(
+                f"record_candidate takes a CandidatePrediction, got "
+                f"{type(candidate).__name__} -- a raw payload would skip the "
+                f"generator's constructor-validated draft.")
+        with mint_lock(self.log_path):
+            payload = {
+                "kind_of_record": "prediction_candidate_act",
+                "act_id": self._next_id(),
+                # No prediction exists yet -- the candidate is what a
+                # commitment MAY be made from. None is the honest not-yet.
+                "prediction_id": None,
+                "candidate": candidate.as_dict(),
+                "gate_one": {
+                    "pressure_class_applied":
+                        GateOneReferent.NOT_APPLICABLE.value,
+                    "unexercised_defeaters":
+                        GateOneReferent.NOT_APPLICABLE.value,
+                    "rejection_reason":
+                        GateOneReferent.NOT_APPLICABLE.value,
+                },
+                "recorded_at": datetime.now().isoformat(),
+            }
+            self._append(payload)
+        return payload
+
+    def record_declined(self, decline: DeclinedContradiction
+                        ) -> Dict[str, Any]:
+        """Record ONE declined contradiction WITH its basis -- surfaced,
+        never silent. RAISES on a failed write."""
+        if not isinstance(decline, DeclinedContradiction):
+            raise TypeError(
+                f"record_declined takes a DeclinedContradiction, got "
+                f"{type(decline).__name__}.")
+        with mint_lock(self.log_path):
+            payload = {
+                "kind_of_record": "prediction_candidate_declined_act",
+                "act_id": self._next_id(),
+                "prediction_id": None,
+                "declined": decline.as_dict(),
+                "gate_one": {
+                    "pressure_class_applied":
+                        GateOneReferent.NOT_APPLICABLE.value,
+                    "unexercised_defeaters":
+                        GateOneReferent.NOT_APPLICABLE.value,
+                    # The decline's basis IS the answer to what was refused.
+                    "rejection_reason": decline.basis.value,
+                },
+                "recorded_at": datetime.now().isoformat(),
+            }
+            self._append(payload)
+        return payload
+
     def acts(self) -> Tuple[Dict[str, Any], ...]:
         """Every readable act line, IN APPEND ORDER. FORENSIC ONLY.
 
@@ -205,6 +278,8 @@ class PredictionActLog:
                 if (isinstance(data, dict)
                         and data.get("kind_of_record") in (
                             "prediction_evaluation_act",
-                            "prediction_propagation_act")):
+                            "prediction_propagation_act",
+                            "prediction_candidate_act",
+                            "prediction_candidate_declined_act")):
                     out.append(data)
         return tuple(out)
