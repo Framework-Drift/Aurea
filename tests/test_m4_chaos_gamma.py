@@ -106,7 +106,7 @@ def test_a_the_replay_report_carries_a_passing_audit_for_both_halves():
         assert audit["performed"] is True
         assert audit["pass"] is True
         assert audit["foreign_writes"] == []
-        assert audit["configured_paths"] == 39   # M8-d: 37 -> 39, TWO ruled movements
+        assert audit["configured_paths"] == 40   # M9-b: 39 -> 40, the prediction act log
 
 
 def test_a_an_audit_failure_is_loud_and_typed():

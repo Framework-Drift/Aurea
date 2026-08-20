@@ -49,6 +49,9 @@ from src.executive.challenge_log import (ChallengeLog, DefectClass,
 from src.executive.utility_log import UtilityLog, UtilityRecord
 from src.executive.stake_classifier import StakeClassifier
 from src.executive.selection_log import SelectionLog
+from src.executive.criterion_evaluator import (CriterionEvaluation,
+                                               EvaluationOutcome)
+from src.executive.prediction_act_log import PredictionActLog
 from src.external.model_provider import ingest_model_assertion
 from src.external.prediction_ledger import PredictionLedger
 from src.filtration.episode_record import EpisodeRecord
@@ -245,6 +248,21 @@ LEDGERS = [
          "RTE-0001", DefectClass.MAPPING_DEFECT, "the minimum was misapplied",
          "reviewer", log=L, routings=_StubRoutings()),
      "src/executive/challenge_log.py", lambda L: L.challenges()),
+    # M9-b MIGRATION (2026-08-19), Ruling-14 form. NO ASSERTION MOVED - one
+    # row added. **THE STANDING DERIVATION FOUND IT WITHOUT BEING TOLD, a
+    # seventh time.** An UNRESOLVED evaluation act is the cheapest honest
+    # write this store has: it needs no kernel, no ledger and no resolver,
+    # so the row exercises the mint and the append alone.
+    ("prediction_act", lambda p: PredictionActLog(log_path=str(p)),
+     lambda L: L.record_evaluation(CriterionEvaluation(
+         prediction_id="PRD-0001", criterion_index=0,
+         criterion={"surface": "goal_status", "record_id": "GLC-0001",
+                    "confirmed_state": "committed",
+                    "failed_state": "superseded"},
+         surface="goal_status", surface_state=None,
+         outcome=EvaluationOutcome.UNRESOLVED_AT_EVALUATION,
+         reason="census row: no reader held")),
+     "src/executive/prediction_act_log.py", lambda L: L.acts()),
 ]
 
 
@@ -283,8 +301,9 @@ def test_the_ledger_population_is_derived_and_matches_this_table():
         f"the funnel-appending, minting population is {sorted(derived)} but "
         f"this file covers {sorted(covered)}. Add the row - a ledger absent "
         f"from it makes every claim below TRUE BY OMISSION for that store.")
-    assert len(covered) == 16, (
-        "SIXTEEN as of M8-d (the challenge surface). ~~FIFTEEN as of M8-c (the "
+    assert len(covered) == 17, (
+        "SEVENTEEN as of M9-b (the prediction act log). ~~SIXTEEN as of M8-d "
+        "(the challenge surface).~~ ~~FIFTEEN as of M8-c (the "
         "utility log).~~ ~~FOURTEEN as of M8-b (the "
         "routing act log).~~ ~~THIRTEEN as of M7-c (the "
         "inquiry act log).~~ ~~TWELVE as of M7-b (the "

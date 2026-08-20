@@ -58,6 +58,7 @@ __all__ = [
     "FindingKind", "LineEra", "ActLogFinding", "ActLogReport",
     "SELECTION_LOG_SCHEMA", "INQUIRY_LOG_SCHEMA", "ROUTING_LOG_SCHEMA",
     "UTILITY_LOG_SCHEMA", "CHALLENGE_LOG_SCHEMA", "ADJUDICATION_LOG_SCHEMA",
+    "PREDICTION_ACT_LOG_SCHEMA",
     "LogSchema", "audit_act_log",
 ]
 
@@ -213,6 +214,17 @@ ADJUDICATION_LOG_SCHEMA = LogSchema(
     required_keys=("kind_of_record", "adjudication_id", "challenge_id",
                    "challenged_record_id", "defect_class", "verdict",
                    "divergences", "legs_run", "gate_one"))
+
+
+#: M9-b REGISTRATION - DATA ONLY. Chained from genesis. ONE log, TWO act
+#: kinds (`prediction_evaluation_act` / `prediction_propagation_act`) on one
+#: `PRA-` ordinal stream; the required keys are the core BOTH kinds carry,
+#: because the audit checks key presence per line and a union schema would
+#: flag every line of each kind for the other's fields.
+PREDICTION_ACT_LOG_SCHEMA = LogSchema(
+    kind_of_record="prediction_act", id_field="act_id", id_prefix="PRA-",
+    required_keys=("kind_of_record", "act_id", "prediction_id", "gate_one",
+                   "recorded_at"))
 
 
 def _ordinal(record_id: Any, prefix: str) -> Optional[int]:

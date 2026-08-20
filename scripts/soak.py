@@ -120,6 +120,7 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
     from src.executive.selection_log import SelectionLog
     from src.executive.inquiry_log import InquiryLog
     from src.executive.routing_log import RoutingLog
+    from src.executive.prediction_act_log import PredictionActLog
     from src.executive.utility_log import UtilityLog
     from src.executive.challenge_log import AdjudicationLog, ChallengeLog
     from src.filtration.scar_logic_core import ScarLogicCore
@@ -238,6 +239,9 @@ def _injection_table() -> Tuple[List[tuple], List[tuple]]:
         # M8-d - the challenge surface. Doors, so the soak shows ZERO lines.
         (ChallengeLog, "log_path", "logs/challenges.jsonl"),
         (AdjudicationLog, "log_path", "logs/adjudications.jsonl"),
+        # M9-b - the prediction act log. The Executive loop is NOT wired into
+        # `process_input`, so the soak must show ZERO prediction-act lines.
+        (PredictionActLog, "log_path", "logs/prediction_acts.jsonl"),
     ]
     return class_attrs, init_defaults
 

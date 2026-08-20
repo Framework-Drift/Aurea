@@ -58,6 +58,16 @@ from src.executive.inquiry_log import (
 )
 from src.executive.routing_log import RoutingLog, RoutingRecord
 from src.executive.stake_classifier import StakeClassifier
+# M9-b (hundred-eighteenth entry, PATH v144): the clerical evaluator, the
+# backward walk, and their act log -- additive wiring only.
+from src.executive.criterion_evaluator import (EVALUATOR_NAME,
+                                               CriterionEvaluation,
+                                               CriterionEvaluator,
+                                               EvaluationOutcome)
+from src.executive.prediction_act_log import PredictionActLog
+from src.executive.propagation_policy import (FalsificationWalk,
+                                              PropagationPolicy)
+from src.external.prediction_ledger import PredictionOutcome
 from src.executive.derived_view import (
     VERDICT_PAYLOAD_KIND,
     ChairState,
@@ -202,7 +212,9 @@ class ExecutiveLoop:
                  acquisitions: Any, policy: Any = None,
                  selections: Any = None, generator: Any = None,
                  inquiries: Any = None, classifier: Any = None,
-                 escalation: Any = None, routings: Any = None):
+                 escalation: Any = None, routings: Any = None,
+                 evaluator: Any = None, propagation: Any = None,
+                 prediction_acts: Any = None):
         self.obligations = obligations
         self.predictions = predictions
         self.goals = goals
@@ -240,6 +252,35 @@ class ExecutiveLoop:
         self.classifier = classifier or StakeClassifier()
         self.escalation = escalation or EscalationPolicy()
         self.routings = routings or RoutingLog()
+        # M9-b, same default-by-construction idiom. THE DEFAULT EVALUATOR IS
+        # WIRED FOR TWO OF THE CENSUS'S FOUR SURFACES -- the two whose owners
+        # this loop already holds: predictions and obligations. The goal
+        # surface is NOT wired here (this slice's bounds: no goal contact),
+        # and the world-proposition surface CANNOT be (the loop holds no
+        # proposition handle, and a tree census found no composed per-id
+        # standing read anywhere in src/ -- `derive_standing` has zero
+        # callers). Both evaluate honestly as UNRESOLVED_AT_EVALUATION with
+        # the no-handle reason; a caller holding the owners may inject a
+        # fuller evaluator, which is the resolver-injection pattern working
+        # as designed.
+        self.evaluator = evaluator or CriterionEvaluator(surface_readers={
+            "prediction_resolution_outcome": self._prediction_outcome_reader,
+            "obligation_status": self._obligation_status_reader,
+        })
+        self.propagation = propagation or PropagationPolicy(
+            obligations=self.obligations, predictions=self.predictions)
+        self.prediction_acts = prediction_acts or PredictionActLog()
+
+    # ------------------------------------------------------------------
+    # M9-b SURFACE READERS -- each is the owner's own read, nothing more
+    # ------------------------------------------------------------------
+
+    def _prediction_outcome_reader(self, record_id: str) -> Any:
+        resolution = self.predictions.resolution_for(record_id)
+        return None if resolution is None else resolution.outcome
+
+    def _obligation_status_reader(self, record_id: str) -> Any:
+        return self.obligations.status_of(record_id)
 
     # ------------------------------------------------------------------
     # OBSERVE
@@ -464,6 +505,52 @@ class ExecutiveLoop:
         return self.routings.record(
             decision, target_kind=str(getattr(target_kind, "value", target_kind)),
             target_id=target_id, selection_id=selection_id)
+
+    # ------------------------------------------------------------------
+    # M9-b DOORS -- externally invoked, like every door in this house
+    # ------------------------------------------------------------------
+
+    def evaluate_prediction(self, prediction_id: str,
+                            criterion_index: int) -> CriterionEvaluation:
+        """Clerically evaluate ONE recorded criterion, and record what happened.
+
+        THE ORDER IS THE DISCIPLINE: evaluate (pure) -> on a decisive outcome,
+        resolve through the ledger's EXISTING funnel, citing the criterion by
+        its recorded index and the evaluator by identity -> record the
+        evaluation ACT. A decisive evaluation whose `resolve()` refuses (an
+        already-resolved prediction, most likely) raises HERE and records no
+        act -- the caller learns by exception, and nothing claims an
+        evaluation consummated that the ledger refused. An
+        UNRESOLVED_AT_EVALUATION resolves NOTHING and records ONLY the act:
+        the inability is an act fact, not a prediction fact.
+        """
+        commitment = self.predictions.commitment_for(prediction_id)
+        if commitment is None:
+            raise ValueError(
+                f"no commitment '{prediction_id}' is recorded; there is "
+                f"nothing to evaluate.")
+        evaluation = self.evaluator.evaluate(commitment, criterion_index)
+        if evaluation.outcome is not EvaluationOutcome.UNRESOLVED_AT_EVALUATION:
+            self.predictions.resolve(
+                prediction_id,
+                PredictionOutcome(evaluation.outcome.value),
+                criterion=f"operational_criteria[{criterion_index}]",
+                evaluator=EVALUATOR_NAME)
+        self.prediction_acts.record_evaluation(evaluation)
+        return evaluation
+
+    def propagate_falsification(self, prediction_id: str) -> FalsificationWalk:
+        """Walk ONE falsification backward, whole, and record the act AFTER.
+
+        The submissions land through the kernel's own door inside the walk;
+        the act writes after them, carrying their REAL dispositions. A
+        log-write failure fails the act loudly -- the submissions stand as
+        kernel records regardless, because the kernel's ledger is its own
+        truth and this act records the WALK, not the admissions.
+        """
+        walk = self.propagation.walk(prediction_id)
+        self.prediction_acts.record_propagation(walk)
+        return walk
 
     def step(self) -> AttentionSelectionRecord:
         """ONE CYCLE: observe, select, record, return.

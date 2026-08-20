@@ -593,7 +593,10 @@ def test_i_the_divergence_log_is_registered_in_the_isolation_table():
     # 2026-08-17 (M8-c): the utility log, THE ONE RULED MOVEMENT (36 -> 37).
     # ~~assert len(class_attrs) + len(init_defaults) == 37~~ MIGRATED
     # 2026-08-17 (M8-d): the challenge surface's two logs (37 -> 39).
-    assert len(class_attrs) + len(init_defaults) == 39
+    # ~~assert len(class_attrs) + len(init_defaults) == 39~~ MIGRATED
+    # 2026-08-19 (M9-b): the prediction act log, THE ONE RULED MOVEMENT
+    # (39 -> 40). Subject unchanged.
+    assert len(class_attrs) + len(init_defaults) == 40
 
     registered = [rel for cls, attr, rel in class_attrs
                   if attr == "DIVERGENCE_LOG_PATH"]

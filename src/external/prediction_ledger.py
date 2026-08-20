@@ -86,12 +86,23 @@ still writes nothing anywhere but its own file. A commitment without
 operational criteria or typed dependencies reads honestly as NON-OPERATIONAL
 (`is_operational`, derived at read, never stored) - ABSENT is an answer, a
 state not a defect, and every legacy line loads exactly as before.
+
+M9-b (2026-08-19) - RESOLUTION CITES ITS CLERICAL READ. Widened under the
+hundred-eighteenth entry (PATH v144), ADDITIVE: `resolve()` accepts a SECOND
+criterion-name family (`OPERATIONAL_CRITERION_NAME` - an M9-a operational
+criterion cited by recorded index, validated against the commitment's own
+tuple, unwritable against any commitment that did not carry it) and an
+`evaluator` identity recorded on the resolution line (empty for every legacy
+and hand-recorded resolution - "" is the honest reading of a line written
+without an instrument). The three refusals, the resolve-once law, and the
+legacy three-name path are byte-for-byte unchanged.
 """
 
 from __future__ import annotations
 
 import copy
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -147,7 +158,8 @@ from src.utils.record_value import validate_record_value
 
 __all__ = [
     "DependencyLink", "DependencyKind", "PredictionOutcome",
-    "CRITERION_FIELDS", "TypedDependency", "OperationalCriterion",
+    "CRITERION_FIELDS", "OPERATIONAL_CRITERION_NAME",
+    "TypedDependency", "OperationalCriterion",
     "PredictionCommitment", "PredictionResolution", "PredictionLedger",
     "PredictionLedgerUnreadable", "RecordedField", "FieldState",
     "provided", "declared_none", "absent",
@@ -246,6 +258,16 @@ CRITERION_FIELDS: Tuple[str, ...] = (
     "failure_criteria",
     "unresolved_criteria",
 )
+
+# M9-b (hundred-eighteenth entry, PATH v144): the SECOND family of criterion
+# names a resolution may cite -- an M9-a operational criterion, BY RECORDED
+# INDEX. Named once, one anchored form, so no second spelling can drift.
+# "Criteria fixed at commit time" is preserved exactly: `resolve()` validates
+# the index against the commitment's own recorded `operational_criteria`, so
+# this form is unwritable against any commitment that did not carry the
+# criterion -- which includes every legacy line (era honesty; the legacy
+# three-name family behaves byte-for-byte as before).
+OPERATIONAL_CRITERION_NAME = re.compile(r"^operational_criteria\[(\d+)\]$")
 
 
 class PredictionLedgerUnreadable(Exception):
@@ -616,6 +638,11 @@ class PredictionResolution:
     criterion: str
     note: str = ""
     resolved_at: str = ""
+    # M9-b, ADDITIVE: the identity of the instrument whose clerical read this
+    # resolution records, empty for every hand-recorded and every legacy
+    # resolution -- "" is the honest reading of a line written before the
+    # evaluator existed or without one.
+    evaluator: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, PredictionOutcome):
@@ -631,6 +658,7 @@ class PredictionResolution:
             "criterion": self.criterion,
             "note": self.note,
             "resolved_at": self.resolved_at,
+            "evaluator": self.evaluator,
         }
 
     @classmethod
@@ -645,6 +673,7 @@ class PredictionResolution:
                 criterion=str(data["criterion"]),
                 note=str(data.get("note", "")),
                 resolved_at=str(data.get("resolved_at", "")),
+                evaluator=str(data.get("evaluator", "")),
             )
         except (KeyError, ValueError, TypeError):
             return None
@@ -947,7 +976,8 @@ class PredictionLedger:
         return commitment
 
     def resolve(self, prediction_id: str, outcome: PredictionOutcome,
-                criterion: str, note: str = "") -> PredictionResolution:
+                criterion: str, note: str = "",
+                evaluator: str = "") -> PredictionResolution:
         """Record what happened. A NEW LINE - the commitment is never rewritten.
 
         THIS IS THE STRUCTURAL HEART OF THE RULING. The commitment line stays
@@ -981,14 +1011,30 @@ class PredictionLedger:
                 f"A resolution refers to a prediction that was committed "
                 f"BEFORE its outcome; there is nothing here to resolve.")
 
-        recorded = commitment.criterion(criterion)   # raises if not a criterion
-        if recorded.state is not FieldState.PROVIDED:
-            raise ValueError(
-                f"'{prediction_id}' recorded no {criterion} - it is "
-                f"{recorded.state.value}. Criteria are FIXED AT COMMIT TIME, "
-                f"so a resolution may not meet a criterion that was never "
-                f"committed. Naming one after the outcome is the rewriting "
-                f"this ledger exists to prevent.")
+        # M9-b: TWO FAMILIES OF CRITERION NAMES, both fixed at commit time.
+        # The operational form cites an M9-a criterion by recorded index and
+        # is validated against the commitment's own recorded tuple; the
+        # legacy three-name path below is byte-for-byte unchanged.
+        operational = OPERATIONAL_CRITERION_NAME.match(criterion)
+        if operational:
+            index = int(operational.group(1))
+            if index >= len(commitment.operational_criteria):
+                raise ValueError(
+                    f"'{prediction_id}' records "
+                    f"{len(commitment.operational_criteria)} operational "
+                    f"criteria; '{criterion}' names one that was never "
+                    f"committed. Criteria are FIXED AT COMMIT TIME, and "
+                    f"naming one after the outcome is the rewriting this "
+                    f"ledger exists to prevent.")
+        else:
+            recorded = commitment.criterion(criterion)   # raises if not a criterion
+            if recorded.state is not FieldState.PROVIDED:
+                raise ValueError(
+                    f"'{prediction_id}' recorded no {criterion} - it is "
+                    f"{recorded.state.value}. Criteria are FIXED AT COMMIT "
+                    f"TIME, so a resolution may not meet a criterion that was "
+                    f"never committed. Naming one after the outcome is the "
+                    f"rewriting this ledger exists to prevent.")
 
         existing = self.resolution_for(prediction_id)
         if existing is not None:
@@ -1003,6 +1049,7 @@ class PredictionLedger:
             criterion=criterion,
             note=note,
             resolved_at=datetime.now().isoformat(),
+            evaluator=evaluator,
         )
         self._append(resolution.as_dict())
         return resolution
